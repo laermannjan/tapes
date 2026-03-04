@@ -17,6 +17,41 @@
 > - All file writes go through the session log (operations table) — no file is touched without a session record.
 > - Pre-flight collision detection runs before any file operation in both `import` and `tapes move`.
 
+## Progress (updated 2026-03-04)
+
+| Task | Description | Status |
+|------|-------------|--------|
+| 1  | Project setup | done |
+| 2  | CLI skeleton | done |
+| 3  | Config schema and loading | done |
+| 4  | SQLite schema and repository | done |
+| 5  | Filename parsing | done |
+| 6  | OpenSubtitles hash | done |
+| 7  | MediaInfo wrapper | done |
+| 8  | TMDB metadata source | done |
+| 9  | Identification pipeline | done |
+| 10 | Template rendering and filename sanitization | done |
+| 11 | Companion file classification and renaming | **todo** |
+| 12 | File scanner and grouper | done |
+| 13 | Pre-flight collision detector | **todo** |
+| 14 | EventBus | done |
+| 15 | Plugin loader | **todo** |
+| 16 | File operations | done |
+| 17 | Session tracking | done |
+| 18 | Rich-based interactive import display | **todo** |
+| 19 | Import service | done |
+| 20 | Startup validation | done |
+| 21 | Query service | **todo** |
+| 22 | tapes check command | **todo** |
+| 23 | tapes move command | **todo** |
+| 24 | Wire import command | done |
+| 25 | Wire query, stats, info, fields commands | **todo** |
+| 26 | Wire modify command | **todo** |
+| 27 | Wire move, check, log commands | **todo** |
+| 28 | NFO sidecar plugin | **todo** |
+
+89 tests passing. Pick up from Task 13.
+
 ---
 
 ## Phase 1: Project Scaffolding
