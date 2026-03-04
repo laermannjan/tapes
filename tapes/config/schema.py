@@ -5,6 +5,7 @@ from typing import Literal
 class LibraryConfig(BaseModel):
     movies: str = ""
     tv: str = ""
+    db_path: str = "~/.local/share/tapes/library.db"
 
 
 class ImportConfig(BaseModel):
