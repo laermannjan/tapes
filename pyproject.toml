@@ -1,0 +1,29 @@
+[project]
+name = "tapes"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "typer>=0.12",
+    "rich>=13",
+    "guessit>=3.8",
+    "pymediainfo>=6.1",
+    "requests>=2.31",
+    "pydantic>=2.6",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-cov",
+    "responses",
+]
+
+[project.scripts]
+tapes = "tapes.cli.main:app"
+
+[project.entry-points."tapes.plugins"]
+nfo = "tapes.plugins.builtin.nfo:NfoPlugin"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
