@@ -27,6 +27,7 @@ class PromptAction(str, Enum):
     """Actions available at an interactive import prompt."""
 
     ACCEPT = "accept"
+    ACCEPT_ALL = "accept_all"
     SEARCH = "search"
     SKIP = "skip"
     MANUAL = "manual"
@@ -260,7 +261,7 @@ def read_action(
 
         # Accept-all: 'a' when candidates exist
         if key == "a" and num_candidates > 0:
-            return PromptAction.ACCEPT
+            return PromptAction.ACCEPT_ALL
 
         # Numbered candidate selection (only when ambiguous)
         if key.isdigit() and is_ambiguous:

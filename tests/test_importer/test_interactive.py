@@ -98,6 +98,7 @@ def test_search_results_single_candidate():
 def test_prompt_action_values():
     """PromptAction enum has expected string values."""
     assert PromptAction.ACCEPT == "accept"
+    assert PromptAction.ACCEPT_ALL == "accept_all"
     assert PromptAction.SEARCH == "search"
     assert PromptAction.SKIP == "skip"
     assert PromptAction.MANUAL == "manual"
@@ -401,6 +402,13 @@ def test_read_action_e_returns_edit():
     with patch("tapes.importer.interactive._read_key", return_value="e"):
         action = read_action(prompt, has_companions=True)
     assert action == "edit"
+
+
+def test_read_action_a_returns_accept_all():
+    prompt = InteractivePrompt(candidates=[_search_result()])
+    with patch("tapes.importer.interactive._read_key", return_value="a"):
+        action = read_action(prompt)
+    assert action == PromptAction.ACCEPT_ALL
 
 
 def test_read_action_e_ignored_without_companions():
