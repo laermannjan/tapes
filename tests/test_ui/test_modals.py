@@ -68,11 +68,11 @@ async def test_split_modal_confirm_creates_new_group():
 
 
 async def test_merge_modal_opens_and_closes():
-    """Press j to open merge modal, then escape to cancel. State unchanged."""
+    """Press m to open merge modal, then escape to cancel. State unchanged."""
     groups = [_make_group("Dune"), _make_group("Arrival")]
     app = ReviewApp(groups)
     async with app.run_test() as pilot:
-        await pilot.press("j")
+        await pilot.press("m")
         await pilot.press("escape")
         state = app.get_state()
         assert len(state) == 2
@@ -83,7 +83,7 @@ async def test_merge_modal_no_open_single_group():
     groups = [_make_group("Dune")]
     app = ReviewApp(groups)
     async with app.run_test() as pilot:
-        await pilot.press("j")
+        await pilot.press("m")
         state = app.get_state()
         assert len(state) == 1
 
@@ -95,7 +95,7 @@ async def test_merge_modal_confirm_merges_groups():
     app = ReviewApp([g1, g2])
     async with app.run_test() as pilot:
         assert len(app.get_state()) == 2
-        await pilot.press("j")
+        await pilot.press("m")
         # Toggle first (only) other group
         await pilot.press("space")
         await pilot.press("enter")

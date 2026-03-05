@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.widgets import Static
+from textual.widgets import Static, Footer, Header
 from textual.containers import VerticalScroll
 
 from tapes.models import ImportGroup, GroupStatus, FileEntry
@@ -15,15 +15,26 @@ from tapes.ui.file_editor import FileEditorModal
 
 # Status badge mapping
 _STATUS_BADGES: dict[GroupStatus, tuple[str, str]] = {
-    GroupStatus.PENDING: ("[??]", "yellow"),
-    GroupStatus.ACCEPTED: ("[ok]", "green"),
-    GroupStatus.AUTO_ACCEPTED: ("[**]", "blue"),
-    GroupStatus.SKIPPED: ("[--]", "dim"),
+    GroupStatus.PENDING: ("??", "yellow"),
+    GroupStatus.ACCEPTED: ("ok", "green"),
+    GroupStatus.AUTO_ACCEPTED: ("**", "blue"),
+    GroupStatus.SKIPPED: ("--", "dim"),
 }
 
 
 class GroupWidget(Static):
     """Displays a single import group in collapsed or expanded form."""
+
+    DEFAULT_CSS = """
+    GroupWidget {
+        padding: 0 1;
+        margin: 0 0 0 0;
+    }
+    GroupWidget.expanded {
+        background: $surface;
+        padding: 0 1 1 1;
+    }
+    """
 
     def __init__(self, group: ImportGroup, expanded: bool = False, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -35,15 +46,17 @@ class GroupWidget(Static):
 
     def _render_content(self) -> None:
         badge, style = _STATUS_BADGES.get(
-            self.group.status, ("[??]", "yellow")
+            self.group.status, ("??", "yellow")
         )
         label = self.group.label
 
         if not self.expanded:
-            self.update(f"[{style}]{badge}[/{style}]  {label}")
+            self.remove_class("expanded")
+            self.update(f"[{style}]\\[{badge}][/{style}]  {label}")
         else:
+            self.add_class("expanded")
             lines: list[str] = []
-            lines.append(f"[{style}]{badge}[/{style}]  [bold]{label}[/bold]")
+            lines.append(f"[{style}]\\[{badge}][/{style}]  [bold]{label}[/bold]")
 
             # Metadata line
             meta = self.group.metadata
@@ -64,9 +77,10 @@ class GroupWidget(Static):
                 lines.append(f"  {' | '.join(meta_parts)}")
 
             # File list
+            lines.append("")
             for fe in self.group.files:
-                role_tag = f"[{fe.role}]" if fe.role else ""
-                lines.append(f"    {role_tag} {fe.path.name}")
+                role_tag = fe.role.ljust(8)
+                lines.append(f"  [dim]{role_tag}[/dim]  {fe.path.name}")
 
             self.update("\n".join(lines))
 
@@ -97,11 +111,13 @@ class SummaryWidget(Static):
 class ReviewApp(App):
     """Vertical accordion TUI for reviewing import groups."""
 
+    TITLE = "tapes"
+
     BINDINGS = [
-        Binding("ctrl+down", "focus_next_group", "Next group", show=True),
-        Binding("ctrl+up", "focus_prev_group", "Previous group", show=True),
+        Binding("j", "focus_next_group", "Next", show=True),
+        Binding("k", "focus_prev_group", "Prev", show=True),
         Binding("p", "open_split", "Split", show=True),
-        Binding("j", "open_merge", "Merge", show=True),
+        Binding("m", "open_merge", "Merge", show=True),
         Binding("e", "open_file_editor", "Edit files", show=True),
         Binding("q", "quit", "Quit", show=True),
     ]
@@ -123,12 +139,14 @@ class ReviewApp(App):
         return []
 
     def compose(self) -> ComposeResult:
+        yield Header()
         with VerticalScroll():
             for i, group in enumerate(self._groups):
                 widget = GroupWidget(group, expanded=(i == 0))
                 self._group_widgets.append(widget)
                 yield widget
         yield SummaryWidget(self._groups)
+        yield Footer()
 
     def action_focus_next_group(self) -> None:
         if not self._group_widgets:

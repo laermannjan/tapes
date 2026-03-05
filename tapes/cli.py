@@ -58,7 +58,31 @@ def import_cmd(
         tui_app.run()
         return
 
-    # Build and display the table
+    _print_plain(groups)
+
+
+@app.command("scan")
+def scan_cmd(
+    path: Path = typer.Argument(..., help="Directory or file to scan"),
+    config_file: Optional[Path] = typer.Option(
+        None, "--config", "-c", help="Path to config file"
+    ),
+) -> None:
+    """Scan and display import groups (no file operations)."""
+    cfg = load_config(config_file) if config_file else TapesConfig()
+    cfg.dry_run = True
+
+    groups = run_pipeline(path, config=cfg)
+
+    if not groups:
+        console.print("No video files found.")
+        return
+
+    _print_plain(groups)
+
+
+def _print_plain(groups):
+    """Print groups as a Rich table."""
     table = Table(title="Import Groups")
     table.add_column("Type")
     table.add_column("Label")

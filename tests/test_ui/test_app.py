@@ -33,12 +33,12 @@ async def test_navigation_down_changes_focused_index():
     app = ReviewApp(groups)
     async with app.run_test() as pilot:
         assert app.focused_index == 0
-        await pilot.press("ctrl+down")
+        await pilot.press("j")
         assert app.focused_index == 1
-        await pilot.press("ctrl+down")
+        await pilot.press("j")
         assert app.focused_index == 2
         # Should not go past the last group
-        await pilot.press("ctrl+down")
+        await pilot.press("j")
         assert app.focused_index == 2
 
 
@@ -47,16 +47,16 @@ async def test_navigation_up_changes_focused_index():
     app = ReviewApp(groups)
     async with app.run_test() as pilot:
         # Move down first
-        await pilot.press("ctrl+down")
-        await pilot.press("ctrl+down")
+        await pilot.press("j")
+        await pilot.press("j")
         assert app.focused_index == 2
         # Now navigate up
-        await pilot.press("ctrl+up")
+        await pilot.press("k")
         assert app.focused_index == 1
-        await pilot.press("ctrl+up")
+        await pilot.press("k")
         assert app.focused_index == 0
         # Should not go below 0
-        await pilot.press("ctrl+up")
+        await pilot.press("k")
         assert app.focused_index == 0
 
 
