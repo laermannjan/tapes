@@ -34,6 +34,8 @@ def command(
         cfg.import_.mode = mode
     if confidence is not None:
         cfg.import_.confidence_threshold = confidence
+    if interactive:
+        cfg.import_.interactive = True
 
     try:
         validate_config(cfg)
