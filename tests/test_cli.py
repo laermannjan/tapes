@@ -31,7 +31,7 @@ def test_finds_files_and_shows_label(tmp_path: Path) -> None:
     group.add_file(FileEntry(path=video))
 
     with patch("tapes.cli.run_pipeline", return_value=[group]):
-        result = runner.invoke(app, ["import", str(tmp_path)])
+        result = runner.invoke(app, ["import", str(tmp_path), "--no-tui"])
 
     assert result.exit_code == 0
     assert "Dune (2021)" in result.output
@@ -58,7 +58,7 @@ def test_multiple_groups(tmp_path: Path) -> None:
         g2.add_file(FileEntry(path=v))
 
     with patch("tapes.cli.run_pipeline", return_value=[g1, g2]):
-        result = runner.invoke(app, ["import", str(tmp_path)])
+        result = runner.invoke(app, ["import", str(tmp_path), "--no-tui"])
 
     assert result.exit_code == 0
     assert "Dune (2021)" in result.output
@@ -83,7 +83,7 @@ def test_dry_run_flag(tmp_path: Path) -> None:
         return [group]
 
     with patch("tapes.cli.run_pipeline", side_effect=fake_pipeline):
-        result = runner.invoke(app, ["import", str(tmp_path), "--dry-run"])
+        result = runner.invoke(app, ["import", str(tmp_path), "--dry-run", "--no-tui"])
 
     assert result.exit_code == 0
     assert len(captured_configs) == 1
@@ -129,7 +129,7 @@ def test_config_file_option(tmp_path: Path) -> None:
 
     with patch("tapes.cli.run_pipeline", side_effect=fake_pipeline):
         result = runner.invoke(
-            app, ["import", str(tmp_path), "--config", str(config_path)]
+            app, ["import", str(tmp_path), "--config", str(config_path), "--no-tui"]
         )
 
     assert result.exit_code == 0
@@ -151,7 +151,7 @@ def test_companion_count(tmp_path: Path) -> None:
     group.add_file(FileEntry(path=sub))
 
     with patch("tapes.cli.run_pipeline", return_value=[group]):
-        result = runner.invoke(app, ["import", str(tmp_path)])
+        result = runner.invoke(app, ["import", str(tmp_path), "--no-tui"])
 
     assert result.exit_code == 0
     # The table should show 1 video and 1 companion
