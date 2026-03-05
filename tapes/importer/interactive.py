@@ -23,6 +23,87 @@ GAP_THRESHOLD = 0.2
 _EPS = 1e-9  # tolerance for floating-point comparisons
 
 
+def _int_or_none(s: str) -> int | None:
+    """Parse a string as int, returning None on failure."""
+    try:
+        return int(s)
+    except (ValueError, TypeError):
+        return None
+
+
+def manual_prompt(
+    console: Console,
+    *,
+    default_media_type: str = "movie",
+    default_title: str = "",
+    default_year: int | None = None,
+) -> "SearchResult":
+    """Collect metadata fields directly from the user.
+
+    Returns a synthetic SearchResult with tmdb_id=0 and confidence=1.0.
+    """
+    from tapes.metadata.base import SearchResult
+
+    year_default = str(default_year) if default_year else ""
+    mt = input(f"Media type [movie/tv] ({default_media_type}): ").strip().lower() or default_media_type
+    if mt not in ("movie", "tv"):
+        mt = default_media_type
+    title = input(f"Title ({default_title}): " if default_title else "Title: ").strip() or default_title
+    raw_year = input(f"Year (optional) ({year_default}): " if year_default else "Year (optional): ").strip() or year_default
+    year = int(raw_year) if raw_year else None
+
+    show = None
+    season = None
+    episode = None
+    episode_title = None
+
+    more = input("More fields? [y/N]: ").strip().lower()
+    if more == "y":
+        if mt == "tv":
+            show = input("Show name: ").strip() or title
+            season = _int_or_none(input("Season: ").strip())
+            episode = _int_or_none(input("Episode: ").strip())
+            episode_title = input("Episode title (optional): ").strip() or None
+
+    return SearchResult(
+        tmdb_id=0,
+        title=title,
+        year=year,
+        media_type=mt,
+        confidence=1.0,
+        show=show,
+        season=season,
+        episode=episode,
+        episode_title=episode_title,
+    )
+
+
+def search_prompt(
+    console: Console,
+    *,
+    default_media_type: str = "movie",
+    default_title: str = "",
+    default_year: int | None = None,
+) -> tuple[str, str, int | None]:
+    """Collect structured search fields from the user.
+
+    Returns (media_type, title, year).
+    """
+    year_default = str(default_year) if default_year else ""
+    mt_prompt = f"Media type [movie/tv] ({default_media_type}): "
+    title_prompt = f"Title ({default_title}): " if default_title else "Title: "
+    year_prompt = f"Year (optional) ({year_default}): " if year_default else "Year (optional): "
+
+    mt = input(mt_prompt).strip().lower() or default_media_type
+    if mt not in ("movie", "tv"):
+        mt = default_media_type
+    title = input(title_prompt).strip() or default_title
+    raw_year = input(year_prompt).strip() or year_default
+    year = int(raw_year) if raw_year else None
+
+    return mt, title, year
+
+
 class PromptAction(str, Enum):
     """Actions available at an interactive import prompt."""
 

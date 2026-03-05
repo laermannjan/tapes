@@ -12,6 +12,7 @@ class ImportConfig(BaseModel):
     mode: Literal["copy", "move", "link", "hardlink"] = "copy"
     confidence_threshold: float = 0.9
     interactive: bool = False
+    no_db: bool = False
     dry_run: bool = False
 
 

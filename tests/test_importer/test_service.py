@@ -221,11 +221,122 @@ def test_interactive_quit(tmp_path, repo, meta_source, cfg):
     assert summary["imported"] == 0
 
 
+def test_interactive_flag_forces_prompt(tmp_path, repo, meta_source, cfg):
+    """--interactive forces prompt even for high-confidence matches."""
+    cfg.import_.interactive = True
+    _make_video(tmp_path)
+    candidate = _make_candidate(confidence=0.95)
+    mock_result = IdentificationResult(
+        candidates=[candidate], file_info={}, requires_interaction=False,
+    )
+    service = ImportService(repo=repo, metadata_source=meta_source, config=cfg)
+    with patch.object(service._pipeline, "identify", return_value=mock_result), \
+         patch("tapes.importer.service.classify_companions", return_value=[]), \
+         patch("tapes.importer.service.display_prompt") as mock_display, \
+         patch("tapes.importer.service.read_action", return_value=PromptAction.ACCEPT):
+        summary = service.import_path(tmp_path)
+
+    assert summary["imported"] == 1
+    # Must have gone through the interactive prompt, not auto-accept
+    assert mock_display.call_count == 1
+
+
+def test_no_db_skips_db_record(tmp_path, repo, meta_source, cfg):
+    """--no-db imports file without writing to DB."""
+    cfg.import_.no_db = True
+    video = _make_video(tmp_path)
+    candidate = _make_candidate()
+    mock_result = IdentificationResult(candidates=[candidate], file_info={})
+
+    service = ImportService(repo=repo, metadata_source=meta_source, config=cfg)
+    with patch.object(service._pipeline, "identify", return_value=mock_result):
+        summary = service.import_path(tmp_path)
+
+    assert summary["imported"] == 1
+    # Verify no DB record was written
+    count = repo._conn.execute("SELECT count(*) FROM items").fetchone()[0]
+    assert count == 0
+    # Verify no session was created
+    sessions = repo._conn.execute("SELECT count(*) FROM sessions").fetchone()[0]
+    assert sessions == 0
+
+
+def test_interactive_search_flow(tmp_path, repo, meta_source, cfg):
+    """Pressing 's' triggers search, shows TMDB results, user accepts."""
+    _make_video(tmp_path)
+    candidate = _make_candidate(confidence=0.50)
+    search_candidate = _make_candidate(title="The Matrix Reloaded", year=2003, confidence=0.92)
+    mock_result = IdentificationResult(
+        candidates=[candidate], file_info={"title": "matrix"}, requires_interaction=True,
+    )
+    meta_source.search.return_value = [search_candidate]
+
+    call_count = [0]
+    def fake_read_action(prompt, **kwargs):
+        call_count[0] += 1
+        if call_count[0] == 1:
+            return PromptAction.SEARCH
+        return PromptAction.ACCEPT
+
+    service = ImportService(repo=repo, metadata_source=meta_source, config=cfg)
+    with patch.object(service._pipeline, "identify", return_value=mock_result), \
+         patch("tapes.importer.service.classify_companions", return_value=[]), \
+         patch("tapes.importer.service.display_prompt"), \
+         patch("tapes.importer.service.read_action", side_effect=fake_read_action), \
+         patch("tapes.importer.service.search_prompt", return_value=("movie", "Matrix", 1999)):
+        summary = service.import_path(tmp_path)
+
+    assert summary["imported"] == 1
+    meta_source.search.assert_called_once_with("Matrix", 1999, "movie")
+
+
+def test_interactive_manual_entry(tmp_path, repo, meta_source, cfg):
+    """Pressing 'm' collects manual metadata and imports."""
+    _make_video(tmp_path)
+    mock_result = IdentificationResult(
+        candidates=[_make_candidate(confidence=0.3)],  # low confidence to trigger prompt
+        file_info={"title": "unknown"},
+        requires_interaction=True,
+    )
+    manual_sr = SearchResult(
+        tmdb_id=0, title="My Movie", year=2020, media_type="movie", confidence=1.0,
+    )
+
+    service = ImportService(repo=repo, metadata_source=meta_source, config=cfg)
+    with patch.object(service._pipeline, "identify", return_value=mock_result), \
+         patch("tapes.importer.service.classify_companions", return_value=[]), \
+         patch("tapes.importer.service.display_prompt"), \
+         patch("tapes.importer.service.read_action", return_value=PromptAction.MANUAL), \
+         patch("tapes.importer.service.manual_prompt", return_value=manual_sr):
+        summary = service.import_path(tmp_path)
+
+    assert summary["imported"] == 1
+
+
+def test_no_candidates_prompts_user(tmp_path, repo, meta_source, cfg):
+    """Files with requires_interaction and no candidates show prompt."""
+    _make_video(tmp_path)
+    mock_result = IdentificationResult(
+        candidates=[], file_info={"title": "mystery"}, requires_interaction=True,
+    )
+
+    service = ImportService(repo=repo, metadata_source=meta_source, config=cfg)
+    with patch.object(service._pipeline, "identify", return_value=mock_result), \
+         patch("tapes.importer.service.classify_companions", return_value=[]), \
+         patch("tapes.importer.service.display_prompt") as mock_display, \
+         patch("tapes.importer.service.read_action", return_value=PromptAction.SKIP):
+        summary = service.import_path(tmp_path)
+
+    # The prompt should have been displayed (not silently skipped)
+    assert mock_display.call_count == 1
+    assert summary["skipped"] == 1
+
+
 def test_interactive_accept_all(tmp_path, repo, meta_source, cfg):
-    """When user presses accept-all, subsequent files are auto-accepted."""
+    """When user presses accept-all, subsequent files above threshold are auto-accepted."""
     _make_video(tmp_path, name="movie1.mkv")
     _make_video(tmp_path, name="movie2.mkv")
-    candidate = _make_candidate(confidence=0.60)
+    candidate = _make_candidate(confidence=0.85)  # above threshold (0.8)
     mock_result = IdentificationResult(
         candidates=[candidate],
         file_info={},
@@ -241,3 +352,63 @@ def test_interactive_accept_all(tmp_path, repo, meta_source, cfg):
     assert summary["imported"] == 2
     # display_prompt should only be called once (first file); second is auto-accepted
     assert mock_display.call_count == 1
+
+
+def test_accept_all_respects_threshold(tmp_path, repo, meta_source, cfg):
+    """Accept-all only auto-accepts candidates above confidence threshold."""
+    cfg.import_.confidence_threshold = 0.8
+    _make_video(tmp_path, name="good.mkv")
+    _make_video(tmp_path, name="bad.mkv")
+
+    good_candidate = _make_candidate(confidence=0.85)
+    bad_candidate = _make_candidate(title="Unknown", confidence=0.50)
+    results = [
+        IdentificationResult(candidates=[good_candidate], file_info={}, requires_interaction=True),
+        IdentificationResult(candidates=[bad_candidate], file_info={}, requires_interaction=True),
+    ]
+
+    call_count = [0]
+    def fake_identify(path):
+        idx = call_count[0]
+        call_count[0] += 1
+        return results[idx]
+
+    prompt_count = [0]
+    def fake_read_action(prompt, **kwargs):
+        prompt_count[0] += 1
+        if prompt_count[0] == 1:
+            return PromptAction.ACCEPT_ALL
+        return PromptAction.SKIP  # second file should be prompted
+
+    service = ImportService(repo=repo, metadata_source=meta_source, config=cfg)
+    with patch.object(service._pipeline, "identify", side_effect=fake_identify), \
+         patch("tapes.importer.service.classify_companions", return_value=[]), \
+         patch("tapes.importer.service.display_prompt"), \
+         patch("tapes.importer.service.read_action", side_effect=fake_read_action):
+        summary = service.import_path(tmp_path)
+
+    assert summary["imported"] == 1
+    assert summary["skipped"] == 1
+    # Second file should have been prompted (not auto-accepted)
+    assert prompt_count[0] == 2
+
+
+def test_companion_files_moved_during_import(tmp_path, repo, meta_source, cfg):
+    """Companion files are moved alongside the video during import."""
+    video = _make_video(tmp_path)
+    # Create a subtitle companion
+    sub = tmp_path / "movie.en.srt"
+    sub.write_text("subtitle content")
+    candidate = _make_candidate()
+    mock_result = IdentificationResult(candidates=[candidate], file_info={})
+
+    service = ImportService(repo=repo, metadata_source=meta_source, config=cfg)
+    with patch.object(service._pipeline, "identify", return_value=mock_result):
+        summary = service.import_path(tmp_path)
+
+    assert summary["imported"] == 1
+    dest_dir = Path(cfg.library.movies)
+    # Subtitle should be renamed and moved alongside video
+    srt_files = list(dest_dir.rglob("*.srt"))
+    assert len(srt_files) == 1
+    assert "The Matrix (1999)" in srt_files[0].name
