@@ -9,3 +9,6 @@ dist/
 *.db-shm
 *.db-wal
 .claude/
+tapes.toml
+*.mkv
+.worktrees/
