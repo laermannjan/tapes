@@ -8,7 +8,7 @@ _WINDOWS_RESERVED = re.compile(
 )
 # Conditional field syntax: {field: prefix$suffix}
 # Note: no \s* after colon — the space is part of the prefix
-_CONDITIONAL = re.compile(r'\{(\w+):(.*?)\$\s*(.*?)\}')
+_CONDITIONAL = re.compile(r'\{(\w+):([^}]*?)\$\s*([^}]*?)\}')
 # Standard field syntax: {field} or {field:format}
 _STANDARD = re.compile(r'\{(\w+)(?::([^}]*))?\}')
 
