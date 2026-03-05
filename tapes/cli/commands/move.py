@@ -36,7 +36,11 @@ def command(
         console.print("[green]All files are already at their correct locations.[/green]")
         return
 
-    result = execute_moves(moves, repo, dry_run=dry_run)
+    if dry_run:
+        result = execute_moves(moves, repo, dry_run=True)
+    else:
+        typer.confirm(f"Move {len(moves)} file(s)?", abort=True)
+        result = execute_moves(moves, repo)
 
     if dry_run:
         table = Table(title=f"[yellow]DRY RUN[/yellow] Would move {len(result.planned)} file(s)")

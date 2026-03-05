@@ -47,10 +47,7 @@ class LibraryService:
             return self._repo.get_all_items()
 
         where = " AND ".join(clauses)
-        rows = self._repo._conn.execute(
-            f"SELECT * FROM items WHERE {where}", params
-        ).fetchall()
-        return [_row_to_item(r) for r in rows]
+        return self._repo.query_items(where, params)
 
     def _parse_field_query(
         self, field: str, value: str, clauses: list[str], params: list
@@ -58,11 +55,17 @@ class LibraryService:
         m = _RANGE_OP.match(value)
         if m and field in _NUMERIC_FIELDS:
             op, val = m.group(1), m.group(2)
-            clauses.append(f"{field} {op} ?")
-            params.append(_coerce_numeric(val))
+            try:
+                clauses.append(f"{field} {op} ?")
+                params.append(_coerce_numeric(val))
+            except ValueError:
+                clauses.append("0")
         elif field in _NUMERIC_FIELDS:
-            clauses.append(f"{field} = ?")
-            params.append(_coerce_numeric(value))
+            try:
+                clauses.append(f"{field} = ?")
+                params.append(_coerce_numeric(value))
+            except ValueError:
+                clauses.append("0")
         else:
             clauses.append(f"{field} = ? COLLATE NOCASE")
             params.append(value)
@@ -73,9 +76,3 @@ def _coerce_numeric(val: str) -> int | float:
         return int(val)
     except ValueError:
         return float(val)
-
-
-def _row_to_item(row) -> ItemRecord:
-    if hasattr(row, "keys"):
-        return ItemRecord(**{k: row[k] for k in row.keys()})
-    return ItemRecord(*row)

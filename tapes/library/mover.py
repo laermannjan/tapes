@@ -67,12 +67,7 @@ def execute_moves(
         try:
             new.parent.mkdir(parents=True, exist_ok=True)
             safe_rename(old, new)
-            # Update DB path
-            repo._conn.execute(
-                "UPDATE items SET path = ? WHERE path = ?",
-                (str(new), str(old)),
-            )
-            repo._conn.commit()
+            repo.update_item_path(str(old), str(new))
             result.moved += 1
         except Exception as e:
             logger.error("Failed to move %s -> %s: %s", old, new, e)

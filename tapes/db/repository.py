@@ -117,6 +117,18 @@ class Repository:
         )
         self._conn.commit()
 
+    def query_items(self, where: str, params: list) -> list[ItemRecord]:
+        rows = self._conn.execute(
+            f"SELECT * FROM items WHERE {where}", params
+        ).fetchall()
+        return [_row_to_item(r) for r in rows]
+
+    def update_item_path(self, old_path: str, new_path: str) -> None:
+        self._conn.execute(
+            "UPDATE items SET path = ? WHERE path = ?", (new_path, old_path)
+        )
+        self._conn.commit()
+
     def get_in_progress_sessions(self) -> list[dict]:
         rows = self._conn.execute(
             "SELECT * FROM sessions WHERE state = 'in_progress'"
