@@ -1,5 +1,10 @@
+import logging
+
 import requests
+
 from tapes.metadata.base import MetadataSource, SearchResult
+
+logger = logging.getLogger(__name__)
 
 BASE_URL = "https://api.themoviedb.org/3"
 
@@ -14,6 +19,7 @@ class TMDBSource(MetadataSource):
     def __init__(self, api_key: str, timeout: int = 10):
         self._key = api_key
         self._timeout = timeout
+        self._available: bool | None = None
 
     def search(self, title: str, year: int | None, media_type: str) -> list[SearchResult]:
         if not title:
@@ -28,7 +34,11 @@ class TMDBSource(MetadataSource):
             resp = requests.get(f"{BASE_URL}/{endpoint}", params=params, timeout=self._timeout)
             resp.raise_for_status()
             raw_results = resp.json().get("results", [])
-        except Exception:
+        except requests.exceptions.HTTPError as e:
+            logger.warning("TMDB search failed (HTTP %s): %s", e.response.status_code, e)
+            return []
+        except Exception as e:
+            logger.warning("TMDB search failed: %s", e)
             return []
 
         results = []
@@ -50,15 +60,21 @@ class TMDBSource(MetadataSource):
         return _build_result(detail, detail, media_type, confidence=0.95)
 
     def is_available(self) -> bool:
+        if self._available is not None:
+            return self._available
         try:
             resp = requests.get(
                 f"{BASE_URL}/configuration",
                 params={"api_key": self._key},
                 timeout=self._timeout,
             )
-            return resp.status_code == 200
-        except Exception:
-            return False
+            self._available = resp.status_code == 200
+            if not self._available:
+                logger.warning("TMDB API returned HTTP %s; check your API key", resp.status_code)
+        except Exception as e:
+            logger.warning("TMDB API unreachable: %s", e)
+            self._available = False
+        return self._available
 
     def _fetch_detail(self, tmdb_id: int, media_type: str) -> dict | None:
         endpoint = "tv" if media_type == "tv" else "movie"
@@ -70,7 +86,8 @@ class TMDBSource(MetadataSource):
             )
             resp.raise_for_status()
             return resp.json()
-        except Exception:
+        except Exception as e:
+            logger.debug("TMDB detail fetch failed for %s/%s: %s", endpoint, tmdb_id, e)
             return None
 
 

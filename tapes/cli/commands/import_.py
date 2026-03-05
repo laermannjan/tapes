@@ -1,4 +1,3 @@
-import os
 import typer
 from pathlib import Path
 from typing import Optional
@@ -50,9 +49,12 @@ def command(
     init_db(conn)
     repo = Repository(conn)
 
-    meta = TMDBSource(api_key=cfg.metadata.tmdb_api_key or os.environ.get("TMDB_API_KEY", ""))
+    meta = TMDBSource(api_key=cfg.metadata.tmdb_api_key)
     if not meta.is_available():
-        console.print("[yellow]Warning:[/yellow] TMDB API is not reachable. Check your tmdb_api_key in tapes.toml.")
+        console.print(
+            "[yellow]Warning:[/yellow] TMDB API is not reachable. "
+            "Check your tmdb_api_key in tapes.toml or TMDB_API_KEY environment variable."
+        )
 
     service = ImportService(repo=repo, metadata_source=meta, config=cfg)
     summary = service.import_path(path)

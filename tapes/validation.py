@@ -8,8 +8,9 @@ class ConfigError(SystemExit):
 
 def validate_config(cfg: TapesConfig) -> None:
     """Validate required config at startup. Raises ConfigError with a clear message."""
-    api_key = cfg.metadata.tmdb_api_key or os.environ.get("TMDB_API_KEY", "")
-    if not api_key:
+    if not cfg.metadata.tmdb_api_key:
+        cfg.metadata.tmdb_api_key = os.environ.get("TMDB_API_KEY", "")
+    if not cfg.metadata.tmdb_api_key:
         raise ConfigError(
             "TMDB API key not configured.\n"
             "  Set TMDB_API_KEY environment variable, or add to tapes.toml:\n"
