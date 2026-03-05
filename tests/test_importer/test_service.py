@@ -147,6 +147,24 @@ def test_execute_copy(tmp_path, repo, meta_source, cfg):
     assert dest.exists()
 
 
+def test_execute_move(tmp_path, repo, meta_source, cfg):
+    """Move mode deletes source after copy-verify; DB record uses dest stat."""
+    cfg.import_.mode = "move"
+    video = _make_video(tmp_path)
+    candidate = _make_candidate()
+    mock_result = IdentificationResult(candidates=[candidate], file_info={})
+
+    service = ImportService(repo=repo, metadata_source=meta_source, config=cfg)
+    with patch.object(service._pipeline, "identify", return_value=mock_result):
+        summary = service.import_path(tmp_path)
+
+    assert summary["imported"] == 1
+    assert summary["errors"] == 0
+    dest = Path(cfg.library.movies) / "The Matrix (1999).mkv"
+    assert dest.exists()
+    assert not video.exists()  # source deleted
+
+
 def test_interactive_skip(tmp_path, repo, meta_source, cfg):
     """When user presses skip, the file is skipped."""
     _make_video(tmp_path)

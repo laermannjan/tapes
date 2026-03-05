@@ -41,7 +41,7 @@ def _find_items(repo: Repository, path: Path) -> list[ItemRecord]:
     return repo.query_items("path = ?", [path_str])
 
 
-def modify_items(
+def modify_item(
     repo: Repository,
     config: TapesConfig,
     metadata_source: MetadataSource,
@@ -81,19 +81,6 @@ def modify_items(
         overall.error = "; ".join(overall.errors)
 
     return overall
-
-
-# Keep the old name as an alias for backwards compatibility with tests
-def modify_item(
-    repo: Repository,
-    config: TapesConfig,
-    metadata_source: MetadataSource,
-    path: Path,
-    tmdb_id: str | None = None,
-    no_move: bool = False,
-    event_bus=None,
-) -> ModifyResult:
-    return modify_items(repo, config, metadata_source, path, tmdb_id, no_move, event_bus)
 
 
 def _modify_single(

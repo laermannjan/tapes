@@ -251,7 +251,8 @@ class ImportService:
         candidate: SearchResult,
         file_info: dict,
     ) -> None:
-        stat = src.stat()
+        # Use dst for stat since src may be deleted in move mode
+        stat = dst.stat()
         item = ItemRecord(
             id=None,
             path=str(dst),
