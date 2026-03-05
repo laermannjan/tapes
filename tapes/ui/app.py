@@ -7,7 +7,10 @@ from textual.binding import Binding
 from textual.widgets import Static
 from textual.containers import VerticalScroll
 
-from tapes.models import ImportGroup, GroupStatus
+from tapes.models import ImportGroup, GroupStatus, FileEntry
+from tapes.ui.split_modal import SplitModal
+from tapes.ui.merge_modal import MergeModal
+from tapes.ui.file_editor import FileEditorModal
 
 
 # Status badge mapping
@@ -97,6 +100,9 @@ class ReviewApp(App):
     BINDINGS = [
         Binding("ctrl+down", "focus_next_group", "Next group", show=True),
         Binding("ctrl+up", "focus_prev_group", "Previous group", show=True),
+        Binding("p", "open_split", "Split", show=True),
+        Binding("j", "open_merge", "Merge", show=True),
+        Binding("e", "open_file_editor", "Edit files", show=True),
         Binding("q", "quit", "Quit", show=True),
     ]
 
@@ -139,3 +145,76 @@ class ReviewApp(App):
             self._group_widgets[self._focused_index].set_expanded(False)
             self._focused_index -= 1
             self._group_widgets[self._focused_index].set_expanded(True)
+
+    def _rebuild_widgets(self) -> None:
+        """Clear and re-compose group widgets after structural changes."""
+        # Remove empty groups
+        self._groups = [g for g in self._groups if g.files]
+        # Clamp focused index
+        if self._focused_index >= len(self._groups):
+            self._focused_index = max(0, len(self._groups) - 1)
+
+        # Remove old widgets
+        scroll = self.query_one(VerticalScroll)
+        scroll.remove_children()
+        self._group_widgets.clear()
+
+        # Re-compose
+        for i, group in enumerate(self._groups):
+            widget = GroupWidget(group, expanded=(i == self._focused_index))
+            self._group_widgets.append(widget)
+            scroll.mount(widget)
+
+        # Update summary
+        summary = self.query_one("#summary", SummaryWidget)
+        summary._groups = self._groups
+        summary._render_content()
+
+    def action_open_split(self) -> None:
+        if not self._groups:
+            return
+        group = self._groups[self._focused_index]
+        if len(group.files) < 2:
+            return  # Need at least 2 files to split
+
+        def on_split_result(result: ImportGroup | None) -> None:
+            if result is None:
+                return
+            self._groups.append(result)
+            self._rebuild_widgets()
+
+        self.push_screen(SplitModal(group), callback=on_split_result)
+
+    def action_open_merge(self) -> None:
+        if len(self._groups) < 2:
+            return
+        focused = self._groups[self._focused_index]
+
+        def on_merge_result(result: list[ImportGroup] | None) -> None:
+            if result is None:
+                return
+            # Move all files from selected groups into focused group
+            for source in result:
+                for entry in list(source.files):
+                    focused.add_file(entry)
+            self._rebuild_widgets()
+
+        self.push_screen(
+            MergeModal(focused, self._groups), callback=on_merge_result
+        )
+
+    def action_open_file_editor(self) -> None:
+        if not self._groups:
+            return
+        focused = self._groups[self._focused_index]
+
+        def on_editor_result(result: list[FileEntry] | None) -> None:
+            if result is None:
+                return
+            for entry in result:
+                focused.add_file(entry)
+            self._rebuild_widgets()
+
+        self.push_screen(
+            FileEditorModal(focused, self._groups), callback=on_editor_result
+        )
