@@ -30,18 +30,21 @@ class IdentificationPipeline:
         repo: Repository,
         metadata_source: MetadataSource,
         confidence_threshold: float = 0.9,
+        no_db: bool = False,
     ):
         self._repo = repo
         self._meta = metadata_source
         self._threshold = confidence_threshold
+        self._no_db = no_db
 
     def identify(self, path: Path) -> IdentificationResult:
         stat = path.stat()
 
         # Step 1: DB cache lookup
-        cached = self._repo.find_by_path_stat(str(path), stat.st_mtime, stat.st_size)
-        if cached:
-            return IdentificationResult(item=cached, source="db_cache")
+        if not self._no_db:
+            cached = self._repo.find_by_path_stat(str(path), stat.st_mtime, stat.st_size)
+            if cached:
+                return IdentificationResult(item=cached, source="db_cache")
 
         file_info: dict = {"path": str(path), "mtime": stat.st_mtime, "size": stat.st_size}
 

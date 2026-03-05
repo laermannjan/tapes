@@ -416,3 +416,103 @@ def test_read_action_e_ignored_without_companions():
     with patch("tapes.importer.interactive._read_key", side_effect=["e", "s"]):
         action = read_action(prompt, has_companions=False)
     assert action == PromptAction.SEARCH
+
+
+# --- search_prompt tests ---
+
+from tapes.importer.interactive import search_prompt
+
+
+def test_search_prompt_collects_fields():
+    buf = StringIO()
+    con = Console(file=buf, force_terminal=True, no_color=True, width=100)
+    with patch("builtins.input", side_effect=["movie", "The Matrix", "1999"]):
+        media_type, title, year = search_prompt(con)
+    assert media_type == "movie"
+    assert title == "The Matrix"
+    assert year == 1999
+
+
+def test_search_prompt_empty_year():
+    buf = StringIO()
+    con = Console(file=buf, force_terminal=True, no_color=True, width=100)
+    with patch("builtins.input", side_effect=["tv", "Breaking Bad", ""]):
+        media_type, title, year = search_prompt(con)
+    assert media_type == "tv"
+    assert title == "Breaking Bad"
+    assert year is None
+
+
+def test_search_prompt_defaults():
+    buf = StringIO()
+    con = Console(file=buf, force_terminal=True, no_color=True, width=100)
+    with patch("builtins.input", side_effect=["", "", ""]):
+        media_type, title, year = search_prompt(con, default_media_type="tv", default_title="Dune", default_year=2021)
+    assert media_type == "tv"
+    assert title == "Dune"
+    assert year == 2021
+
+
+# --- manual_prompt tests ---
+
+from tapes.importer.interactive import manual_prompt
+
+
+def test_manual_prompt_movie():
+    buf = StringIO()
+    con = Console(file=buf, force_terminal=True, no_color=True, width=100)
+    with patch("builtins.input", side_effect=["movie", "Inception", "2010", "n"]):
+        result = manual_prompt(con)
+    assert result.title == "Inception"
+    assert result.year == 2010
+    assert result.media_type == "movie"
+    assert result.tmdb_id == 0
+    assert result.confidence == 1.0
+
+
+def test_manual_prompt_tv_with_extra_fields():
+    buf = StringIO()
+    con = Console(file=buf, force_terminal=True, no_color=True, width=100)
+    with patch("builtins.input", side_effect=["tv", "Breaking Bad", "2008", "y", "Breaking Bad", "1", "1", "Pilot"]):
+        result = manual_prompt(con)
+    assert result.media_type == "tv"
+    assert result.show == "Breaking Bad"
+    assert result.season == 1
+    assert result.episode == 1
+    assert result.episode_title == "Pilot"
+
+
+def test_manual_prompt_defaults():
+    buf = StringIO()
+    con = Console(file=buf, force_terminal=True, no_color=True, width=100)
+    with patch("builtins.input", side_effect=["", "", "", "n"]):
+        result = manual_prompt(con, default_title="Dune", default_year=2021)
+    assert result.title == "Dune"
+    assert result.year == 2021
+
+
+def test_manual_prompt_invalid_media_type_uses_default():
+    buf = StringIO()
+    con = Console(file=buf, force_terminal=True, no_color=True, width=100)
+    with patch("builtins.input", side_effect=["invalid", "Some Title", "", "n"]):
+        result = manual_prompt(con, default_media_type="tv")
+    assert result.media_type == "tv"
+
+
+def test_manual_prompt_no_year():
+    buf = StringIO()
+    con = Console(file=buf, force_terminal=True, no_color=True, width=100)
+    with patch("builtins.input", side_effect=["movie", "Unknown Film", "", "n"]):
+        result = manual_prompt(con)
+    assert result.year is None
+
+
+def test_manual_prompt_more_fields_movie_skips_tv_fields():
+    """Pressing 'y' for more fields as movie does not collect TV fields."""
+    buf = StringIO()
+    con = Console(file=buf, force_terminal=True, no_color=True, width=100)
+    with patch("builtins.input", side_effect=["movie", "Some Movie", "2020", "y"]):
+        result = manual_prompt(con)
+    assert result.show is None
+    assert result.season is None
+    assert result.episode is None

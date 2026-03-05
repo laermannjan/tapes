@@ -5,7 +5,7 @@ from pathlib import Path
 
 from rich.console import Console
 
-from tapes.companions.classifier import classify_companions
+from tapes.companions.classifier import classify_companions, rename_companion
 from tapes.config.schema import TapesConfig
 from tapes.db.repository import Repository, ItemRecord
 from tapes.discovery.scanner import scan_media_files
@@ -16,7 +16,9 @@ from tapes.importer.interactive import (
     PromptAction,
     display_prompt,
     edit_companions,
+    manual_prompt,
     read_action,
+    search_prompt,
 )
 from tapes.metadata.base import MetadataSource, SearchResult
 from tapes.templates.engine import render_template
@@ -60,6 +62,7 @@ class ImportService:
             repo=repo,
             metadata_source=metadata_source,
             confidence_threshold=config.import_.confidence_threshold,
+            no_db=config.import_.no_db,
         )
 
     def import_path(self, path: Path) -> dict:
@@ -71,7 +74,8 @@ class ImportService:
             return vars(summary)
 
         groups = group_media_files(video_files)
-        session = ImportSession.create(self._repo, str(path)) if not summary.dry_run else None
+        no_db = self._cfg.import_.no_db
+        session = ImportSession.create(self._repo, str(path)) if not summary.dry_run and not no_db else None
 
         total_videos = sum(len(g.video_files) for g in groups)
         video_index = 0
@@ -112,6 +116,10 @@ class ImportService:
             summary.skipped += 1
             return
 
+        # --interactive: force every file through the prompt
+        if self._cfg.import_.interactive:
+            result.requires_interaction = True
+
         # No candidates at all — mark unmatched
         if not result.candidates and not result.requires_interaction:
             summary.unmatched.append(str(video))
@@ -120,13 +128,9 @@ class ImportService:
 
         # Needs interaction
         if result.requires_interaction:
-            if not result.candidates:
-                summary.unmatched.append(str(video))
-                summary.skipped += 1
-                return
-
-            # Accept-all mode: auto-accept top candidate
-            if self._accept_all:
+            # Accept-all mode: auto-accept top candidate if above threshold
+            if (self._accept_all and result.candidates
+                    and result.candidates[0].confidence >= self._cfg.import_.confidence_threshold):
                 candidate = result.candidates[0]
             else:
                 candidate = self._prompt_user(video, result, index=index, total=total)
@@ -155,14 +159,18 @@ class ImportService:
             return
 
         # Execute file operation
-        op_id = session.add_operation(str(video), self._cfg.import_.mode)
+        op_id = session.add_operation(str(video), self._cfg.import_.mode) if session else None
         try:
             self._execute_file_op(video, dest)
-            self._write_db_record(video, dest, candidate, result.file_info)
-            session.update_operation(op_id, state="done", dest_path=str(dest))
+            self._move_companions(video, dest)
+            if not self._cfg.import_.no_db:
+                self._write_db_record(video, dest, candidate, result.file_info)
+            if session:
+                session.update_operation(op_id, state="done", dest_path=str(dest))
             summary.imported += 1
         except Exception as e:
-            session.update_operation(op_id, state="failed", error=str(e))
+            if session:
+                session.update_operation(op_id, state="failed", error=str(e))
             raise
 
     def _prompt_user(self, video, result, *, index, total):
@@ -189,14 +197,14 @@ class ImportService:
             if isinstance(action, tuple):
                 # Numbered candidate selection
                 _, idx = action
-                return result.candidates[idx]
+                return prompt.candidates[idx]
 
             if action == PromptAction.ACCEPT:
-                return result.candidates[0]
+                return prompt.candidates[0]
 
             if action == PromptAction.ACCEPT_ALL:
                 self._accept_all = True
-                return result.candidates[0]
+                return prompt.candidates[0]
 
             if action == PromptAction.SKIP:
                 return None
@@ -204,8 +212,34 @@ class ImportService:
             if action == PromptAction.QUIT:
                 raise _QuitImport()
 
-            # SEARCH, MANUAL: skip for now (full search flow is separate work)
-            return None
+            if action == PromptAction.MANUAL:
+                default_title = result.file_info.get("title") or result.file_info.get("show") or ""
+                default_year = result.file_info.get("year")
+                default_media_type = "tv" if "season" in result.file_info else "movie"
+                return manual_prompt(
+                    self._console,
+                    default_media_type=default_media_type,
+                    default_title=default_title,
+                    default_year=default_year,
+                )
+
+            if action == PromptAction.SEARCH:
+                default_title = result.file_info.get("title") or result.file_info.get("show") or ""
+                default_year = result.file_info.get("year")
+                default_media_type = "tv" if "season" in result.file_info else "movie"
+
+                mt, title, year = search_prompt(
+                    self._console,
+                    default_media_type=default_media_type,
+                    default_title=default_title,
+                    default_year=default_year,
+                )
+                search_results = self._meta.search(title, year, mt)
+                if search_results:
+                    prompt = InteractivePrompt(candidates=search_results, is_search_result=True)
+                else:
+                    prompt = InteractivePrompt(candidates=[], after_failed_search=True)
+                continue
 
     def _render_destination(self, video: Path, candidate: SearchResult) -> Path:
         cfg = self._cfg
@@ -231,6 +265,24 @@ class ImportService:
 
         rendered = render_template(template, fields, replace=cfg.replace)
         return library_root / rendered
+
+    def _move_companions(self, src_video: Path, dest_video: Path) -> None:
+        """Move companion files alongside the imported video."""
+        companions = classify_companions(src_video)
+        dest_stem = dest_video.stem
+        for comp in companions:
+            if not comp.move_by_default:
+                continue
+            new_name = rename_companion(comp.path.name, dest_stem, comp.category)
+            new_path = dest_video.parent / comp.relative_to_video.parent / new_name
+            try:
+                new_path.parent.mkdir(parents=True, exist_ok=True)
+                if self._cfg.import_.mode == "copy":
+                    copy_verify(comp.path, new_path)
+                else:
+                    move_file(comp.path, new_path, verify=True)
+            except Exception as e:
+                logger.warning("Failed to move companion %s: %s", comp.path, e)
 
     def _execute_file_op(self, src: Path, dst: Path) -> None:
         mode = self._cfg.import_.mode
