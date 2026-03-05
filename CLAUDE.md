@@ -102,14 +102,15 @@ See `docs/decisions/` for full ADRs. Summary:
   for file system tests. Mock external HTTP with the `responses` library.
 - **Config:** Pydantic v2 models. The `import` key in TOML is renamed to
   `import_` by the loader to avoid the Python keyword.
-- **guessit field names:** `screen_size` (not `resolution`), `video_codec`
-  (not `codec`).
+- **guessit field names:** `parse_filename` normalizes guessit keys:
+  `video_codec` -> `codec`, `source` -> `media_source`, `audio_codec` -> `audio`.
+  The raw guessit name `screen_size` is kept (fallback in `_write_db_record`).
 
 ---
 
 ## Current status
 
-**Beta.** Auto-import pipeline works end-to-end. 312 tests passing.
+**Beta.** Auto-import pipeline works end-to-end. 370 tests passing.
 Interactive matching flow is fully built: search, manual entry, no-candidate
 prompting, companion file import, and accept-all threshold enforcement all work.
 
@@ -148,9 +149,7 @@ and records every operation in the DB.
 
 - Multi-episode files still require manual handling (by design, ADR)
 - OpenSubtitles API lookup deferred (hash computed but not queried)
-- Interactive companion editing during import: user can toggle companions via
-  `e` key but the edited selection is not yet threaded through to the move step
-  (always uses `move_by_default` from classifier)
+- Bulk directory modify applies same TMDB ID regardless of media type
 
 ### Task completion
 
