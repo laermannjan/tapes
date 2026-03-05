@@ -216,6 +216,66 @@ def _read_key() -> str:
     return ch
 
 
+# --- Read user action from prompt ---
+
+_KEY_TO_ACTION = {
+    "s": PromptAction.SEARCH,
+    "m": PromptAction.MANUAL,
+    "x": PromptAction.SKIP,
+    "q": PromptAction.QUIT,
+}
+
+
+def read_action(
+    prompt: InteractivePrompt,
+    *,
+    has_companions: bool = False,
+) -> PromptAction | tuple[PromptAction, int] | str:
+    """Read a single keypress and map it to a PromptAction.
+
+    Returns:
+        PromptAction for simple actions (search, skip, quit, manual, accept).
+        (PromptAction.ACCEPT, index) when the user picks a numbered candidate.
+        The string ``"edit"`` when ``e`` is pressed and companions exist.
+    """
+    # Ambiguous means multiple candidates without a clear default accept
+    is_ambiguous = (
+        len(prompt.candidates) > 1
+        and prompt.default_action != PromptAction.ACCEPT
+    )
+    num_candidates = len(prompt.candidates)
+
+    while True:
+        key = _read_key()
+
+        # Enter -> default action (if one exists)
+        if key in ("\r", "\n"):
+            if prompt.default_action is not None:
+                return prompt.default_action
+            continue  # no default, retry
+
+        # Simple letter keys
+        if key in _KEY_TO_ACTION:
+            return _KEY_TO_ACTION[key]
+
+        # Accept-all: 'a' when candidates exist
+        if key == "a" and num_candidates > 0:
+            return PromptAction.ACCEPT
+
+        # Numbered candidate selection (only when ambiguous)
+        if key.isdigit() and is_ambiguous:
+            idx = int(key)
+            if 1 <= idx <= num_candidates:
+                return (PromptAction.ACCEPT, idx - 1)
+            continue  # out of range, retry
+
+        # Edit companions
+        if key == "e" and has_companions:
+            return "edit"
+
+        # Invalid key, loop again
+
+
 # --- Companion file checklist editor ---
 
 
