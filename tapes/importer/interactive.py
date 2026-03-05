@@ -7,11 +7,14 @@ results to the user during interactive import mode.
 from __future__ import annotations
 
 import logging
+import sys
 from dataclasses import dataclass
 from enum import Enum
 
 from rich.console import Console
 from rich.text import Text
+
+from tapes.companions.classifier import Category, CompanionFile
 
 logger = logging.getLogger(__name__)
 
@@ -94,16 +97,25 @@ _ACTION_KEYS = [
 ]
 
 
-def _render_action_keys(default: PromptAction | None) -> Text:
+_EDIT_KEY = "[e]dit files"
+
+
+def _render_action_keys(
+    default: PromptAction | None, *, has_companions: bool = False
+) -> Text:
     """Build a Rich Text line showing available actions.
 
     The default action is rendered bold; all others are dim.
+    The ``[e]dit files`` key is only shown when companions are present.
     """
     line = Text()
-    for i, (action, label) in enumerate(_ACTION_KEYS):
+    keys = list(_ACTION_KEYS)
+    if has_companions:
+        keys.append((None, _EDIT_KEY))
+    for i, (action, label) in enumerate(keys):
         if i > 0:
             line.append("  ")
-        if action == default:
+        if action is not None and action == default:
             line.append(label, style="bold")
         else:
             line.append(label, style="dim")
@@ -157,6 +169,94 @@ def display_prompt(
             source_str = f"  [{source}]" if source else ""
             console.print(Text(f"{num}. {match_str}{source_str}"))
 
+    # Companion files
+    has_companions = bool(companions)
+    if has_companions:
+        _render_companions(console, companions)
+
     # Action keys
-    action_line = _render_action_keys(prompt.default_action)
+    action_line = _render_action_keys(prompt.default_action, has_companions=has_companions)
     console.print(action_line)
+
+
+# --- Companion file rendering ---
+
+_CATEGORY_WIDTH = 12  # right-align category names to this width
+
+
+def _render_companions(console: Console, companions: list[CompanionFile]) -> None:
+    """Render companion files grouped by category."""
+    for comp in companions:
+        marker = "+" if comp.move_by_default else "?"
+        cat_label = comp.category.value.rjust(_CATEGORY_WIDTH)
+        line = Text()
+        line.append(f"{cat_label}   {marker}  {comp.relative_to_video}")
+        console.print(line)
+
+
+# --- Single keypress reader ---
+
+
+def _read_key() -> str:
+    """Read a single keypress from stdin.
+
+    Returns the character as a string. This is a separate function so that
+    tests can mock it.
+    """
+    import termios
+    import tty
+
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch
+
+
+# --- Companion file checklist editor ---
+
+
+def edit_companions(
+    console: Console, companions: list[CompanionFile]
+) -> list[CompanionFile]:
+    """Show a togglable checklist for companion files.
+
+    Video files are locked (always selected). Other files start at their
+    ``move_by_default`` state. The user types a number to toggle, Enter to
+    confirm.
+
+    Returns:
+        List of companion files that the user selected for import.
+    """
+    selected = [comp.move_by_default or comp.category == Category.VIDEO for comp in companions]
+
+    while True:
+        # Render checklist
+        for i, comp in enumerate(companions):
+            is_video = comp.category == Category.VIDEO
+            if is_video:
+                mark = "x"
+                lock = " (locked)"
+            else:
+                mark = "x" if selected[i] else " "
+                lock = ""
+            line = Text()
+            line.append(f"  {i}  [{mark}]  {comp.category.value:>12}  {comp.relative_to_video}{lock}")
+            console.print(line)
+
+        console.print(Text("Toggle number, Enter to confirm: ", style="dim"), end="")
+
+        key = _read_key()
+        if key in ("\r", "\n"):
+            break
+        if key.isdigit():
+            idx = int(key)
+            if 0 <= idx < len(companions):
+                # Video files cannot be toggled
+                if companions[idx].category != Category.VIDEO:
+                    selected[idx] = not selected[idx]
+
+    return [comp for comp, sel in zip(companions, selected) if sel]
