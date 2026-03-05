@@ -51,7 +51,7 @@ class FileMetadata:
     title: str | None = None
     year: int | None = None
     season: int | None = None
-    episode: int | None = None
+    episode: int | list[int] | None = None
     part: int | None = None
     raw: dict = field(default_factory=dict)
 
