@@ -23,6 +23,32 @@ GAP_THRESHOLD = 0.2
 _EPS = 1e-9  # tolerance for floating-point comparisons
 
 
+def search_prompt(
+    console: Console,
+    *,
+    default_media_type: str = "movie",
+    default_title: str = "",
+    default_year: int | None = None,
+) -> tuple[str, str, int | None]:
+    """Collect structured search fields from the user.
+
+    Returns (media_type, title, year).
+    """
+    year_default = str(default_year) if default_year else ""
+    mt_prompt = f"Media type [movie/tv] ({default_media_type}): "
+    title_prompt = f"Title ({default_title}): " if default_title else "Title: "
+    year_prompt = f"Year (optional) ({year_default}): " if year_default else "Year (optional): "
+
+    mt = input(mt_prompt).strip().lower() or default_media_type
+    if mt not in ("movie", "tv"):
+        mt = default_media_type
+    title = input(title_prompt).strip() or default_title
+    raw_year = input(year_prompt).strip() or year_default
+    year = int(raw_year) if raw_year else None
+
+    return mt, title, year
+
+
 class PromptAction(str, Enum):
     """Actions available at an interactive import prompt."""
 

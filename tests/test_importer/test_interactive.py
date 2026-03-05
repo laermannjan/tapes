@@ -416,3 +416,38 @@ def test_read_action_e_ignored_without_companions():
     with patch("tapes.importer.interactive._read_key", side_effect=["e", "s"]):
         action = read_action(prompt, has_companions=False)
     assert action == PromptAction.SEARCH
+
+
+# --- search_prompt tests ---
+
+from tapes.importer.interactive import search_prompt
+
+
+def test_search_prompt_collects_fields():
+    buf = StringIO()
+    con = Console(file=buf, force_terminal=True, no_color=True, width=100)
+    with patch("builtins.input", side_effect=["movie", "The Matrix", "1999"]):
+        media_type, title, year = search_prompt(con)
+    assert media_type == "movie"
+    assert title == "The Matrix"
+    assert year == 1999
+
+
+def test_search_prompt_empty_year():
+    buf = StringIO()
+    con = Console(file=buf, force_terminal=True, no_color=True, width=100)
+    with patch("builtins.input", side_effect=["tv", "Breaking Bad", ""]):
+        media_type, title, year = search_prompt(con)
+    assert media_type == "tv"
+    assert title == "Breaking Bad"
+    assert year is None
+
+
+def test_search_prompt_defaults():
+    buf = StringIO()
+    con = Console(file=buf, force_terminal=True, no_color=True, width=100)
+    with patch("builtins.input", side_effect=["", "", ""]):
+        media_type, title, year = search_prompt(con, default_media_type="tv", default_title="Dune", default_year=2021)
+    assert media_type == "tv"
+    assert title == "Dune"
+    assert year == 2021
