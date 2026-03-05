@@ -13,24 +13,31 @@ from tapes.scanner import scan
 
 
 def run_pipeline(
-    root: Path, config: TapesConfig | None = None
+    root: Path,
+    config: TapesConfig | None = None,
+    *,
+    companions: bool = True,
+    group: bool = True,
 ) -> list[ImportGroup]:
-    """Orchestrate the four-pass import pipeline.
+    """Orchestrate the import pipeline.
 
-    Pass 1 -- Scan: find video files under *root*.
-    Pass 2 -- Extract: parse metadata from each filename; create one ImportGroup per video.
-    Pass 3 -- Companions: discover companion files for each video; deduplicate globally.
-    Pass 4 -- Group: apply merge criteria (season merge, multi-part merge).
+    Passes 1-2 (scan + extract) always run. Passes 3-4 are controlled by flags.
+    ``group=True`` implies ``companions=True``.
 
     Args:
         root: Directory (or single file) to scan.
         config: Optional configuration; defaults are used when None.
+        companions: Run pass 3 (companion discovery). Default True.
+        group: Run pass 4 (merge criteria). Implies companions. Default True.
 
     Returns:
         List of ImportGroup objects ready for further processing.
     """
     if config is None:
         config = TapesConfig()
+
+    if group:
+        companions = True
 
     # Pass 1: Scan
     videos = scan(root)
@@ -45,28 +52,30 @@ def run_pipeline(
             folder_name = video_path.parent.name
 
         metadata = extract_metadata(video_path.name, folder_name=folder_name)
-        group = ImportGroup(metadata=metadata)
-        group.add_file(FileEntry(path=video_path))
-        groups.append(group)
+        grp = ImportGroup(metadata=metadata)
+        grp.add_file(FileEntry(path=video_path))
+        groups.append(grp)
 
     # Pass 3: Companions -- find and deduplicate across groups
-    companion_depth = config.scan.companion_depth
-    companion_separators = tuple(config.scan.companion_separators)
-    claimed: set[Path] = set()
+    if companions:
+        companion_depth = config.scan.companion_depth
+        companion_separators = tuple(config.scan.companion_separators)
+        claimed: set[Path] = set()
 
-    for group in groups:
-        for video_entry in group.video_files:
-            companions = find_companions(
-                video_entry.path,
-                max_depth=companion_depth,
-                separators=companion_separators,
-            )
-            for comp in companions:
-                if comp.path not in claimed:
-                    claimed.add(comp.path)
-                    group.add_file(comp)
+        for grp in groups:
+            for video_entry in grp.video_files:
+                comps = find_companions(
+                    video_entry.path,
+                    max_depth=companion_depth,
+                    separators=companion_separators,
+                )
+                for comp in comps:
+                    if comp.path not in claimed:
+                        claimed.add(comp.path)
+                        grp.add_file(comp)
 
     # Pass 4: Group -- apply merge criteria
-    groups = group_files(groups)
+    if group:
+        groups = group_files(groups)
 
     return groups

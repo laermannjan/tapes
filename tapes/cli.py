@@ -64,15 +64,27 @@ def import_cmd(
 @app.command("scan")
 def scan_cmd(
     path: Path = typer.Argument(..., help="Directory or file to scan"),
+    find_companions: bool = typer.Option(
+        False, "--find-companions", help="Include companion discovery (pass 3)"
+    ),
+    group: bool = typer.Option(
+        False, "--group", help="Apply grouping (pass 4, implies --find-companions)"
+    ),
     config_file: Optional[Path] = typer.Option(
         None, "--config", "-c", help="Path to config file"
     ),
 ) -> None:
-    """Scan and display import groups (no file operations)."""
+    """Scan and display import groups (no file operations).
+
+    By default runs passes 1-2 (scan + metadata extraction).
+    Use --find-companions to add companion discovery, --group to also merge groups.
+    """
     cfg = load_config(config_file) if config_file else TapesConfig()
     cfg.dry_run = True
 
-    groups = run_pipeline(path, config=cfg)
+    groups = run_pipeline(
+        path, config=cfg, companions=find_companions or group, group=group
+    )
 
     if not groups:
         console.print("No video files found.")
