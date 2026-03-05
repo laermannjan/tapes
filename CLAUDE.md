@@ -107,8 +107,8 @@ See `docs/decisions/` for full ADRs. Summary:
 
 ## Current status
 
-**Alpha.** Core operations work. 209 tests passing.
-Next task to pick up: **Task 26 (wire modify command)**.
+**Beta.** All commands functional. 295 tests passing.
+M3 milestone complete. Next: **M4 (Release)** -- CI/CD, PyPI publish, README polish.
 
 ### Milestones
 
@@ -148,14 +148,14 @@ matches. Target tasks:
 | 8  | TMDB metadata source | done |
 | 9  | Identification pipeline | done |
 | 10 | Template rendering and filename sanitization | done |
-| 11 | Companion file classification and renaming | todo |
+| 11 | Companion file classification and renaming | done |
 | 12 | File scanner and grouper | done |
 | 13 | Pre-flight collision detector | done |
 | 14 | EventBus | done |
-| 15 | Plugin loader | todo |
+| 15 | Plugin loader | done |
 | 16 | File operations | done |
 | 17 | Session tracking | done |
-| 18 | Rich-based interactive import display | todo |
+| 18 | Rich-based interactive import display | done |
 | 19 | Import service | done |
 | 20 | Startup validation | done |
 | 21 | Query service | done |
@@ -163,9 +163,9 @@ matches. Target tasks:
 | 23 | tapes move command | done |
 | 24 | Wire import command | done |
 | 25 | Wire query, stats, info, fields commands | done |
-| 26 | Wire modify command | **next** |
+| 26 | Wire modify command | done |
 | 27 | Wire move, check, log commands | done |
-| 28 | NFO sidecar plugin | todo |
+| 28 | NFO sidecar plugin | done |
 
 Full task specs: `docs/plans/2026-03-04-tapes-implementation.md`.
 Design spec: `docs/plans/2026-03-04-tapes-design.md`.
