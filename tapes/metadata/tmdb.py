@@ -67,7 +67,7 @@ class TMDBSource(MetadataSource):
             )
             self._available = resp.status_code == 200
             if not self._available:
-                logger.warning("TMDB API returned HTTP %s; check your API key", resp.status_code)
+                logger.warning("TMDB API returned HTTP %s; check your read access token", resp.status_code)
         except Exception as e:
             logger.warning("TMDB API unreachable: %s", e)
             self._available = False

@@ -15,7 +15,9 @@ class Collision:
     diff_fields: list[str] = field(default_factory=list)
 
 
-_TECH_FIELDS = ["resolution", "hdr", "codec", "audio", "media_source", "size"]
+# Fields used to distinguish different releases of the same title.
+# "source" here is the media source (BluRay, WEB-DL, etc.), not the file path.
+_TECH_FIELDS = ["resolution", "hdr", "codec", "audio", "source", "size"]
 
 
 def detect_collisions(planned: list[dict], existing_paths: set[str]) -> list[Collision]:
