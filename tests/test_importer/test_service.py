@@ -221,6 +221,26 @@ def test_interactive_quit(tmp_path, repo, meta_source, cfg):
     assert summary["imported"] == 0
 
 
+def test_interactive_flag_forces_prompt(tmp_path, repo, meta_source, cfg):
+    """--interactive forces prompt even for high-confidence matches."""
+    cfg.import_.interactive = True
+    _make_video(tmp_path)
+    candidate = _make_candidate(confidence=0.95)
+    mock_result = IdentificationResult(
+        candidates=[candidate], file_info={}, requires_interaction=False,
+    )
+    service = ImportService(repo=repo, metadata_source=meta_source, config=cfg)
+    with patch.object(service._pipeline, "identify", return_value=mock_result), \
+         patch("tapes.importer.service.classify_companions", return_value=[]), \
+         patch("tapes.importer.service.display_prompt") as mock_display, \
+         patch("tapes.importer.service.read_action", return_value=PromptAction.ACCEPT):
+        summary = service.import_path(tmp_path)
+
+    assert summary["imported"] == 1
+    # Must have gone through the interactive prompt, not auto-accept
+    assert mock_display.call_count == 1
+
+
 def test_interactive_accept_all(tmp_path, repo, meta_source, cfg):
     """When user presses accept-all, subsequent files are auto-accepted."""
     _make_video(tmp_path, name="movie1.mkv")

@@ -112,6 +112,10 @@ class ImportService:
             summary.skipped += 1
             return
 
+        # --interactive: force every file through the prompt
+        if self._cfg.import_.interactive:
+            result.requires_interaction = True
+
         # No candidates at all — mark unmatched
         if not result.candidates and not result.requires_interaction:
             summary.unmatched.append(str(video))
