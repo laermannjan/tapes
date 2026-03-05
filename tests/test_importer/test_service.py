@@ -433,3 +433,84 @@ def test_db_record_stores_identification_source(tmp_path, repo, meta_source, cfg
     # Verify the DB record has identification source, not media source
     row = repo._conn.execute("SELECT match_source FROM items").fetchone()
     assert row[0] == "filename"  # NOT "Blu-ray"
+
+
+def test_companion_files_linked_in_link_mode(tmp_path, repo, meta_source, cfg):
+    """In link mode, companion files should be symlinked, not moved."""
+    cfg.import_.mode = "link"
+    video = _make_video(tmp_path)
+    sub = tmp_path / "movie.en.srt"
+    sub.write_text("subtitle content")
+    candidate = _make_candidate()
+    mock_result = IdentificationResult(candidates=[candidate], file_info={})
+
+    service = ImportService(repo=repo, metadata_source=meta_source, config=cfg)
+    with patch.object(service._pipeline, "identify", return_value=mock_result):
+        summary = service.import_path(tmp_path)
+
+    assert summary["imported"] == 1
+    dest_dir = Path(cfg.library.movies)
+    srt_files = list(dest_dir.rglob("*.srt"))
+    assert len(srt_files) == 1
+    assert srt_files[0].is_symlink()
+    # Source companion should still exist (not moved)
+    assert sub.exists()
+
+
+def test_companion_files_hardlinked_in_hardlink_mode(tmp_path, repo, meta_source, cfg):
+    """In hardlink mode, companion files should be hardlinked, not moved."""
+    cfg.import_.mode = "hardlink"
+    video = _make_video(tmp_path)
+    sub = tmp_path / "movie.en.srt"
+    sub.write_text("subtitle content")
+    candidate = _make_candidate()
+    mock_result = IdentificationResult(candidates=[candidate], file_info={})
+
+    service = ImportService(repo=repo, metadata_source=meta_source, config=cfg)
+    with patch.object(service._pipeline, "identify", return_value=mock_result):
+        summary = service.import_path(tmp_path)
+
+    assert summary["imported"] == 1
+    dest_dir = Path(cfg.library.movies)
+    srt_files = list(dest_dir.rglob("*.srt"))
+    assert len(srt_files) == 1
+    # Source companion should still exist (hardlinked, not moved)
+    assert sub.exists()
+    # Same inode
+    assert srt_files[0].stat().st_ino == sub.stat().st_ino
+
+
+def test_edited_companions_passed_to_move(tmp_path, repo, meta_source, cfg):
+    """User-edited companion selection should be used during move, not re-classified."""
+    from tapes.companions.classifier import CompanionFile, Category
+
+    video = _make_video(tmp_path)
+    # Create a subtitle file
+    sub = tmp_path / "movie.en.srt"
+    sub.write_text("subtitle content")
+
+    candidate = _make_candidate(confidence=0.50)
+    mock_result = IdentificationResult(
+        candidates=[candidate], file_info={}, requires_interaction=True,
+    )
+
+    # Simulate: user edits companions to EXCLUDE the subtitle (move_by_default=False)
+    edited_companions = [
+        CompanionFile(sub, Category.SUBTITLE, False, sub.relative_to(tmp_path)),
+    ]
+
+    service = ImportService(repo=repo, metadata_source=meta_source, config=cfg)
+    with patch.object(service._pipeline, "identify", return_value=mock_result), \
+         patch("tapes.importer.service.classify_companions", return_value=[
+             CompanionFile(sub, Category.SUBTITLE, True, sub.relative_to(tmp_path)),
+         ]), \
+         patch("tapes.importer.service.display_prompt"), \
+         patch("tapes.importer.service.read_action", side_effect=["edit", PromptAction.ACCEPT]), \
+         patch("tapes.importer.service.edit_companions", return_value=edited_companions):
+        summary = service.import_path(tmp_path)
+
+    assert summary["imported"] == 1
+    dest_dir = Path(cfg.library.movies)
+    # Subtitle should NOT have been moved (user deselected it)
+    srt_files = list(dest_dir.rglob("*.srt"))
+    assert len(srt_files) == 0

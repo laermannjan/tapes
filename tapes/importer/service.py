@@ -132,13 +132,14 @@ class ImportService:
             return
 
         # Needs interaction
+        companions = None  # will be set by _prompt_user if interactive
         if result.requires_interaction:
             # Accept-all mode: auto-accept top candidate if above threshold
             if (self._accept_all and result.candidates
                     and result.candidates[0].confidence >= self._cfg.import_.confidence_threshold):
                 candidate = result.candidates[0]
             else:
-                candidate = self._prompt_user(video, result, index=index, total=total)
+                candidate, companions = self._prompt_user(video, result, index=index, total=total)
                 if candidate is None:
                     summary.skipped += 1
                     return
@@ -167,7 +168,7 @@ class ImportService:
         op_id = session.add_operation(str(video), self._cfg.import_.mode) if session else None
         try:
             self._execute_file_op(video, dest)
-            self._move_companions(video, dest)
+            self._move_companions(video, dest, companions=companions)
             if not self._cfg.import_.no_db:
                 self._write_db_record(video, dest, candidate, result.file_info)
             if session:
@@ -179,7 +180,7 @@ class ImportService:
             raise
 
     def _prompt_user(self, video, result, *, index, total):
-        """Show interactive prompt and return selected candidate or None."""
+        """Show interactive prompt and return (candidate, companions) or (None, None)."""
         companions = classify_companions(video)
         prompt = InteractivePrompt(candidates=result.candidates)
 
@@ -200,19 +201,18 @@ class ImportService:
                 continue
 
             if isinstance(action, tuple):
-                # Numbered candidate selection
                 _, idx = action
-                return prompt.candidates[idx]
+                return prompt.candidates[idx], companions
 
             if action == PromptAction.ACCEPT:
-                return prompt.candidates[0]
+                return prompt.candidates[0], companions
 
             if action == PromptAction.ACCEPT_ALL:
                 self._accept_all = True
-                return prompt.candidates[0]
+                return prompt.candidates[0], companions
 
             if action == PromptAction.SKIP:
-                return None
+                return None, None
 
             if action == PromptAction.QUIT:
                 raise _QuitImport()
@@ -221,12 +221,13 @@ class ImportService:
                 default_title = result.file_info.get("title") or result.file_info.get("show") or ""
                 default_year = result.file_info.get("year")
                 default_media_type = "tv" if "season" in result.file_info else "movie"
-                return manual_prompt(
+                manual_result = manual_prompt(
                     self._console,
                     default_media_type=default_media_type,
                     default_title=default_title,
                     default_year=default_year,
                 )
+                return manual_result, companions
 
             if action == PromptAction.SEARCH:
                 default_title = result.file_info.get("title") or result.file_info.get("show") or ""
@@ -271,9 +272,11 @@ class ImportService:
         rendered = render_template(template, fields, replace=cfg.replace)
         return library_root / rendered
 
-    def _move_companions(self, src_video: Path, dest_video: Path) -> None:
+    def _move_companions(self, src_video: Path, dest_video: Path,
+                         companions: list | None = None) -> None:
         """Move companion files alongside the imported video."""
-        companions = classify_companions(src_video)
+        if companions is None:
+            companions = classify_companions(src_video)
         dest_stem = dest_video.stem
         for comp in companions:
             if not comp.move_by_default:
@@ -282,12 +285,17 @@ class ImportService:
             new_path = dest_video.parent / comp.relative_to_video.parent / new_name
             try:
                 new_path.parent.mkdir(parents=True, exist_ok=True)
-                if self._cfg.import_.mode == "copy":
+                mode = self._cfg.import_.mode
+                if mode == "copy":
                     copy_verify(comp.path, new_path)
-                else:
+                elif mode == "move":
                     move_file(comp.path, new_path, verify=True)
+                elif mode == "link":
+                    new_path.symlink_to(comp.path)
+                elif mode == "hardlink":
+                    new_path.hardlink_to(comp.path)
             except Exception as e:
-                logger.warning("Failed to move companion %s: %s", comp.path, e)
+                logger.warning("Failed to process companion %s: %s", comp.path, e)
 
     def _execute_file_op(self, src: Path, dst: Path) -> None:
         mode = self._cfg.import_.mode
