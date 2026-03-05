@@ -199,14 +199,14 @@ class ImportService:
             if isinstance(action, tuple):
                 # Numbered candidate selection
                 _, idx = action
-                return result.candidates[idx]
+                return prompt.candidates[idx]
 
             if action == PromptAction.ACCEPT:
-                return result.candidates[0]
+                return prompt.candidates[0]
 
             if action == PromptAction.ACCEPT_ALL:
                 self._accept_all = True
-                return result.candidates[0]
+                return prompt.candidates[0]
 
             if action == PromptAction.SKIP:
                 return None
