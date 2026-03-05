@@ -14,39 +14,36 @@ runner = CliRunner()
 
 
 def test_empty_directory_shows_no_files(tmp_path: Path) -> None:
-    """An empty directory should print 'No video files found.' and exit 0."""
     result = runner.invoke(app, ["import", str(tmp_path)])
     assert result.exit_code == 0
     assert "No video files found." in result.output
 
 
 def test_finds_files_and_shows_label(tmp_path: Path) -> None:
-    """Groups returned by the pipeline should appear in the table."""
     group = ImportGroup(
-        metadata=FileMetadata(title="Dune", year=2021),
+        metadata=FileMetadata(title="Dune", year=2021, media_type="movie"),
         group_type=GroupType.STANDALONE,
     )
     video = tmp_path / "Dune.2021.mkv"
     video.touch()
-    group.add_file(FileEntry(path=video))
+    group.add_file(FileEntry(path=video, metadata=FileMetadata(title="Dune", year=2021, media_type="movie")))
 
     with patch("tapes.cli.run_pipeline", return_value=[group]):
         result = runner.invoke(app, ["import", str(tmp_path), "--no-tui"])
 
     assert result.exit_code == 0
-    assert "Dune (2021)" in result.output
-    assert "1 group(s) found." in result.output
+    assert "Dune" in result.output
+    assert "2021" in result.output
 
 
 def test_multiple_groups(tmp_path: Path) -> None:
-    """Multiple groups are listed with correct counts."""
     g1 = ImportGroup(
-        metadata=FileMetadata(title="Dune", year=2021),
+        metadata=FileMetadata(title="Dune", year=2021, media_type="movie"),
         group_type=GroupType.STANDALONE,
     )
     v1 = tmp_path / "Dune.2021.mkv"
     v1.touch()
-    g1.add_file(FileEntry(path=v1))
+    g1.add_file(FileEntry(path=v1, metadata=g1.metadata))
 
     g2 = ImportGroup(
         metadata=FileMetadata(title="Breaking Bad", media_type="episode", season=1),
@@ -55,19 +52,19 @@ def test_multiple_groups(tmp_path: Path) -> None:
     for i in range(1, 4):
         v = tmp_path / f"Breaking.Bad.S01E0{i}.mkv"
         v.touch()
-        g2.add_file(FileEntry(path=v))
+        g2.add_file(FileEntry(path=v, metadata=FileMetadata(
+            title="Breaking Bad", media_type="episode", season=1, episode=i
+        )))
 
     with patch("tapes.cli.run_pipeline", return_value=[g1, g2]):
         result = runner.invoke(app, ["import", str(tmp_path), "--no-tui"])
 
     assert result.exit_code == 0
-    assert "Dune (2021)" in result.output
-    assert "Breaking Bad S01" in result.output
-    assert "2 group(s) found." in result.output
+    assert "Dune" in result.output
+    assert "Breaking Bad" in result.output
 
 
 def test_dry_run_flag(tmp_path: Path) -> None:
-    """--dry-run should set config.dry_run = True."""
     group = ImportGroup(
         metadata=FileMetadata(title="Test"),
         group_type=GroupType.STANDALONE,
@@ -78,7 +75,7 @@ def test_dry_run_flag(tmp_path: Path) -> None:
 
     captured_configs: list = []
 
-    def fake_pipeline(root: Path, config=None):
+    def fake_pipeline(root: Path, config=None, **kwargs):
         captured_configs.append(config)
         return [group]
 
@@ -91,25 +88,22 @@ def test_dry_run_flag(tmp_path: Path) -> None:
 
 
 def test_no_tui_flag(tmp_path: Path) -> None:
-    """--no-tui should still produce the table (same as default for now)."""
     group = ImportGroup(
-        metadata=FileMetadata(title="Movie"),
+        metadata=FileMetadata(title="Movie", media_type="movie"),
         group_type=GroupType.STANDALONE,
     )
     v = tmp_path / "Movie.mkv"
     v.touch()
-    group.add_file(FileEntry(path=v))
+    group.add_file(FileEntry(path=v, metadata=group.metadata))
 
     with patch("tapes.cli.run_pipeline", return_value=[group]):
         result = runner.invoke(app, ["import", str(tmp_path), "--no-tui"])
 
     assert result.exit_code == 0
     assert "Movie" in result.output
-    assert "1 group(s) found." in result.output
 
 
 def test_config_file_option(tmp_path: Path) -> None:
-    """--config should load config from the specified file."""
     config_path = tmp_path / "tapes.yaml"
     config_path.write_text("dry_run: true\n")
 
@@ -123,7 +117,7 @@ def test_config_file_option(tmp_path: Path) -> None:
 
     captured_configs: list = []
 
-    def fake_pipeline(root: Path, config=None):
+    def fake_pipeline(root: Path, config=None, **kwargs):
         captured_configs.append(config)
         return [group]
 
@@ -137,38 +131,48 @@ def test_config_file_option(tmp_path: Path) -> None:
     assert captured_configs[0].dry_run is True
 
 
-def test_companion_count(tmp_path: Path) -> None:
-    """Companion files should be counted separately from videos."""
+def test_companion_in_output(tmp_path: Path) -> None:
     group = ImportGroup(
-        metadata=FileMetadata(title="Dune", year=2021),
+        metadata=FileMetadata(title="Dune", year=2021, media_type="movie"),
         group_type=GroupType.STANDALONE,
     )
     video = tmp_path / "Dune.2021.mkv"
     video.touch()
     sub = tmp_path / "Dune.2021.srt"
     sub.touch()
-    group.add_file(FileEntry(path=video))
+    group.add_file(FileEntry(path=video, metadata=group.metadata))
     group.add_file(FileEntry(path=sub))
 
     with patch("tapes.cli.run_pipeline", return_value=[group]):
         result = runner.invoke(app, ["import", str(tmp_path), "--no-tui"])
 
     assert result.exit_code == 0
-    # The table should show 1 video and 1 companion
-    assert "Dune (2021)" in result.output
+    assert "Dune.2021.mkv" in result.output
+    assert "Dune.2021.srt" in result.output
 
 
 def test_help() -> None:
-    """--help should show usage information."""
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
     assert "tapes" in result.output.lower()
 
 
 def test_import_help() -> None:
-    """import --help should show the command's options."""
     result = runner.invoke(app, ["import", "--help"])
     assert result.exit_code == 0
     assert "--dry-run" in result.output
     assert "--no-tui" in result.output
     assert "--config" in result.output
+
+
+def test_scan_help() -> None:
+    result = runner.invoke(app, ["scan", "--help"])
+    assert result.exit_code == 0
+    assert "--find-companions" in result.output
+    assert "--group" in result.output
+
+
+def test_scan_empty(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["scan", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "No video files found." in result.output

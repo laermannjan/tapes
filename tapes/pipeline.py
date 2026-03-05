@@ -53,7 +53,7 @@ def run_pipeline(
 
         metadata = extract_metadata(video_path.name, folder_name=folder_name)
         grp = ImportGroup(metadata=metadata)
-        grp.add_file(FileEntry(path=video_path))
+        grp.add_file(FileEntry(path=video_path, metadata=metadata))
         groups.append(grp)
 
     # Pass 3: Companions -- find and deduplicate across groups

@@ -62,6 +62,7 @@ class FileEntry:
 
     path: Path
     role: str | None = None
+    metadata: FileMetadata | None = field(default=None, repr=False)
     group: ImportGroup | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
