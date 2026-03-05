@@ -5,7 +5,7 @@ from pathlib import Path
 
 from rich.console import Console
 
-from tapes.companions.classifier import classify_companions
+from tapes.companions.classifier import classify_companions, rename_companion
 from tapes.config.schema import TapesConfig
 from tapes.db.repository import Repository, ItemRecord
 from tapes.discovery.scanner import scan_media_files
@@ -128,8 +128,9 @@ class ImportService:
 
         # Needs interaction
         if result.requires_interaction:
-            # Accept-all mode: auto-accept top candidate
-            if self._accept_all and result.candidates:
+            # Accept-all mode: auto-accept top candidate if above threshold
+            if (self._accept_all and result.candidates
+                    and result.candidates[0].confidence >= self._cfg.import_.confidence_threshold):
                 candidate = result.candidates[0]
             else:
                 candidate = self._prompt_user(video, result, index=index, total=total)
@@ -161,6 +162,7 @@ class ImportService:
         op_id = session.add_operation(str(video), self._cfg.import_.mode) if session else None
         try:
             self._execute_file_op(video, dest)
+            self._move_companions(video, dest)
             if not self._cfg.import_.no_db:
                 self._write_db_record(video, dest, candidate, result.file_info)
             if session:
@@ -263,6 +265,24 @@ class ImportService:
 
         rendered = render_template(template, fields, replace=cfg.replace)
         return library_root / rendered
+
+    def _move_companions(self, src_video: Path, dest_video: Path) -> None:
+        """Move companion files alongside the imported video."""
+        companions = classify_companions(src_video)
+        dest_stem = dest_video.stem
+        for comp in companions:
+            if not comp.move_by_default:
+                continue
+            new_name = rename_companion(comp.path.name, dest_stem, comp.category)
+            new_path = dest_video.parent / comp.relative_to_video.parent / new_name
+            try:
+                new_path.parent.mkdir(parents=True, exist_ok=True)
+                if self._cfg.import_.mode == "copy":
+                    copy_verify(comp.path, new_path)
+                else:
+                    move_file(comp.path, new_path, verify=True)
+            except Exception as e:
+                logger.warning("Failed to move companion %s: %s", comp.path, e)
 
     def _execute_file_op(self, src: Path, dst: Path) -> None:
         mode = self._cfg.import_.mode
