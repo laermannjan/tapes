@@ -107,8 +107,8 @@ See `docs/decisions/` for full ADRs. Summary:
 
 ## Current status
 
-**Alpha.** Core operations work. 190 tests passing.
-Next task to pick up: **Task 25 (wire query, stats, info, fields)**.
+**Alpha.** Core operations work. 209 tests passing.
+Next task to pick up: **Task 26 (wire modify command)**.
 
 ### Milestones
 
@@ -162,8 +162,8 @@ matches. Target tasks:
 | 22 | tapes check command | done |
 | 23 | tapes move command | done |
 | 24 | Wire import command | done |
-| 25 | Wire query, stats, info, fields commands | **next** |
-| 26 | Wire modify command | todo |
+| 25 | Wire query, stats, info, fields commands | done |
+| 26 | Wire modify command | **next** |
 | 27 | Wire move, check, log commands | done |
 | 28 | NFO sidecar plugin | todo |
 
