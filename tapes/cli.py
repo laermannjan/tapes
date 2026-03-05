@@ -51,6 +51,13 @@ def import_cmd(
         console.print("No video files found.")
         return
 
+    if not no_tui:
+        from tapes.ui import ReviewApp
+
+        tui_app = ReviewApp(groups)
+        tui_app.run()
+        return
+
     # Build and display the table
     table = Table(title="Import Groups")
     table.add_column("Type")
