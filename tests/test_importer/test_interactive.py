@@ -216,3 +216,113 @@ def test_display_year_none():
     assert "Dune" in output
     # Should not show "(None)"
     assert "(None)" not in output
+
+
+# --- Companion file display tests (Task 3) ---
+
+from pathlib import Path
+from tapes.companions.classifier import CompanionFile, Category
+
+
+def test_display_shows_companion_files():
+    buf = StringIO()
+    con = Console(file=buf, force_terminal=True, no_color=True, width=100)
+    prompt = InteractivePrompt(candidates=[_search_result()])
+    companions = [
+        CompanionFile(Path("/src/Dune.2021.en.srt"), Category.SUBTITLE, True, Path("Dune.2021.en.srt")),
+        CompanionFile(Path("/src/poster.jpg"), Category.ARTWORK, True, Path("poster.jpg")),
+        CompanionFile(Path("/src/sample.mkv"), Category.SAMPLE, False, Path("sample.mkv")),
+    ]
+    display_prompt(con, prompt, index=1, total=1, filename="Dune.2021.mkv",
+                   source="filename", companions=companions)
+    output = _strip_ansi(buf.getvalue())
+    assert "subtitle" in output
+    assert "Dune.2021.en.srt" in output
+    assert "artwork" in output
+    assert "poster.jpg" in output
+    assert "sample" in output
+
+
+def test_display_edit_key_only_when_companions():
+    # With companions
+    buf = StringIO()
+    con = Console(file=buf, force_terminal=True, no_color=True, width=100)
+    companions = [CompanionFile(Path("/src/sub.srt"), Category.SUBTITLE, True, Path("sub.srt"))]
+    prompt = InteractivePrompt(candidates=[_search_result()])
+    display_prompt(con, prompt, index=1, total=1, filename="movie.mkv",
+                   source="filename", companions=companions)
+    assert "[e]dit" in _strip_ansi(buf.getvalue()).lower()
+
+    # Without companions
+    buf2 = StringIO()
+    con2 = Console(file=buf2, force_terminal=True, no_color=True, width=100)
+    display_prompt(con2, prompt, index=1, total=1, filename="movie.mkv", source="filename")
+    assert "[e]dit" not in _strip_ansi(buf2.getvalue()).lower()
+
+
+def test_display_companion_markers():
+    """move_by_default=True shows +, False shows ?."""
+    buf = StringIO()
+    con = Console(file=buf, force_terminal=True, no_color=True, width=100)
+    prompt = InteractivePrompt(candidates=[_search_result()])
+    companions = [
+        CompanionFile(Path("/src/sub.srt"), Category.SUBTITLE, True, Path("sub.srt")),
+        CompanionFile(Path("/src/sample.mkv"), Category.SAMPLE, False, Path("sample.mkv")),
+    ]
+    display_prompt(con, prompt, index=1, total=1, filename="movie.mkv",
+                   source="filename", companions=companions)
+    output = _strip_ansi(buf.getvalue())
+    # + for move_by_default=True, ? for False
+    assert "+" in output
+    assert "?" in output
+
+
+# --- Companion file checklist editor tests (Task 4) ---
+
+from tapes.importer.interactive import edit_companions
+
+
+def test_edit_companions_returns_selected():
+    from unittest.mock import patch
+    video = CompanionFile(Path("/src/movie.mkv"), Category.VIDEO, True, Path("movie.mkv"))
+    sub = CompanionFile(Path("/src/movie.en.srt"), Category.SUBTITLE, True, Path("movie.en.srt"))
+    sample = CompanionFile(Path("/src/sample.mkv"), Category.SAMPLE, False, Path("sample.mkv"))
+
+    buf = StringIO()
+    con = Console(file=buf, force_terminal=True, no_color=True, width=100)
+    # Toggle sample on (index 2), then confirm
+    with patch("tapes.importer.interactive._read_key", side_effect=["2", "\r"]):
+        result = edit_companions(con, [video, sub, sample])
+
+    assert video in result
+    assert sub in result
+    assert sample in result
+
+
+def test_edit_companions_video_locked():
+    from unittest.mock import patch
+    video = CompanionFile(Path("/src/movie.mkv"), Category.VIDEO, True, Path("movie.mkv"))
+    sub = CompanionFile(Path("/src/sub.srt"), Category.SUBTITLE, True, Path("sub.srt"))
+
+    buf = StringIO()
+    con = Console(file=buf, force_terminal=True, no_color=True, width=100)
+    # Try to toggle video (index 0), then confirm
+    with patch("tapes.importer.interactive._read_key", side_effect=["0", "\r"]):
+        result = edit_companions(con, [video, sub])
+
+    assert video in result  # still selected
+
+
+def test_edit_companions_toggle_off():
+    from unittest.mock import patch
+    video = CompanionFile(Path("/src/movie.mkv"), Category.VIDEO, True, Path("movie.mkv"))
+    sub = CompanionFile(Path("/src/sub.srt"), Category.SUBTITLE, True, Path("sub.srt"))
+
+    buf = StringIO()
+    con = Console(file=buf, force_terminal=True, no_color=True, width=100)
+    # Toggle subtitle off (index 1), then confirm
+    with patch("tapes.importer.interactive._read_key", side_effect=["1", "\r"]):
+        result = edit_companions(con, [video, sub])
+
+    assert video in result
+    assert sub not in result
