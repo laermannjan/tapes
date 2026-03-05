@@ -8,14 +8,15 @@ class ConfigError(SystemExit):
 
 def validate_config(cfg: TapesConfig) -> None:
     """Validate required config at startup. Raises ConfigError with a clear message."""
-    if not cfg.metadata.tmdb_api_key:
-        cfg.metadata.tmdb_api_key = os.environ.get("TMDB_API_KEY", "")
-    if not cfg.metadata.tmdb_api_key:
+    if not cfg.metadata.tmdb_token:
+        cfg.metadata.tmdb_token = os.environ.get("TMDB_TOKEN", "")
+    if not cfg.metadata.tmdb_token:
         raise ConfigError(
-            "TMDB API key not configured.\n"
-            "  Set TMDB_API_KEY environment variable, or add to tapes.toml:\n"
+            "TMDB read access token not configured.\n"
+            "  Set TMDB_TOKEN environment variable, or add to tapes.toml:\n"
             "    [metadata]\n"
-            '    tmdb_api_key = "your-key-here"'
+            '    tmdb_token = "your-token-here"\n'
+            "  Get one at https://www.themoviedb.org/settings/api"
         )
 
     if not cfg.library.movies and not cfg.library.tv:

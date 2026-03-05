@@ -16,22 +16,23 @@ _NO_MATCH_YEAR = 0.50
 
 
 class TMDBSource(MetadataSource):
-    def __init__(self, api_key: str, timeout: int = 10):
-        self._key = api_key
+    def __init__(self, token: str, timeout: int = 10):
+        self._token = token
         self._timeout = timeout
         self._available: bool | None = None
+        self._headers = {"Authorization": f"Bearer {token}"}
 
     def search(self, title: str, year: int | None, media_type: str) -> list[SearchResult]:
         if not title:
             return []
 
         endpoint = "search/tv" if media_type == "tv" else "search/movie"
-        params = {"api_key": self._key, "query": title}
+        params = {"query": title}
         if year:
             params["year" if media_type == "movie" else "first_air_date_year"] = year
 
         try:
-            resp = requests.get(f"{BASE_URL}/{endpoint}", params=params, timeout=self._timeout)
+            resp = requests.get(f"{BASE_URL}/{endpoint}", params=params, headers=self._headers, timeout=self._timeout)
             resp.raise_for_status()
             raw_results = resp.json().get("results", [])
         except requests.exceptions.HTTPError as e:
@@ -65,7 +66,7 @@ class TMDBSource(MetadataSource):
         try:
             resp = requests.get(
                 f"{BASE_URL}/configuration",
-                params={"api_key": self._key},
+                headers=self._headers,
                 timeout=self._timeout,
             )
             self._available = resp.status_code == 200
@@ -81,7 +82,8 @@ class TMDBSource(MetadataSource):
         try:
             resp = requests.get(
                 f"{BASE_URL}/{endpoint}/{tmdb_id}",
-                params={"api_key": self._key, "append_to_response": "credits"},
+                params={"append_to_response": "credits"},
+                headers=self._headers,
                 timeout=self._timeout,
             )
             resp.raise_for_status()

@@ -177,7 +177,7 @@ cat > tapes.toml <<EOF
 movies = "/tmp/tapes-movies"
 
 [metadata]
-tmdb_api_key = "your-real-key"
+tmdb_token = "your-token-here"
 EOF
 
 # Create test input

@@ -49,11 +49,11 @@ def command(
     init_db(conn)
     repo = Repository(conn)
 
-    meta = TMDBSource(api_key=cfg.metadata.tmdb_api_key)
+    meta = TMDBSource(token=cfg.metadata.tmdb_token)
     if not meta.is_available():
         console.print(
             "[yellow]Warning:[/yellow] TMDB API is not reachable. "
-            "Check your tmdb_api_key in tapes.toml or TMDB_API_KEY environment variable."
+            "Check your tmdb_token in tapes.toml or TMDB_TOKEN environment variable."
         )
 
     service = ImportService(repo=repo, metadata_source=meta, config=cfg)
