@@ -10,11 +10,11 @@ from rich.console import Console
 from rich.text import Text
 
 from tapes.config import TapesConfig, load_config
-from tapes.models import FileEntry, ImportGroup
+from tapes.models import FileEntry, FileMetadata, ImportGroup
 from tapes.pipeline import run_pipeline
 
 app = typer.Typer(name="tapes", no_args_is_help=True, invoke_without_command=True)
-console = Console()
+console = Console(highlight=False)
 
 
 @app.callback()
@@ -92,51 +92,45 @@ def scan_cmd(
     _print_scan(path.resolve(), groups)
 
 
-def _format_meta(entry: FileEntry, group: ImportGroup) -> Text:
-    """Build the metadata column for a file entry."""
-    # Use per-file metadata if available, fall back to group metadata
-    meta = entry.metadata if entry.metadata else group.metadata
-    parts: list[str] = []
-
-    if entry.role == "video":
-        if meta.media_type:
-            parts.append(meta.media_type)
-        if meta.title:
-            parts.append(meta.title)
-        if meta.year is not None:
-            parts.append(str(meta.year))
-        if meta.season is not None:
-            ep = meta.episode
-            if isinstance(ep, list):
-                ep_str = "".join(f"E{e:02d}" for e in ep)
-                parts.append(f"S{meta.season:02d}{ep_str}")
-            elif ep is not None:
-                parts.append(f"S{meta.season:02d}E{ep:02d}")
-            else:
-                parts.append(f"S{meta.season:02d}")
-        if meta.part is not None:
-            parts.append(f"CD{meta.part}")
-    else:
-        parts.append(entry.role)
-
-    text = " │ ".join(parts)
-    return Text(text, style="dim")
+def _meta_parts(meta: FileMetadata) -> list[tuple[str, str]]:
+    """Build (text, style) pairs for metadata display."""
+    parts: list[tuple[str, str]] = []
+    if meta.media_type:
+        style = "cyan" if meta.media_type == "movie" else "magenta"
+        parts.append((meta.media_type, style))
+    if meta.title:
+        parts.append((meta.title, "bold"))
+    if meta.year is not None:
+        parts.append((str(meta.year), "yellow"))
+    if meta.season is not None:
+        ep = meta.episode
+        if isinstance(ep, list):
+            ep_str = "".join(f"E{e:02d}" for e in ep)
+            parts.append((f"S{meta.season:02d}{ep_str}", "green"))
+        elif ep is not None:
+            parts.append((f"S{meta.season:02d}E{ep:02d}", "green"))
+        else:
+            parts.append((f"S{meta.season:02d}", "green"))
+    if meta.part is not None:
+        parts.append((f"CD{meta.part}", "yellow"))
+    return parts
 
 
 def _print_scan(root: Path, groups: list[ImportGroup]) -> None:
     """Print file-level scan results with metadata."""
-    # Compute the relative display root
     try:
         display_root = f"./{root.relative_to(Path.cwd())}"
     except ValueError:
         display_root = str(root)
 
     console.print()
-    console.print(f"  scanning [bold]{display_root}[/bold]")
+    header = Text("  scanning ")
+    header.append(display_root, style="bold")
+    console.print(header)
     console.print()
 
-    # Build paths relative to scan root
-    rel_paths: dict[int, str] = {}
+    # Pre-compute relative paths and find max length for alignment
+    entries: list[tuple[FileEntry, ImportGroup, str]] = []
     max_path_len = 0
     for group in groups:
         for entry in group.files:
@@ -144,37 +138,69 @@ def _print_scan(root: Path, groups: list[ImportGroup]) -> None:
                 rel = str(entry.path.relative_to(root))
             except ValueError:
                 rel = entry.path.name
-            rel_paths[id(entry)] = rel
+            entries.append((entry, group, rel))
             max_path_len = max(max_path_len, len(rel))
 
-    # Cap alignment to something reasonable
     term_width = console.width or 120
-    pad = min(max_path_len + 4, term_width - 40)
+    pad = min(max_path_len + 2, term_width - 40)
 
-    for i, group in enumerate(groups):
-        if i > 0:
+    prev_group = None
+    for entry, group, rel in entries:
+        # Blank line between groups
+        if prev_group is not None and group is not prev_group:
             console.print()
+        prev_group = group
 
-        for entry in group.files:
-            rel = rel_paths[id(entry)]
-            meta_text = _format_meta(entry, group)
+        line = Text()
+        line.append("  ")
 
-            line = Text()
-            line.append("  ")
-            if entry.role == "video":
-                line.append(rel, style="white")
+        if entry.role == "video":
+            # Split into dir/ and filename
+            p = Path(rel)
+            if len(p.parts) > 1:
+                dir_part = str(p.parent) + "/"
+                line.append(dir_part, style="dim")
+                line.append(p.name, style="white")
             else:
-                line.append(rel, style="dim")
+                line.append(rel, style="white")
+
+            # Pad and add metadata
             spacing = max(pad - len(rel), 2)
             line.append(" " * spacing)
-            line.append(meta_text)
-            console.print(line)
+
+            meta = entry.metadata if entry.metadata else group.metadata
+            parts = _meta_parts(meta)
+            for j, (text, style) in enumerate(parts):
+                if j > 0:
+                    line.append(" ", style="dim")
+                line.append(text, style=style)
+        else:
+            # Companion: dimmed path + role tag
+            p = Path(rel)
+            if len(p.parts) > 1:
+                dir_part = str(p.parent) + "/"
+                line.append(dir_part, style="dim")
+                line.append(p.name, style="dim")
+            else:
+                line.append(rel, style="dim")
+
+            spacing = max(pad - len(rel), 2)
+            line.append(" " * spacing)
+            line.append(entry.role, style="dim italic")
+
+        console.print(line)
 
     console.print()
     n_videos = sum(len(g.video_files) for g in groups)
     n_companions = sum(len(g.files) - len(g.video_files) for g in groups)
-    summary_parts = [f"{len(groups)} group(s)", f"{n_videos} video(s)"]
+
+    summary = Text("  ")
+    summary.append(f"{len(groups)}", style="bold")
+    summary.append(f" groups  ", style="dim")
+    summary.append(f"{n_videos}", style="bold")
+    summary.append(f" videos", style="dim")
     if n_companions:
-        summary_parts.append(f"{n_companions} companion(s)")
-    console.print(f"  [dim]{', '.join(summary_parts)}[/dim]")
+        summary.append(f"  {n_companions}", style="bold")
+        summary.append(f" companions", style="dim")
+    console.print(summary)
     console.print()
