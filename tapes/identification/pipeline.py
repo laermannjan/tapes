@@ -1,5 +1,8 @@
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from tapes.db.repository import Repository, ItemRecord
 from tapes.metadata.base import MetadataSource, SearchResult
