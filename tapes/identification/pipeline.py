@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -7,6 +8,8 @@ from tapes.identification.filename import parse_filename
 from tapes.identification.osdb_hash import compute_hash
 from tapes.identification.mediainfo import parse_mediainfo
 from tapes.identification.nfo_scanner import scan_for_nfo_id
+
+logger = logging.getLogger(__name__)
 
 NFO_ID_CONFIDENCE = 0.95
 

@@ -11,7 +11,7 @@ dry_run              = false
 [metadata]
 movies       = "tmdb"
 tv           = "tmdb"
-tmdb_api_key = ""    # or set env var TMDB_API_KEY
+tmdb_token   = ""    # or set env var TMDB_TOKEN
 
 [templates]
 movie = "{title} ({year})/{title} ({year}){ext}"
