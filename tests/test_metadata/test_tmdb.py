@@ -34,7 +34,7 @@ TV_DETAIL = {
 def test_search_movie():
     resp_lib.add(resp_lib.GET, f"{BASE}/search/movie", json=MOVIE_SEARCH)
     resp_lib.add(resp_lib.GET, f"{BASE}/movie/438631", json=MOVIE_DETAIL)
-    source = TMDBSource(api_key="testkey")
+    source = TMDBSource(token="testkey")
     results = source.search("Dune", 2021, "movie")
     assert len(results) >= 1
     assert results[0].tmdb_id == 438631
@@ -47,7 +47,7 @@ def test_search_movie():
 def test_search_movie_exact_year_confidence():
     resp_lib.add(resp_lib.GET, f"{BASE}/search/movie", json=MOVIE_SEARCH)
     resp_lib.add(resp_lib.GET, f"{BASE}/movie/438631", json=MOVIE_DETAIL)
-    source = TMDBSource(api_key="testkey")
+    source = TMDBSource(token="testkey")
     results = source.search("Dune", 2021, "movie")
     assert results[0].confidence >= 0.90
 
@@ -56,7 +56,7 @@ def test_search_movie_exact_year_confidence():
 def test_search_tv():
     resp_lib.add(resp_lib.GET, f"{BASE}/search/tv", json=TV_SEARCH)
     resp_lib.add(resp_lib.GET, f"{BASE}/tv/1438", json=TV_DETAIL)
-    source = TMDBSource(api_key="testkey")
+    source = TMDBSource(token="testkey")
     results = source.search("The Wire", 2002, "tv")
     assert results[0].tmdb_id == 1438
     assert results[0].show == "The Wire"
@@ -65,7 +65,7 @@ def test_search_tv():
 @resp_lib.activate
 def test_get_by_id_movie():
     resp_lib.add(resp_lib.GET, f"{BASE}/movie/438631", json=MOVIE_DETAIL)
-    source = TMDBSource(api_key="testkey")
+    source = TMDBSource(token="testkey")
     result = source.get_by_id(438631, "movie")
     assert result is not None
     assert result.title == "Dune"
@@ -74,20 +74,20 @@ def test_get_by_id_movie():
 @resp_lib.activate
 def test_is_available_true():
     resp_lib.add(resp_lib.GET, f"{BASE}/configuration", json={"images": {}})
-    source = TMDBSource(api_key="testkey")
+    source = TMDBSource(token="testkey")
     assert source.is_available() is True
 
 
 @resp_lib.activate
 def test_is_available_false_on_401():
     resp_lib.add(resp_lib.GET, f"{BASE}/configuration", status=401)
-    source = TMDBSource(api_key="bad_key")
+    source = TMDBSource(token="bad_key")
     assert source.is_available() is False
 
 
 @resp_lib.activate
 def test_search_no_results():
     resp_lib.add(resp_lib.GET, f"{BASE}/search/movie", json={"results": []})
-    source = TMDBSource(api_key="testkey")
+    source = TMDBSource(token="testkey")
     results = source.search("xyzzy unknown film", None, "movie")
     assert results == []

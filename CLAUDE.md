@@ -83,6 +83,10 @@ See `docs/decisions/` for full ADRs. Summary:
 - **No interactive undo.** Operations log is append-only; recovery is manual.
 - **Multi-episode files are manual only.** Auto mode skips them.
 - **OpenSubtitles deferred.** OSDB hash is computed but no API calls yet.
+- **TMDB bearer token.** Uses v4 read access token (`Authorization: Bearer`),
+  not v3 API key. Config field: `tmdb_token`, env var: `TMDB_TOKEN`.
+- **Continuous confidence scoring.** Jaro-Winkler title similarity * year
+  decay factor. No fixed tiers. Year is not passed as a TMDB API filter.
 - **uv for package management.** Use `[dependency-groups]` not `[project.optional-dependencies]`.
 
 ---
@@ -103,8 +107,8 @@ See `docs/decisions/` for full ADRs. Summary:
 
 ## Current status
 
-**Pre-alpha.** `tapes import --dry-run` works end to end. 89 tests passing.
-Next task to pick up: **Task 13 (pre-flight collision detection)**.
+**Alpha.** Core operations work. 190 tests passing.
+Next task to pick up: **Task 25 (wire query, stats, info, fields)**.
 
 ### Milestones
 
@@ -112,12 +116,12 @@ Next task to pick up: **Task 13 (pre-flight collision detection)**.
 prints a summary. `tapes import` copies/moves files with SHA-256 verification
 and records every operation in the DB.
 
-**M2 — Alpha.** Core operations work without data loss risk. Target tasks:
-- Task 13: pre-flight collision detection (blocks Task 19/23)
-- Task 21: query service (needed by check)
-- Task 22: `tapes check` — verify files still exist at recorded paths
-- Task 23: `tapes move` — relocate already-imported files
-- Task 27: wire check, move, log commands
+**M2 — Alpha (done).** Core operations work without data loss risk:
+- Task 13: pre-flight collision detection
+- Task 21: query service with mini query language
+- Task 22: `tapes check` for library integrity
+- Task 23: `tapes move` to re-apply templates
+- Task 27: check, move, log commands wired
 
 **M3 — Beta.** All commands functional, interactive mode for low-confidence
 matches. Target tasks:
@@ -146,7 +150,7 @@ matches. Target tasks:
 | 10 | Template rendering and filename sanitization | done |
 | 11 | Companion file classification and renaming | todo |
 | 12 | File scanner and grouper | done |
-| 13 | Pre-flight collision detector | **next** |
+| 13 | Pre-flight collision detector | done |
 | 14 | EventBus | done |
 | 15 | Plugin loader | todo |
 | 16 | File operations | done |
@@ -154,13 +158,13 @@ matches. Target tasks:
 | 18 | Rich-based interactive import display | todo |
 | 19 | Import service | done |
 | 20 | Startup validation | done |
-| 21 | Query service | todo |
-| 22 | tapes check command | todo |
-| 23 | tapes move command | todo |
+| 21 | Query service | done |
+| 22 | tapes check command | done |
+| 23 | tapes move command | done |
 | 24 | Wire import command | done |
-| 25 | Wire query, stats, info, fields commands | todo |
+| 25 | Wire query, stats, info, fields commands | **next** |
 | 26 | Wire modify command | todo |
-| 27 | Wire move, check, log commands | todo |
+| 27 | Wire move, check, log commands | done |
 | 28 | NFO sidecar plugin | todo |
 
 Full task specs: `docs/plans/2026-03-04-tapes-implementation.md`.
@@ -177,7 +181,7 @@ cat > tapes.toml <<EOF
 movies = "/tmp/tapes-movies"
 
 [metadata]
-tmdb_api_key = "your-real-key"
+tmdb_token = "your-token-here"
 EOF
 
 # Create test input

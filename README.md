@@ -15,7 +15,7 @@ commands are stubbed. See [What works](#what-works).
 
 - Python 3.11+
 - [uv](https://docs.astral.sh/uv/) for package management
-- A [TMDB API key](https://www.themoviedb.org/settings/api) (free)
+- A [TMDB read access token](https://www.themoviedb.org/settings/api) (free)
 
 ## Setup
 
@@ -39,13 +39,13 @@ movies = "~/Media/Movies"
 tv     = "~/Media/TV"
 
 [metadata]
-tmdb_api_key = "your-key-here"
+tmdb_token = "your-token-here"
 ```
 
-Or export the key as an environment variable:
+Or export the token as an environment variable:
 
 ```sh
-export TMDB_API_KEY=your-key-here
+export TMDB_TOKEN=your-token-here
 ```
 
 ## Usage
@@ -113,7 +113,7 @@ confidence_threshold = 0.9
 dry_run              = false
 
 [metadata]
-tmdb_api_key = ""               # or set TMDB_API_KEY env var
+tmdb_token   = ""               # or set TMDB_TOKEN env var
 
 [templates]
 movie = "{title} ({year})/{title} ({year}){ext}"

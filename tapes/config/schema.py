@@ -18,7 +18,7 @@ class ImportConfig(BaseModel):
 class MetadataConfig(BaseModel):
     movies: str = "tmdb"
     tv: str = "tmdb"
-    tmdb_api_key: str = ""
+    tmdb_token: str = ""
 
 
 class TemplatesConfig(BaseModel):

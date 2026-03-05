@@ -1,34 +1,41 @@
+import logging
+import re
+
+import jellyfish
 import requests
+
 from tapes.metadata.base import MetadataSource, SearchResult
+
+logger = logging.getLogger(__name__)
 
 BASE_URL = "https://api.themoviedb.org/3"
 
-# Confidence scoring per design doc
-_EXACT_YEAR = 0.90
-_YEAR_OFF_BY_ONE = 0.75
-_EXACT_NO_YEAR = 0.70
-_NO_MATCH_YEAR = 0.50
+_LEADING_ARTICLE = re.compile(r"^(the|a|an)\s+", re.IGNORECASE)
 
 
 class TMDBSource(MetadataSource):
-    def __init__(self, api_key: str, timeout: int = 10):
-        self._key = api_key
+    def __init__(self, token: str, timeout: int = 10):
+        self._token = token
         self._timeout = timeout
+        self._available: bool | None = None
+        self._headers = {"Authorization": f"Bearer {token}"}
 
     def search(self, title: str, year: int | None, media_type: str) -> list[SearchResult]:
         if not title:
             return []
 
         endpoint = "search/tv" if media_type == "tv" else "search/movie"
-        params = {"api_key": self._key, "query": title}
-        if year:
-            params["year" if media_type == "movie" else "first_air_date_year"] = year
+        params = {"query": title}
 
         try:
-            resp = requests.get(f"{BASE_URL}/{endpoint}", params=params, timeout=self._timeout)
+            resp = requests.get(f"{BASE_URL}/{endpoint}", params=params, headers=self._headers, timeout=self._timeout)
             resp.raise_for_status()
             raw_results = resp.json().get("results", [])
-        except Exception:
+        except requests.exceptions.HTTPError as e:
+            logger.warning("TMDB search failed (HTTP %s): %s", e.response.status_code, e)
+            return []
+        except Exception as e:
+            logger.warning("TMDB search failed: %s", e)
             return []
 
         results = []
@@ -50,27 +57,35 @@ class TMDBSource(MetadataSource):
         return _build_result(detail, detail, media_type, confidence=0.95)
 
     def is_available(self) -> bool:
+        if self._available is not None:
+            return self._available
         try:
             resp = requests.get(
                 f"{BASE_URL}/configuration",
-                params={"api_key": self._key},
+                headers=self._headers,
                 timeout=self._timeout,
             )
-            return resp.status_code == 200
-        except Exception:
-            return False
+            self._available = resp.status_code == 200
+            if not self._available:
+                logger.warning("TMDB API returned HTTP %s; check your read access token", resp.status_code)
+        except Exception as e:
+            logger.warning("TMDB API unreachable: %s", e)
+            self._available = False
+        return self._available
 
     def _fetch_detail(self, tmdb_id: int, media_type: str) -> dict | None:
         endpoint = "tv" if media_type == "tv" else "movie"
         try:
             resp = requests.get(
                 f"{BASE_URL}/{endpoint}/{tmdb_id}",
-                params={"api_key": self._key, "append_to_response": "credits"},
+                params={"append_to_response": "credits"},
+                headers=self._headers,
                 timeout=self._timeout,
             )
             resp.raise_for_status()
             return resp.json()
-        except Exception:
+        except Exception as e:
+            logger.debug("TMDB detail fetch failed for %s/%s: %s", endpoint, tmdb_id, e)
             return None
 
 
@@ -82,23 +97,37 @@ def _extract_year(item: dict, media_type: str) -> int | None:
         return None
 
 
+def _normalize_title(title: str) -> str:
+    return _LEADING_ARTICLE.sub("", title).strip().lower()
+
+
+def _title_similarity(query: str, result: str) -> float:
+    return jellyfish.jaro_winkler_similarity(
+        _normalize_title(query),
+        _normalize_title(result),
+    )
+
+
+def _year_factor(query_year: int | None, result_year: int | None) -> float:
+    if query_year is None:
+        return 0.8
+    if result_year is None:
+        return 0.8
+    distance = abs(query_year - result_year)
+    if distance == 0:
+        return 1.0
+    if distance == 1:
+        return 0.95
+    if distance == 2:
+        return 0.85
+    return max(0.5, 1.0 - distance * 0.1)
+
+
 def _score(query_title: str, query_year: int | None, item: dict, media_type: str, result_year: int | None) -> float:
     result_title = item.get("title") or item.get("name") or ""
-    title_match = result_title.lower() == query_title.lower()
-
-    if not title_match:
-        return _NO_MATCH_YEAR
-
-    if query_year is None:
-        return _EXACT_NO_YEAR
-
-    if result_year == query_year:
-        return _EXACT_YEAR
-
-    if result_year and abs(result_year - query_year) == 1:
-        return _YEAR_OFF_BY_ONE
-
-    return _EXACT_NO_YEAR
+    similarity = _title_similarity(query_title, result_title)
+    year_f = _year_factor(query_year, result_year)
+    return similarity * year_f
 
 
 def _build_result(item: dict, detail: dict, media_type: str, confidence: float) -> SearchResult:
