@@ -326,3 +326,85 @@ def test_edit_companions_toggle_off():
 
     assert video in result
     assert sub not in result
+
+
+# --- read_action tests (Task 5) ---
+
+from unittest.mock import patch
+from tapes.importer.interactive import read_action
+
+
+def test_read_action_enter_returns_default():
+    prompt = InteractivePrompt(candidates=[_search_result(confidence=0.86)])
+    with patch("tapes.importer.interactive._read_key", return_value="\r"):
+        action = read_action(prompt)
+    assert action == PromptAction.ACCEPT
+
+
+def test_read_action_s_returns_search():
+    prompt = InteractivePrompt(candidates=[_search_result()])
+    with patch("tapes.importer.interactive._read_key", return_value="s"):
+        action = read_action(prompt)
+    assert action == PromptAction.SEARCH
+
+
+def test_read_action_x_returns_skip():
+    prompt = InteractivePrompt(candidates=[_search_result()])
+    with patch("tapes.importer.interactive._read_key", return_value="x"):
+        action = read_action(prompt)
+    assert action == PromptAction.SKIP
+
+
+def test_read_action_q_returns_quit():
+    prompt = InteractivePrompt(candidates=[_search_result()])
+    with patch("tapes.importer.interactive._read_key", return_value="q"):
+        action = read_action(prompt)
+    assert action == PromptAction.QUIT
+
+
+def test_read_action_m_returns_manual():
+    prompt = InteractivePrompt(candidates=[_search_result()])
+    with patch("tapes.importer.interactive._read_key", return_value="m"):
+        action = read_action(prompt)
+    assert action == PromptAction.MANUAL
+
+
+def test_read_action_number_selects_candidate():
+    candidates = [
+        _search_result("Blade Runner", 1982, tmdb_id=78, confidence=0.62),
+        _search_result("Blade Runner 2049", 2017, tmdb_id=335984, confidence=0.51),
+    ]
+    prompt = InteractivePrompt(candidates=candidates)
+    with patch("tapes.importer.interactive._read_key", return_value="2"):
+        action = read_action(prompt)
+    assert action == (PromptAction.ACCEPT, 1)  # 0-based index
+
+
+def test_read_action_invalid_key_retries():
+    prompt = InteractivePrompt(candidates=[_search_result()])
+    with patch("tapes.importer.interactive._read_key", side_effect=["z", "s"]):
+        action = read_action(prompt)
+    assert action == PromptAction.SEARCH
+
+
+def test_read_action_enter_no_default_retries():
+    # Search results too close - no default
+    candidates = [_search_result(confidence=0.70), _search_result(confidence=0.60)]
+    prompt = InteractivePrompt(candidates=candidates, is_search_result=True)
+    with patch("tapes.importer.interactive._read_key", side_effect=["\r", "1"]):
+        action = read_action(prompt)
+    assert action == (PromptAction.ACCEPT, 0)
+
+
+def test_read_action_e_returns_edit():
+    prompt = InteractivePrompt(candidates=[_search_result()])
+    with patch("tapes.importer.interactive._read_key", return_value="e"):
+        action = read_action(prompt, has_companions=True)
+    assert action == "edit"
+
+
+def test_read_action_e_ignored_without_companions():
+    prompt = InteractivePrompt(candidates=[_search_result()])
+    with patch("tapes.importer.interactive._read_key", side_effect=["e", "s"]):
+        action = read_action(prompt, has_companions=False)
+    assert action == PromptAction.SEARCH
