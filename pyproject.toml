@@ -9,6 +9,7 @@ dependencies = [
     "pymediainfo>=6.1",
     "requests>=2.31",
     "pydantic>=2.6",
+    "jellyfish>=1.2.1",
 ]
 
 [dependency-groups]
