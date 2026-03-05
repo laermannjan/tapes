@@ -151,6 +151,14 @@ class ImportService:
                 return
             candidate = result.candidates[0]
 
+        # Inject season/episode from filename into the candidate for TV shows.
+        # TMDB search returns show-level metadata without episode-specific fields.
+        if candidate.media_type == "tv":
+            if candidate.season is None and result.file_info.get("season") is not None:
+                candidate.season = result.file_info["season"]
+            if candidate.episode is None and result.file_info.get("episode") is not None:
+                candidate.episode = result.file_info["episode"]
+
         dest = self._render_destination(video, candidate)
 
         if summary.dry_run:
