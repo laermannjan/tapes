@@ -95,7 +95,9 @@ See `docs/decisions/` for full ADRs. Summary:
 
 - **Package manager:** `uv`. Run commands as `uv run pytest`, `uv run tapes`.
 - **Commits:** short imperative subject, body with bullet points. No co-author
-  lines. No em-dashes.
+  lines. No em-dashes. All commits must be attributed to the repo's configured
+  git user (`git config user.name` / `git config user.email`), never to Claude
+  or any AI. When spawning subagents, pass `--author="$(git config user.name) <$(git config user.email)>"` explicitly.
 - **Tests:** pytest in `tests/`. Mirror the source tree. Use `tmp_path` fixture
   for file system tests. Mock external HTTP with the `responses` library.
 - **Config:** Pydantic v2 models. The `import` key in TOML is renamed to
@@ -107,11 +109,9 @@ See `docs/decisions/` for full ADRs. Summary:
 
 ## Current status
 
-**Beta (partial).** Auto-import pipeline works end-to-end. 296 tests passing.
-Interactive matching flow is partially built (prompt UI exists) but search and
-manual metadata entry are not yet implemented. These are **mission-critical**
-for real-world use -- without them, tapes can only handle files that already
-have clean filenames.
+**Beta.** Auto-import pipeline works end-to-end. 312 tests passing.
+Interactive matching flow is fully built: search, manual entry, no-candidate
+prompting, companion file import, and accept-all threshold enforcement all work.
 
 ### Milestones
 
@@ -126,54 +126,31 @@ and records every operation in the DB.
 - Task 23: `tapes move` to re-apply templates
 - Task 27: check, move, log commands wired
 
-**M3 -- Beta (partial).** Commands wired, companion files, plugins:
+**M3 -- Beta (done).** Commands wired, companion files, plugins:
 - Task 11: companion file handling (subtitles, artwork, NFO) -- done
 - Task 15: plugin loader (entry points) -- done
-- Task 18: interactive disambiguation UI -- prompt UI done, flows not wired
+- Task 18: interactive disambiguation UI -- done
 - Task 25: wire query, stats, info, fields -- done
 - Task 26: wire modify command -- done
 - Task 28: NFO sidecar plugin -- done
 
-**M3.5 -- Interactive matching (next, mission-critical).** The tool's core
-value is helping users organise messy media files. Auto-accept only covers
-well-named files. For everything else, the user must be able to intervene.
-- Wire `--interactive` and `--no-db` CLI flags through to service
-- Interactive search flow: `s` key collects title/year, queries TMDB, shows results
-- Manual metadata entry: `m` key lets user fill fields directly, no TMDB lookup
-- No-candidate prompting: when TMDB returns nothing, prompt user instead of silent skip
-- Companion file import: move selected companions alongside video during import
+**M3.5 -- Interactive matching (done).** All interactive flows wired:
+- `--interactive` and `--no-db` CLI flags wired through to service
+- Search flow (`s` key): collects title/year, queries TMDB, shows results
+- Manual metadata entry (`m` key): fills fields directly, no TMDB lookup
+- No-candidate prompting: shows prompt with search/manual/skip options
+- Companion file import: moves companions alongside video during import
+- Accept-all (`a` key) respects confidence threshold
 
 **M4 -- Release.** CI/CD, PyPI publish, README polish.
 
-### Interactive matching gaps (M3.5 scope)
+### Known remaining gaps
 
-These are the specific gaps between the current implementation and the design
-spec's interactive import flow (design doc section "Interactive Import Flow"):
-
-1. **`--interactive` flag not wired.** CLI accepts it but never passes to config/service.
-   Files above confidence threshold are always auto-accepted; user cannot force review.
-
-2. **`--no-db` flag not wired.** CLI accepts it but is ignored.
-
-3. **Search flow (`s` key) stubs out.** Pressing `s` at the prompt skips the file.
-   Should: collect media type + title + year, query TMDB, display results with
-   confidence, let user accept a result or try again.
-
-4. **Manual metadata entry (`m` key) stubs out.** Pressing `m` skips the file.
-   Should: collect fields (media type, title, year, optional show/season/episode),
-   create a synthetic SearchResult with `[manual]` source, let user accept.
-
-5. **No-candidate files silently skipped.** When TMDB returns zero results and
-   `requires_interaction=True`, the file is marked unmatched without prompting.
-   Should: show "no match found" prompt with search/manual/skip options.
-
-6. **Companion files not moved during import.** `classify_companions` and
-   `edit_companions` exist but ImportService does not move companions alongside
-   the video file. Only `tapes modify` moves companions currently.
-
-7. **Accept-all (`a` key) does not respect threshold.** Design says accept-all
-   should only auto-accept groups above confidence threshold; current impl
-   accepts everything unconditionally.
+- Multi-episode files still require manual handling (by design, ADR)
+- OpenSubtitles API lookup deferred (hash computed but not queried)
+- Interactive companion editing during import: user can toggle companions via
+  `e` key but the edited selection is not yet threaded through to the move step
+  (always uses `move_by_default` from classifier)
 
 ### Task completion
 
