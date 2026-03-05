@@ -11,3 +11,4 @@ dist/
 .claude/
 tapes.toml
 *.mkv
+.worktrees/
