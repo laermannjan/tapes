@@ -290,6 +290,48 @@ def test_interactive_search_flow(tmp_path, repo, meta_source, cfg):
     meta_source.search.assert_called_once_with("Matrix", 1999, "movie")
 
 
+def test_interactive_manual_entry(tmp_path, repo, meta_source, cfg):
+    """Pressing 'm' collects manual metadata and imports."""
+    _make_video(tmp_path)
+    mock_result = IdentificationResult(
+        candidates=[_make_candidate(confidence=0.3)],  # low confidence to trigger prompt
+        file_info={"title": "unknown"},
+        requires_interaction=True,
+    )
+    manual_sr = SearchResult(
+        tmdb_id=0, title="My Movie", year=2020, media_type="movie", confidence=1.0,
+    )
+
+    service = ImportService(repo=repo, metadata_source=meta_source, config=cfg)
+    with patch.object(service._pipeline, "identify", return_value=mock_result), \
+         patch("tapes.importer.service.classify_companions", return_value=[]), \
+         patch("tapes.importer.service.display_prompt"), \
+         patch("tapes.importer.service.read_action", return_value=PromptAction.MANUAL), \
+         patch("tapes.importer.service.manual_prompt", return_value=manual_sr):
+        summary = service.import_path(tmp_path)
+
+    assert summary["imported"] == 1
+
+
+def test_no_candidates_prompts_user(tmp_path, repo, meta_source, cfg):
+    """Files with requires_interaction and no candidates show prompt."""
+    _make_video(tmp_path)
+    mock_result = IdentificationResult(
+        candidates=[], file_info={"title": "mystery"}, requires_interaction=True,
+    )
+
+    service = ImportService(repo=repo, metadata_source=meta_source, config=cfg)
+    with patch.object(service._pipeline, "identify", return_value=mock_result), \
+         patch("tapes.importer.service.classify_companions", return_value=[]), \
+         patch("tapes.importer.service.display_prompt") as mock_display, \
+         patch("tapes.importer.service.read_action", return_value=PromptAction.SKIP):
+        summary = service.import_path(tmp_path)
+
+    # The prompt should have been displayed (not silently skipped)
+    assert mock_display.call_count == 1
+    assert summary["skipped"] == 1
+
+
 def test_interactive_accept_all(tmp_path, repo, meta_source, cfg):
     """When user presses accept-all, subsequent files are auto-accepted."""
     _make_video(tmp_path, name="movie1.mkv")
