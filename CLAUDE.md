@@ -107,7 +107,7 @@ See `docs/decisions/` for full ADRs. Summary:
 
 ## Current status
 
-**Beta.** All commands functional. 295 tests passing.
+**Beta.** All commands functional. 296 tests passing.
 M3 milestone complete. Next: **M4 (Release)** -- CI/CD, PyPI publish, README polish.
 
 ### Milestones
