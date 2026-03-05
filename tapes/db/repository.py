@@ -123,6 +123,25 @@ class Repository:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    def get_all_sessions(self) -> list[dict]:
+        rows = self._conn.execute(
+            "SELECT * FROM sessions ORDER BY started_at DESC"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_session(self, session_id: int) -> dict | None:
+        row = self._conn.execute(
+            "SELECT * FROM sessions WHERE id = ?", (session_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+    def get_operations(self, session_id: int) -> list[dict]:
+        rows = self._conn.execute(
+            "SELECT * FROM operations WHERE session_id = ? ORDER BY id",
+            (session_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
 
 def _row_to_item(row) -> ItemRecord:
     # Support both sqlite3.Row and plain tuples
