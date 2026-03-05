@@ -3,17 +3,32 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+from rich.console import Console
+
+from tapes.companions.classifier import classify_companions
 from tapes.config.schema import TapesConfig
 from tapes.db.repository import Repository, ItemRecord
 from tapes.discovery.scanner import scan_media_files
 from tapes.discovery.grouper import group_media_files
 from tapes.identification.pipeline import IdentificationPipeline
+from tapes.importer.interactive import (
+    InteractivePrompt,
+    PromptAction,
+    display_prompt,
+    edit_companions,
+    read_action,
+)
 from tapes.metadata.base import MetadataSource, SearchResult
 from tapes.templates.engine import render_template
 from tapes.importer.session import ImportSession
 from tapes.importer.file_ops import copy_verify, move_file, safe_rename
 
 logger = logging.getLogger(__name__)
+
+
+class _QuitImport(Exception):
+    """Internal sentinel raised when the user chooses to quit."""
+    pass
 
 
 @dataclass
@@ -33,11 +48,14 @@ class ImportService:
         metadata_source: MetadataSource,
         config: TapesConfig,
         event_bus=None,
+        console=None,
     ):
         self._repo = repo
         self._meta = metadata_source
         self._cfg = config
         self._bus = event_bus
+        self._console = console or Console()
+        self._accept_all = False
         self._pipeline = IdentificationPipeline(
             repo=repo,
             metadata_source=metadata_source,
@@ -55,13 +73,23 @@ class ImportService:
         groups = group_media_files(video_files)
         session = ImportSession.create(self._repo, str(path)) if not summary.dry_run else None
 
-        for group in groups:
-            for video in group.video_files:
-                try:
-                    self._process_file(video, summary, session)
-                except Exception as e:
-                    logger.error("Error processing %s: %s", video, e)
-                    summary.errors += 1
+        total_videos = sum(len(g.video_files) for g in groups)
+        video_index = 0
+
+        try:
+            for group in groups:
+                for video in group.video_files:
+                    video_index += 1
+                    try:
+                        self._process_file(video, summary, session,
+                                           index=video_index, total=total_videos)
+                    except _QuitImport:
+                        raise
+                    except Exception as e:
+                        logger.error("Error processing %s: %s", video, e)
+                        summary.errors += 1
+        except _QuitImport:
+            pass  # graceful exit
 
         if session:
             session.complete()
@@ -73,6 +101,9 @@ class ImportService:
         video: Path,
         summary: ImportSummary,
         session: ImportSession | None,
+        *,
+        index: int = 0,
+        total: int = 0,
     ) -> None:
         result = self._pipeline.identify(video)
 
@@ -81,19 +112,35 @@ class ImportService:
             summary.skipped += 1
             return
 
-        # Needs interaction but we're in auto mode — mark unmatched
-        if result.requires_interaction and not result.candidates:
+        # No candidates at all — mark unmatched
+        if not result.candidates and not result.requires_interaction:
             summary.unmatched.append(str(video))
             summary.skipped += 1
             return
 
-        # Pick best candidate
-        if not result.candidates:
-            summary.unmatched.append(str(video))
-            summary.skipped += 1
-            return
+        # Needs interaction
+        if result.requires_interaction:
+            if not result.candidates:
+                summary.unmatched.append(str(video))
+                summary.skipped += 1
+                return
 
-        candidate = result.candidates[0]
+            # Accept-all mode: auto-accept top candidate
+            if self._accept_all:
+                candidate = result.candidates[0]
+            else:
+                candidate = self._prompt_user(video, result, index=index, total=total)
+                if candidate is None:
+                    summary.skipped += 1
+                    return
+        else:
+            # Auto-accepted — pick best candidate
+            if not result.candidates:
+                summary.unmatched.append(str(video))
+                summary.skipped += 1
+                return
+            candidate = result.candidates[0]
+
         dest = self._render_destination(video, candidate)
 
         if summary.dry_run:
@@ -117,6 +164,48 @@ class ImportService:
         except Exception as e:
             session.update_operation(op_id, state="failed", error=str(e))
             raise
+
+    def _prompt_user(self, video, result, *, index, total):
+        """Show interactive prompt and return selected candidate or None."""
+        companions = classify_companions(video)
+        prompt = InteractivePrompt(candidates=result.candidates)
+
+        while True:
+            display_prompt(
+                self._console,
+                prompt,
+                index=index,
+                total=total,
+                filename=video.name,
+                source=result.source,
+                companions=companions or None,
+            )
+            action = read_action(prompt, has_companions=bool(companions))
+
+            if action == "edit":
+                companions = edit_companions(self._console, companions)
+                continue
+
+            if isinstance(action, tuple):
+                # Numbered candidate selection
+                _, idx = action
+                return result.candidates[idx]
+
+            if action == PromptAction.ACCEPT:
+                return result.candidates[0]
+
+            if action == PromptAction.ACCEPT_ALL:
+                self._accept_all = True
+                return result.candidates[0]
+
+            if action == PromptAction.SKIP:
+                return None
+
+            if action == PromptAction.QUIT:
+                raise _QuitImport()
+
+            # SEARCH, MANUAL: skip for now (full search flow is separate work)
+            return None
 
     def _render_destination(self, video: Path, candidate: SearchResult) -> Path:
         cfg = self._cfg

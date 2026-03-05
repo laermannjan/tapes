@@ -8,6 +8,7 @@ from tapes.db.repository import Repository
 from tapes.config.schema import TapesConfig, LibraryConfig, ImportConfig, TemplatesConfig
 from tapes.metadata.base import SearchResult
 from tapes.identification.pipeline import IdentificationResult
+from tapes.importer.interactive import PromptAction
 from tapes.importer.service import ImportService
 
 
@@ -71,7 +72,7 @@ def test_dry_run_planned(tmp_path, repo, meta_source, cfg):
     mock_result = IdentificationResult(candidates=[candidate], file_info={})
     with patch.object(
         ImportService, "_process_file",
-        side_effect=lambda v, summary, session: (
+        side_effect=lambda v, summary, session, *, index=0, total=0: (
             summary.planned.append({"source": str(v), "title": candidate.title})
             or setattr(summary, "imported", summary.imported + 1)
         )
@@ -144,3 +145,81 @@ def test_execute_copy(tmp_path, repo, meta_source, cfg):
     # destination file should exist
     dest = Path(cfg.library.movies) / "The Matrix (1999).mkv"
     assert dest.exists()
+
+
+def test_interactive_skip(tmp_path, repo, meta_source, cfg):
+    """When user presses skip, the file is skipped."""
+    _make_video(tmp_path)
+    mock_result = IdentificationResult(
+        candidates=[_make_candidate(confidence=0.60)],
+        file_info={},
+        requires_interaction=True,
+    )
+    service = ImportService(repo=repo, metadata_source=meta_source, config=cfg)
+    with patch.object(service._pipeline, "identify", return_value=mock_result), \
+         patch("tapes.importer.service.classify_companions", return_value=[]), \
+         patch("tapes.importer.service.display_prompt"), \
+         patch("tapes.importer.service.read_action", return_value=PromptAction.SKIP):
+        summary = service.import_path(tmp_path)
+
+    assert summary["skipped"] == 1
+    assert summary["imported"] == 0
+
+
+def test_interactive_accept(tmp_path, repo, meta_source, cfg):
+    """When user accepts, the file is imported."""
+    _make_video(tmp_path)
+    candidate = _make_candidate(confidence=0.60)
+    mock_result = IdentificationResult(
+        candidates=[candidate],
+        file_info={},
+        requires_interaction=True,
+    )
+    service = ImportService(repo=repo, metadata_source=meta_source, config=cfg)
+    with patch.object(service._pipeline, "identify", return_value=mock_result), \
+         patch("tapes.importer.service.classify_companions", return_value=[]), \
+         patch("tapes.importer.service.display_prompt"), \
+         patch("tapes.importer.service.read_action", return_value=PromptAction.ACCEPT):
+        summary = service.import_path(tmp_path)
+
+    assert summary["imported"] == 1
+
+
+def test_interactive_quit(tmp_path, repo, meta_source, cfg):
+    """When user quits, import stops early."""
+    _make_video(tmp_path)
+    mock_result = IdentificationResult(
+        candidates=[_make_candidate(confidence=0.60)],
+        file_info={},
+        requires_interaction=True,
+    )
+    service = ImportService(repo=repo, metadata_source=meta_source, config=cfg)
+    with patch.object(service._pipeline, "identify", return_value=mock_result), \
+         patch("tapes.importer.service.classify_companions", return_value=[]), \
+         patch("tapes.importer.service.display_prompt"), \
+         patch("tapes.importer.service.read_action", return_value=PromptAction.QUIT):
+        summary = service.import_path(tmp_path)
+
+    assert summary["imported"] == 0
+
+
+def test_interactive_accept_all(tmp_path, repo, meta_source, cfg):
+    """When user presses accept-all, subsequent files are auto-accepted."""
+    _make_video(tmp_path, name="movie1.mkv")
+    _make_video(tmp_path, name="movie2.mkv")
+    candidate = _make_candidate(confidence=0.60)
+    mock_result = IdentificationResult(
+        candidates=[candidate],
+        file_info={},
+        requires_interaction=True,
+    )
+    service = ImportService(repo=repo, metadata_source=meta_source, config=cfg)
+    with patch.object(service._pipeline, "identify", return_value=mock_result), \
+         patch("tapes.importer.service.classify_companions", return_value=[]), \
+         patch("tapes.importer.service.display_prompt") as mock_display, \
+         patch("tapes.importer.service.read_action", return_value=PromptAction.ACCEPT_ALL):
+        summary = service.import_path(tmp_path)
+
+    assert summary["imported"] == 2
+    # display_prompt should only be called once (first file); second is auto-accepted
+    assert mock_display.call_count == 1
