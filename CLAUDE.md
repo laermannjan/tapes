@@ -107,32 +107,73 @@ See `docs/decisions/` for full ADRs. Summary:
 
 ## Current status
 
-**Alpha.** Core operations work. 190 tests passing.
-Next task to pick up: **Task 25 (wire query, stats, info, fields)**.
+**Beta (partial).** Auto-import pipeline works end-to-end. 296 tests passing.
+Interactive matching flow is partially built (prompt UI exists) but search and
+manual metadata entry are not yet implemented. These are **mission-critical**
+for real-world use -- without them, tapes can only handle files that already
+have clean filenames.
 
 ### Milestones
 
-**M1 — Pre-alpha (done).** `tapes import --dry-run` runs the full pipeline and
+**M1 -- Pre-alpha (done).** `tapes import --dry-run` runs the full pipeline and
 prints a summary. `tapes import` copies/moves files with SHA-256 verification
 and records every operation in the DB.
 
-**M2 — Alpha (done).** Core operations work without data loss risk:
+**M2 -- Alpha (done).** Core operations work without data loss risk:
 - Task 13: pre-flight collision detection
 - Task 21: query service with mini query language
 - Task 22: `tapes check` for library integrity
 - Task 23: `tapes move` to re-apply templates
 - Task 27: check, move, log commands wired
 
-**M3 — Beta.** All commands functional, interactive mode for low-confidence
-matches. Target tasks:
-- Task 11: companion file handling (subtitles, artwork, NFO)
-- Task 15: plugin loader (entry points)
-- Task 18: interactive disambiguation UI
-- Task 25: wire query, stats, info, fields
-- Task 26: wire modify command
-- Task 28: NFO sidecar plugin
+**M3 -- Beta (partial).** Commands wired, companion files, plugins:
+- Task 11: companion file handling (subtitles, artwork, NFO) -- done
+- Task 15: plugin loader (entry points) -- done
+- Task 18: interactive disambiguation UI -- prompt UI done, flows not wired
+- Task 25: wire query, stats, info, fields -- done
+- Task 26: wire modify command -- done
+- Task 28: NFO sidecar plugin -- done
 
-**M4 — Release.** CI/CD, PyPI publish, README polish.
+**M3.5 -- Interactive matching (next, mission-critical).** The tool's core
+value is helping users organise messy media files. Auto-accept only covers
+well-named files. For everything else, the user must be able to intervene.
+- Wire `--interactive` and `--no-db` CLI flags through to service
+- Interactive search flow: `s` key collects title/year, queries TMDB, shows results
+- Manual metadata entry: `m` key lets user fill fields directly, no TMDB lookup
+- No-candidate prompting: when TMDB returns nothing, prompt user instead of silent skip
+- Companion file import: move selected companions alongside video during import
+
+**M4 -- Release.** CI/CD, PyPI publish, README polish.
+
+### Interactive matching gaps (M3.5 scope)
+
+These are the specific gaps between the current implementation and the design
+spec's interactive import flow (design doc section "Interactive Import Flow"):
+
+1. **`--interactive` flag not wired.** CLI accepts it but never passes to config/service.
+   Files above confidence threshold are always auto-accepted; user cannot force review.
+
+2. **`--no-db` flag not wired.** CLI accepts it but is ignored.
+
+3. **Search flow (`s` key) stubs out.** Pressing `s` at the prompt skips the file.
+   Should: collect media type + title + year, query TMDB, display results with
+   confidence, let user accept a result or try again.
+
+4. **Manual metadata entry (`m` key) stubs out.** Pressing `m` skips the file.
+   Should: collect fields (media type, title, year, optional show/season/episode),
+   create a synthetic SearchResult with `[manual]` source, let user accept.
+
+5. **No-candidate files silently skipped.** When TMDB returns zero results and
+   `requires_interaction=True`, the file is marked unmatched without prompting.
+   Should: show "no match found" prompt with search/manual/skip options.
+
+6. **Companion files not moved during import.** `classify_companions` and
+   `edit_companions` exist but ImportService does not move companions alongside
+   the video file. Only `tapes modify` moves companions currently.
+
+7. **Accept-all (`a` key) does not respect threshold.** Design says accept-all
+   should only auto-accept groups above confidence threshold; current impl
+   accepts everything unconditionally.
 
 ### Task completion
 
@@ -148,24 +189,24 @@ matches. Target tasks:
 | 8  | TMDB metadata source | done |
 | 9  | Identification pipeline | done |
 | 10 | Template rendering and filename sanitization | done |
-| 11 | Companion file classification and renaming | todo |
+| 11 | Companion file classification and renaming | done |
 | 12 | File scanner and grouper | done |
 | 13 | Pre-flight collision detector | done |
 | 14 | EventBus | done |
-| 15 | Plugin loader | todo |
+| 15 | Plugin loader | done |
 | 16 | File operations | done |
 | 17 | Session tracking | done |
-| 18 | Rich-based interactive import display | todo |
+| 18 | Rich-based interactive import display | done |
 | 19 | Import service | done |
 | 20 | Startup validation | done |
 | 21 | Query service | done |
 | 22 | tapes check command | done |
 | 23 | tapes move command | done |
 | 24 | Wire import command | done |
-| 25 | Wire query, stats, info, fields commands | **next** |
-| 26 | Wire modify command | todo |
+| 25 | Wire query, stats, info, fields commands | done |
+| 26 | Wire modify command | done |
 | 27 | Wire move, check, log commands | done |
-| 28 | NFO sidecar plugin | todo |
+| 28 | NFO sidecar plugin | done |
 
 Full task specs: `docs/plans/2026-03-04-tapes-implementation.md`.
 Design spec: `docs/plans/2026-03-04-tapes-design.md`.
