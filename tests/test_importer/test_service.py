@@ -241,6 +241,55 @@ def test_interactive_flag_forces_prompt(tmp_path, repo, meta_source, cfg):
     assert mock_display.call_count == 1
 
 
+def test_no_db_skips_db_record(tmp_path, repo, meta_source, cfg):
+    """--no-db imports file without writing to DB."""
+    cfg.import_.no_db = True
+    video = _make_video(tmp_path)
+    candidate = _make_candidate()
+    mock_result = IdentificationResult(candidates=[candidate], file_info={})
+
+    service = ImportService(repo=repo, metadata_source=meta_source, config=cfg)
+    with patch.object(service._pipeline, "identify", return_value=mock_result):
+        summary = service.import_path(tmp_path)
+
+    assert summary["imported"] == 1
+    # Verify no DB record was written
+    count = repo._conn.execute("SELECT count(*) FROM items").fetchone()[0]
+    assert count == 0
+    # Verify no session was created
+    sessions = repo._conn.execute("SELECT count(*) FROM sessions").fetchone()[0]
+    assert sessions == 0
+
+
+def test_interactive_search_flow(tmp_path, repo, meta_source, cfg):
+    """Pressing 's' triggers search, shows TMDB results, user accepts."""
+    _make_video(tmp_path)
+    candidate = _make_candidate(confidence=0.50)
+    search_candidate = _make_candidate(title="The Matrix Reloaded", year=2003, confidence=0.92)
+    mock_result = IdentificationResult(
+        candidates=[candidate], file_info={"title": "matrix"}, requires_interaction=True,
+    )
+    meta_source.search.return_value = [search_candidate]
+
+    call_count = [0]
+    def fake_read_action(prompt, **kwargs):
+        call_count[0] += 1
+        if call_count[0] == 1:
+            return PromptAction.SEARCH
+        return PromptAction.ACCEPT
+
+    service = ImportService(repo=repo, metadata_source=meta_source, config=cfg)
+    with patch.object(service._pipeline, "identify", return_value=mock_result), \
+         patch("tapes.importer.service.classify_companions", return_value=[]), \
+         patch("tapes.importer.service.display_prompt"), \
+         patch("tapes.importer.service.read_action", side_effect=fake_read_action), \
+         patch("tapes.importer.service.search_prompt", return_value=("movie", "Matrix", 1999)):
+        summary = service.import_path(tmp_path)
+
+    assert summary["imported"] == 1
+    meta_source.search.assert_called_once_with("Matrix", 1999, "movie")
+
+
 def test_interactive_accept_all(tmp_path, repo, meta_source, cfg):
     """When user presses accept-all, subsequent files are auto-accepted."""
     _make_video(tmp_path, name="movie1.mkv")

@@ -17,6 +17,7 @@ from tapes.importer.interactive import (
     display_prompt,
     edit_companions,
     read_action,
+    search_prompt,
 )
 from tapes.metadata.base import MetadataSource, SearchResult
 from tapes.templates.engine import render_template
@@ -60,6 +61,7 @@ class ImportService:
             repo=repo,
             metadata_source=metadata_source,
             confidence_threshold=config.import_.confidence_threshold,
+            no_db=config.import_.no_db,
         )
 
     def import_path(self, path: Path) -> dict:
@@ -71,7 +73,8 @@ class ImportService:
             return vars(summary)
 
         groups = group_media_files(video_files)
-        session = ImportSession.create(self._repo, str(path)) if not summary.dry_run else None
+        no_db = self._cfg.import_.no_db
+        session = ImportSession.create(self._repo, str(path)) if not summary.dry_run and not no_db else None
 
         total_videos = sum(len(g.video_files) for g in groups)
         video_index = 0
@@ -159,14 +162,17 @@ class ImportService:
             return
 
         # Execute file operation
-        op_id = session.add_operation(str(video), self._cfg.import_.mode)
+        op_id = session.add_operation(str(video), self._cfg.import_.mode) if session else None
         try:
             self._execute_file_op(video, dest)
-            self._write_db_record(video, dest, candidate, result.file_info)
-            session.update_operation(op_id, state="done", dest_path=str(dest))
+            if not self._cfg.import_.no_db:
+                self._write_db_record(video, dest, candidate, result.file_info)
+            if session:
+                session.update_operation(op_id, state="done", dest_path=str(dest))
             summary.imported += 1
         except Exception as e:
-            session.update_operation(op_id, state="failed", error=str(e))
+            if session:
+                session.update_operation(op_id, state="failed", error=str(e))
             raise
 
     def _prompt_user(self, video, result, *, index, total):
@@ -208,8 +214,26 @@ class ImportService:
             if action == PromptAction.QUIT:
                 raise _QuitImport()
 
-            # SEARCH, MANUAL: skip for now (full search flow is separate work)
-            return None
+            if action == PromptAction.MANUAL:
+                return None
+
+            if action == PromptAction.SEARCH:
+                default_title = result.file_info.get("title") or result.file_info.get("show") or ""
+                default_year = result.file_info.get("year")
+                default_media_type = "tv" if "season" in result.file_info else "movie"
+
+                mt, title, year = search_prompt(
+                    self._console,
+                    default_media_type=default_media_type,
+                    default_title=default_title,
+                    default_year=default_year,
+                )
+                search_results = self._meta.search(title, year, mt)
+                if search_results:
+                    prompt = InteractivePrompt(candidates=search_results, is_search_result=True)
+                else:
+                    prompt = InteractivePrompt(candidates=[], after_failed_search=True)
+                continue
 
     def _render_destination(self, video: Path, candidate: SearchResult) -> Path:
         cfg = self._cfg
