@@ -16,6 +16,7 @@ from tapes.importer.interactive import (
     PromptAction,
     display_prompt,
     edit_companions,
+    manual_prompt,
     read_action,
     search_prompt,
 )
@@ -127,13 +128,8 @@ class ImportService:
 
         # Needs interaction
         if result.requires_interaction:
-            if not result.candidates:
-                summary.unmatched.append(str(video))
-                summary.skipped += 1
-                return
-
             # Accept-all mode: auto-accept top candidate
-            if self._accept_all:
+            if self._accept_all and result.candidates:
                 candidate = result.candidates[0]
             else:
                 candidate = self._prompt_user(video, result, index=index, total=total)
@@ -215,7 +211,15 @@ class ImportService:
                 raise _QuitImport()
 
             if action == PromptAction.MANUAL:
-                return None
+                default_title = result.file_info.get("title") or result.file_info.get("show") or ""
+                default_year = result.file_info.get("year")
+                default_media_type = "tv" if "season" in result.file_info else "movie"
+                return manual_prompt(
+                    self._console,
+                    default_media_type=default_media_type,
+                    default_title=default_title,
+                    default_year=default_year,
+                )
 
             if action == PromptAction.SEARCH:
                 default_title = result.file_info.get("title") or result.file_info.get("show") or ""
