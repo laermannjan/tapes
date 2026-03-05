@@ -1,5 +1,11 @@
 from guessit import guessit
 
+_GUESSIT_RENAMES = {
+    "video_codec": "codec",
+    "source": "media_source",
+    "audio_codec": "audio",
+}
+
 
 def parse_filename(filename: str, folder_name: str | None = None) -> dict:
     """
@@ -20,5 +26,10 @@ def parse_filename(filename: str, folder_name: str | None = None) -> dict:
         result["show"] = result.pop("title")
         if "episode_title" in result:
             result["episode_title"] = result["episode_title"]
+
+    # Rename guessit keys to match downstream field expectations
+    for old_key, new_key in _GUESSIT_RENAMES.items():
+        if old_key in result:
+            result[new_key] = result.pop(old_key)
 
     return result

@@ -30,3 +30,27 @@ def test_folder_name_as_hint(tmp_path):
     r = parse_filename("s01e01.mkv", folder_name="The Wire (2002)")
     assert r["show"] == "The Wire"
     assert r["year"] == 2002
+
+
+def test_video_codec_normalised_to_codec():
+    """guessit's 'video_codec' key is renamed to 'codec'."""
+    r = parse_filename("Dune.2021.2160p.BluRay.x265.mkv")
+    assert "codec" in r
+    assert "video_codec" not in r
+
+
+def test_source_renamed_to_media_source():
+    """guessit's 'source' key (media source) is renamed to 'media_source'
+    so it doesn't collide with the identification source field."""
+    r = parse_filename("Dune.2021.2160p.BluRay.x265.mkv")
+    assert "media_source" in r
+    assert "source" not in r
+
+
+def test_audio_codec_normalised_to_audio():
+    """guessit's 'audio_codec' key is renamed to 'audio'."""
+    r = parse_filename("Dune.2021.DTS-HD.BluRay.mkv")
+    # audio_codec may or may not be detected depending on guessit version,
+    # but if present it should be renamed
+    if "audio" in r or "audio_codec" in r:
+        assert "audio_codec" not in r
