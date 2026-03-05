@@ -57,7 +57,7 @@ def command(
                 se += f"E{item.episode:02d}"
         table.add_row(
             item.title or "",
-            str(item.year) if item.year else "",
+            str(item.year) if item.year is not None else "",
             item.media_type,
             item.show or "",
             se,

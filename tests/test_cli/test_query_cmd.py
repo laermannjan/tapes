@@ -56,7 +56,7 @@ class TestQueryCommand:
     def test_query_with_limit(self, db_with_items):
         result = runner.invoke(app, ["query", "", "--limit", "1"])
         assert result.exit_code == 0
-        # Should only show 1 result
+        assert "1 result(s)" in result.output
 
     def test_query_no_db(self, tmp_path, monkeypatch):
         toml = tmp_path / "tapes.toml"
