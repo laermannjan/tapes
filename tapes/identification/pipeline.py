@@ -82,6 +82,8 @@ class IdentificationPipeline:
             year = file_info.get("year")
             media_type = "tv" if "season" in file_info else "movie"
             candidates = self._meta.search(title, year, media_type)
+        else:
+            logger.warning("Metadata source unavailable; skipping TMDB lookup for %s", path.name)
 
         # Step 7: auto-accept if top candidate clears threshold
         if candidates and candidates[0].confidence >= self._threshold:

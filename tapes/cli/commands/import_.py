@@ -51,6 +51,8 @@ def command(
     repo = Repository(conn)
 
     meta = TMDBSource(api_key=cfg.metadata.tmdb_api_key or os.environ.get("TMDB_API_KEY", ""))
+    if not meta.is_available():
+        console.print("[yellow]Warning:[/yellow] TMDB API is not reachable. Check your tmdb_api_key in tapes.toml.")
 
     service = ImportService(repo=repo, metadata_source=meta, config=cfg)
     summary = service.import_path(path)
