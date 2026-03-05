@@ -412,3 +412,24 @@ def test_companion_files_moved_during_import(tmp_path, repo, meta_source, cfg):
     srt_files = list(dest_dir.rglob("*.srt"))
     assert len(srt_files) == 1
     assert "The Matrix (1999)" in srt_files[0].name
+
+
+def test_db_record_stores_identification_source(tmp_path, repo, meta_source, cfg):
+    """match_source in DB should be the identification method, not guessit's media source."""
+    video = _make_video(tmp_path)
+    candidate = _make_candidate()
+    # file_info with guessit's "source" field (media source, e.g. "Blu-ray")
+    mock_result = IdentificationResult(
+        candidates=[candidate],
+        file_info={"source": "Blu-ray", "title": "The Matrix"},
+        source="filename",  # this is the identification source
+    )
+
+    service = ImportService(repo=repo, metadata_source=meta_source, config=cfg)
+    with patch.object(service._pipeline, "identify", return_value=mock_result):
+        summary = service.import_path(tmp_path)
+
+    assert summary["imported"] == 1
+    # Verify the DB record has identification source, not media source
+    row = repo._conn.execute("SELECT match_source FROM items").fetchone()
+    assert row[0] == "filename"  # NOT "Blu-ray"

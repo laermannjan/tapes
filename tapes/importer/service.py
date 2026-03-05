@@ -111,6 +111,11 @@ class ImportService:
     ) -> None:
         result = self._pipeline.identify(video)
 
+        # Stash identification source for DB record. Must be done before any
+        # early return that skips the DB write. The key is namespaced to avoid
+        # collision with guessit's "source" (media source like "Blu-ray").
+        result.file_info["_identification_source"] = result.source
+
         # Already in DB — skip
         if result.item is not None:
             summary.skipped += 1
@@ -323,7 +328,7 @@ class ImportService:
             resolution=file_info.get("resolution") or file_info.get("screen_size"),
             audio=file_info.get("audio"),
             hdr=file_info.get("hdr", 0),
-            match_source=file_info.get("source", "tmdb"),
+            match_source=file_info.get("_identification_source") or "tmdb",
             confidence=candidate.confidence,
             mtime=stat.st_mtime,
             size=stat.st_size,
