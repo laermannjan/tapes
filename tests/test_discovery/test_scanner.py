@@ -31,3 +31,22 @@ def test_excludes_sample_files(tmp_path):
     names = [f.name for f in found]
     assert "movie.mkv" in names
     assert "sample.mkv" not in names
+
+
+def test_single_video_file(tmp_path):
+    video = tmp_path / "Matrix.1999.BluRay.mkv"
+    video.touch()
+    found = scan_media_files(video)
+    assert found == [video]
+
+
+def test_single_non_video_file(tmp_path):
+    txt = tmp_path / "readme.txt"
+    txt.touch()
+    assert scan_media_files(txt) == []
+
+
+def test_single_sample_file(tmp_path):
+    sample = tmp_path / "sample.mkv"
+    sample.touch()
+    assert scan_media_files(sample) == []
