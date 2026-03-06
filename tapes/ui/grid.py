@@ -144,6 +144,7 @@ class GridWidget(Static):
         self._cursor_col = 0
         self._selected_rows: set[int] = set()
         self._sel_col: int | None = None
+        self._selecting: bool = False
         self._edit_col: int | None = None
         self._edit_value: str | None = None
 
@@ -157,6 +158,7 @@ class GridWidget(Static):
     def clear_selection(self) -> None:
         self._selected_rows.clear()
         self._sel_col = None
+        self._selecting = False
 
     def render_grid(self) -> Text:
         out = Text()
@@ -294,19 +296,16 @@ class GridApp(App):
     def action_toggle_select(self) -> None:
         if not self._grid or self._editing:
             return
-        row = self._grid._cursor_row
-        col = self._grid._cursor_col
-        if self._grid._sel_col is None:
-            # Start new selection, lock column
-            self._grid._sel_col = col
-            self._grid._selected_rows.add(row)
-        elif row in self._grid._selected_rows:
-            # Already selected -- deselect
-            self._grid._selected_rows.discard(row)
-            if not self._grid._selected_rows:
-                self._grid._sel_col = None
+        if self._grid._selecting:
+            # Pause selecting mode (selection stays)
+            self._grid._selecting = False
         else:
-            self._grid._selected_rows.add(row)
+            # Start or resume selecting mode
+            col = self._grid._cursor_col
+            if self._grid._sel_col is None:
+                self._grid._sel_col = col
+            self._grid._selecting = True
+            self._grid._selected_rows.add(self._grid._cursor_row)
         self._grid.refresh_grid()
         self._refresh_footer()
 
@@ -545,6 +544,9 @@ class GridApp(App):
         for idx in file_rows:
             if idx > cur:
                 self._grid._cursor_row = idx
+                if self._grid._selecting:
+                    self._grid._selected_rows.add(idx)
+                    self._refresh_footer()
                 self._grid.refresh_grid()
                 return
 
@@ -556,6 +558,9 @@ class GridApp(App):
         for idx in reversed(file_rows):
             if idx < cur:
                 self._grid._cursor_row = idx
+                if self._grid._selecting:
+                    self._grid._selected_rows.add(idx)
+                    self._refresh_footer()
                 self._grid.refresh_grid()
                 return
 

@@ -82,7 +82,7 @@ async def test_cursor_clamps_at_edges():
         assert app.cursor_row == 0
 
 
-async def test_v_toggles_selection():
+async def test_v_starts_selecting():
     app = GridApp(_groups())
     async with app.run_test() as pilot:
         assert app.selection == set()
@@ -90,24 +90,32 @@ async def test_v_toggles_selection():
         assert app.selection == {(0, 0)}
 
 
-async def test_v_toggle_deselects():
+async def test_v_selecting_extends_on_arrow():
     app = GridApp(_groups())
     async with app.run_test() as pilot:
-        await pilot.press("v")
-        assert app.selection == {(0, 0)}
-        await pilot.press("v")
-        assert app.selection == set()
-
-
-async def test_arrow_does_not_extend_selection():
-    app = GridApp(_groups())
-    async with app.run_test() as pilot:
+        # v activates selecting mode, arrows add cells
         await pilot.press("v")
         assert app.selection == {(0, 0)}
         await pilot.press("down")
-        # Arrow moves cursor but does not add to selection
-        assert app.selection == {(0, 0)}
-        assert app.cursor_row == 1
+        assert app.selection == {(0, 0), (1, 0)}
+        await pilot.press("down")
+        assert app.selection == {(0, 0), (1, 0), (2, 0)}
+
+
+async def test_v_pause_resume_selecting():
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        # v starts selecting, v pauses, arrows don't add
+        await pilot.press("v")
+        await pilot.press("down")
+        assert app.selection == {(0, 0), (1, 0)}
+        await pilot.press("v")  # pause
+        await pilot.press("down")
+        assert app.selection == {(0, 0), (1, 0)}  # no new cells
+        assert app.cursor_row == 2
+        # v resumes selecting from current position
+        await pilot.press("v")
+        assert app.selection == {(0, 0), (1, 0), (2, 0)}
 
 
 async def test_esc_clears_selection():
@@ -123,17 +131,15 @@ async def test_non_adjacent_selection():
     app = GridApp(_groups())
     async with app.run_test() as pilot:
         # rows: 0=Dune.mkv 1=Dune.en.srt 2=Dune.de.srt 3=BLANK 4=Arrival.mkv 5=Arrival.en.srt
+        # Select rows 0-1, pause, move to row 4, resume selecting
         await pilot.press("v")
-        assert app.selection == {(0, 0)}
-        # Move down two rows, then toggle row 2
         await pilot.press("down")
-        await pilot.press("down")
-        assert app.cursor_row == 2
-        await pilot.press("v")
-        assert app.selection == {(0, 0), (2, 0)}
-        # Deselect row 2
-        await pilot.press("v")
-        assert app.selection == {(0, 0)}
+        assert app.selection == {(0, 0), (1, 0)}
+        await pilot.press("v")  # pause
+        await pilot.press("down", "down")  # move to row 4
+        assert app.cursor_row == 4
+        await pilot.press("v")  # resume, adds row 4
+        assert app.selection == {(0, 0), (1, 0), (4, 0)}
 
 
 async def test_selection_locks_column():
@@ -234,27 +240,25 @@ async def test_edit_invalid_int_cancels_silently():
 async def test_edit_selected_cells():
     app = GridApp(_groups())
     async with app.run_test() as pilot:
-        # rows: 0=Dune.mkv 1=Dune.en.srt 2=Dune.de.srt 3=BLANK 4=Arrival.mkv
-        # Select rows 0 and 4 (both video files) on title column
-        await pilot.press("v")  # select row 0
+        # rows: 0=Dune.mkv 1=Dune.en.srt 2=Dune.de.srt
+        # Select rows 0 and 1 via selecting mode
+        await pilot.press("v")
         await pilot.press("down")
-        await pilot.press("down")
-        await pilot.press("down")  # row 4 (Arrival)
-        await pilot.press("v")  # select row 4
-        assert app.selection == {(0, 0), (4, 0)}
+        assert app.selection == {(0, 0), (1, 0)}
+        await pilot.press("v")  # pause selecting
 
         await pilot.press("e")
         app._edit_buffer = "Shared Title"
         await pilot.press("enter")
 
         assert app._rows[0].title == "Shared Title"
-        assert app._rows[4].title == "Shared Title"
+        assert app._rows[1].title == "Shared Title"
         assert app._rows[0].status == RowStatus.EDITED
-        assert app._rows[4].status == RowStatus.EDITED
+        assert app._rows[1].status == RowStatus.EDITED
         assert "title" in app._rows[0].edited_fields
-        assert "title" in app._rows[4].edited_fields
+        assert "title" in app._rows[1].edited_fields
         # Selection stays active after edit, cursor jumps to top
-        assert app.selection == {(0, 0), (4, 0)}
+        assert app.selection == {(0, 0), (1, 0)}
         assert app.cursor_row == 0
 
 
@@ -289,22 +293,19 @@ async def test_q_queries_selected_rows():
     app = GridApp(_groups())
     async with app.run_test() as pilot:
         # rows: 0=Dune.mkv 1=Dune.en.srt 2=Dune.de.srt 3=BLANK 4=Arrival.mkv
-        # Select row 0 and row 4
-        await pilot.press("v")  # select row 0
-        await pilot.press("down", "down", "down")  # row 4
-        await pilot.press("v")  # select row 4
-        assert app.selection == {(0, 0), (4, 0)}
+        # Select rows 0 and 1
+        await pilot.press("v")
+        await pilot.press("down")
+        await pilot.press("v")  # pause selecting
+        assert app.selection == {(0, 0), (1, 0)}
 
         await pilot.press("q")
 
         assert app._rows[0].status == RowStatus.AUTO
         assert app._rows[0].title == "Dune"
         assert app._rows[0].year == 2021
-        assert app._rows[4].status == RowStatus.AUTO
-        assert app._rows[4].title == "Arrival"
-        assert app._rows[4].year == 2016
         # Selection stays active, cursor jumps to top
-        assert app.selection == {(0, 0), (4, 0)}
+        assert app.selection == {(0, 0), (1, 0)}
         assert app.cursor_row == 0
 
 
@@ -427,10 +428,10 @@ async def test_undo_reverts_query():
 async def test_action_jumps_cursor_to_top_of_selection():
     app = GridApp(_groups())
     async with app.run_test() as pilot:
-        # Select row 0, move to row 4, select it, then query
-        await pilot.press("v")  # select row 0
-        await pilot.press("down", "down", "down")  # row 4
-        await pilot.press("v")  # select row 4
+        # Select rows 0-4 via selecting mode, then pause
+        await pilot.press("v")  # start selecting (row 0)
+        await pilot.press("down", "down", "down")  # adds 1, 2, 4
+        await pilot.press("v")  # pause selecting
         assert app.cursor_row == 4
         await pilot.press("q")
         assert app.cursor_row == 0  # jumped to topmost selected
@@ -451,9 +452,10 @@ async def test_shift_v_selects_group():
 async def test_shift_v_adds_to_existing_selection():
     app = GridApp(_groups())
     async with app.run_test() as pilot:
-        # Select row 0, move to Arrival group, shift-V adds Arrival group
-        await pilot.press("v")  # select row 0
-        await pilot.press("down", "down", "down")  # row 4 (Arrival)
+        # Select row 0 only, pause, move to Arrival group, shift-V adds it
+        await pilot.press("v")  # start selecting (row 0)
+        await pilot.press("v")  # pause selecting
+        await pilot.press("down", "down", "down")  # move to row 4
         await pilot.press("V")  # select Arrival group
         assert app.selection == {(0, 0), (4, 0), (5, 0)}
 
