@@ -51,3 +51,63 @@ def test_grid_row_metadata_falls_back_to_group():
     rows = build_grid_rows([g])
     assert rows[0].title == "Dune"
     assert rows[0].year == 2021
+
+
+def test_episode_groups_same_season_no_blank_between():
+    """Sibling episodes (same title+season) cluster without blank rows."""
+    ep1_meta = FileMetadata(media_type="episode", title="Breaking Bad", season=1, episode=1)
+    ep1 = ImportGroup(metadata=ep1_meta)
+    ep1.add_file(FileEntry(path=Path("BB.S01E01.mkv"), metadata=ep1_meta))
+
+    ep2_meta = FileMetadata(media_type="episode", title="Breaking Bad", season=1, episode=2)
+    ep2 = ImportGroup(metadata=ep2_meta)
+    ep2.add_file(FileEntry(path=Path("BB.S01E02.mkv"), metadata=ep2_meta))
+
+    rows = build_grid_rows([ep1, ep2])
+    assert len(rows) == 2
+    assert all(r.kind == RowKind.FILE for r in rows)
+
+
+def test_different_seasons_get_blank_between():
+    """Different seasons of same show get blank separator."""
+    ep1_meta = FileMetadata(media_type="episode", title="BB", season=1, episode=1)
+    ep1 = ImportGroup(metadata=ep1_meta)
+    ep1.add_file(FileEntry(path=Path("BB.S01E01.mkv"), metadata=ep1_meta))
+
+    ep2_meta = FileMetadata(media_type="episode", title="BB", season=2, episode=1)
+    ep2 = ImportGroup(metadata=ep2_meta)
+    ep2.add_file(FileEntry(path=Path("BB.S02E01.mkv"), metadata=ep2_meta))
+
+    rows = build_grid_rows([ep1, ep2])
+    assert len(rows) == 3
+    assert rows[1].kind == RowKind.BLANK
+
+
+def test_different_shows_get_blank_between():
+    """Different shows get blank separator even with same season number."""
+    ep1_meta = FileMetadata(media_type="episode", title="BB", season=1, episode=1)
+    ep1 = ImportGroup(metadata=ep1_meta)
+    ep1.add_file(FileEntry(path=Path("BB.S01E01.mkv"), metadata=ep1_meta))
+
+    ep2_meta = FileMetadata(media_type="episode", title="Office", season=1, episode=1)
+    ep2 = ImportGroup(metadata=ep2_meta)
+    ep2.add_file(FileEntry(path=Path("Office.S01E01.mkv"), metadata=ep2_meta))
+
+    rows = build_grid_rows([ep1, ep2])
+    assert len(rows) == 3
+    assert rows[1].kind == RowKind.BLANK
+
+
+def test_movie_and_episode_get_blank_between():
+    """Movie followed by episodes gets blank separator."""
+    movie_meta = FileMetadata(media_type="movie", title="Dune", year=2021)
+    movie = ImportGroup(metadata=movie_meta)
+    movie.add_file(FileEntry(path=Path("Dune.mkv"), metadata=movie_meta))
+
+    ep_meta = FileMetadata(media_type="episode", title="BB", season=1, episode=1)
+    ep = ImportGroup(metadata=ep_meta)
+    ep.add_file(FileEntry(path=Path("BB.S01E01.mkv"), metadata=ep_meta))
+
+    rows = build_grid_rows([movie, ep])
+    assert len(rows) == 3
+    assert rows[1].kind == RowKind.BLANK

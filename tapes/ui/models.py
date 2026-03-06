@@ -120,12 +120,32 @@ class GridRow:
         return ""
 
 
+def _cluster_key(group: ImportGroup) -> tuple[str, int | None] | None:
+    """Return a clustering key for sibling detection.
+
+    Episode groups with the same (title_lower, season) are siblings and
+    should not have blank rows between them. Returns None for non-episodes.
+    """
+    meta = group.metadata
+    if meta.media_type == "episode" and meta.title and meta.season is not None:
+        return (meta.title.lower(), meta.season)
+    return None
+
+
 def build_grid_rows(groups: list[ImportGroup]) -> list[GridRow]:
-    """Convert ImportGroups into a flat list of GridRows with blank separators."""
+    """Convert ImportGroups into a flat list of GridRows.
+
+    Blank separator rows are inserted between groups, except between
+    sibling episode groups (same show + season).
+    """
     rows: list[GridRow] = []
+    prev_key: tuple[str, int | None] | None = None
     for i, group in enumerate(groups):
+        cur_key = _cluster_key(group)
         if i > 0:
-            rows.append(GridRow(kind=RowKind.BLANK))
+            if prev_key is None or cur_key is None or prev_key != cur_key:
+                rows.append(GridRow(kind=RowKind.BLANK))
         for entry in group.files:
             rows.append(GridRow(kind=RowKind.FILE, entry=entry, group=group))
+        prev_key = cur_key
     return rows
