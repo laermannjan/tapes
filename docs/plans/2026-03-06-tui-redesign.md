@@ -36,23 +36,44 @@ nothing → guessit → TMDB → result → destination
 
 ### 1. File tree (main view)
 
-Shows the scanned directory as a tree with destinations:
+Shows the scanned files with destinations. Two display modes toggled with
+backtick (`` ` ``), inspired by lazygit's file tree toggle:
+
+**Flat mode (default):** filenames relative to the import path.
 
 ```
-~/downloads/
-├── ✓ Breaking.Bad.S01E01.720p.mkv   → TV/Breaking Bad (2008)/S01/…E01 - Pilot.mkv
-├── ✓ Breaking.Bad.S01E01.en.srt     → TV/Breaking Bad (2008)/S01/…E01 - Pilot.en.srt
-├── ✓ Breaking.Bad.S01E02.720p.mkv   → TV/Breaking Bad (2008)/S01/…E02 - Cat's in the Bag.mkv
-├── ○ movie_final_cut.mkv            → ???
-├──   thumbs.db
-└── subfolder/
-    ├── ✓ Inception.2010.1080p.mkv   → Movies/Inception (2010)/Inception (2010).mkv
-    └── ✓ Inception.2010.en.srt      → Movies/Inception (2010)/Inception (2010).en.srt
+ ✓ Breaking.Bad.S01E01.720p.mkv        → TV/Breaking Bad (2008)/S01/…E01 - Pilot.mkv
+ ✓ Breaking.Bad.S01E01.en.srt          → TV/Breaking Bad (2008)/S01/…E01 - Pilot.en.srt
+ ✓ Breaking.Bad.S01E02.720p.mkv        → TV/Breaking Bad (2008)/S01/…E02 - Cat's in the Bag.mkv
+ ○ movie_final_cut.mkv                 → ???
+   thumbs.db
+ ✓ subfolder/Inception.2010.1080p.mkv  → Movies/Inception (2010)/Inception (2010).mkv
+ ✓ subfolder/Inception.2010.en.srt     → Movies/Inception (2010)/Inception (2010).en.srt
 ```
+
+**Tree mode:** lazygit-style with unicode arrows for folders.
+
+```
+ ✓ Breaking.Bad.S01E01.720p.mkv   → TV/Breaking Bad (2008)/S01/…E01 - Pilot.mkv
+ ✓ Breaking.Bad.S01E01.en.srt     → TV/Breaking Bad (2008)/S01/…E01 - Pilot.en.srt
+ ✓ Breaking.Bad.S01E02.720p.mkv   → TV/Breaking Bad (2008)/S01/…E02 - Cat's in the Bag.mkv
+ ○ movie_final_cut.mkv            → ???
+   thumbs.db
+ ▶ subfolder/
+```
+
+Folders use `▶` (collapsed) / `▼` (expanded). `enter` on a folder toggles:
+
+```
+ ▼ subfolder/
+    ✓ Inception.2010.1080p.mkv    → Movies/Inception (2010)/Inception (2010).mkv
+    ✓ Inception.2010.en.srt       → Movies/Inception (2010)/Inception (2010).en.srt
+```
+
+`space` on a folder toggles staged/unstaged for all children recursively.
 
 Markers: `✓` staged, `○` unstaged (needs attention), no marker = ignored/dimmed.
 
-Directories are collapsible. `enter` on a directory toggles expand/collapse.
 `enter` on a file (or selection) drills into the detail view.
 
 ### 2. Detail view (per file or selection)
@@ -129,6 +150,7 @@ template actually needs are displayed.
 | `c` | commit: process all staged files (with confirmation) |
 | `r` | refresh: re-run pipeline per file (re-query TMDB using each file's own result values) |
 | `x` | ignore file (skip, won't be processed) |
+| `` ` `` | toggle flat/tree display mode |
 
 ### Detail view
 
