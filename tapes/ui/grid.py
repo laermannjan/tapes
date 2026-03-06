@@ -1,6 +1,8 @@
 """Grid TUI app for tapes."""
 from __future__ import annotations
 
+from typing import Any
+
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import VerticalScroll
@@ -221,8 +223,8 @@ class GridApp(App):
         self._edit_targets: list[int] = []  # row indices being edited
         self._edit_buffer: str | None = None
         self._edit_original: str = ""
-        # Undo: stores (field_name, [(row_idx, old_value), ...]) for last edit
-        self._undo: tuple[str, list[tuple[int, Any]]] | None = None
+        # Undo: stores [(row_idx, old_overrides, old_status, old_edited_fields), ...]
+        self._undo: list[tuple[int, dict[str, Any], RowStatus, set[str]]] | None = None
 
     @property
     def editing(self) -> bool:
@@ -271,6 +273,13 @@ class GridApp(App):
         if self._grid._sel_col is not None and self._grid._selected_rows:
             return sorted(self._grid._selected_rows)
         return [self._grid._cursor_row]
+
+    def _snapshot_rows(self, targets: list[int]) -> list[tuple[int, dict[str, Any], RowStatus, set[str]]]:
+        """Capture current state of target rows for undo."""
+        return [
+            (idx, dict(self._rows[idx]._overrides), self._rows[idx].status, set(self._rows[idx].edited_fields))
+            for idx in targets
+        ]
 
     def _jump_to_top_target(self, targets: list[int]) -> None:
         """Move cursor to the topmost target row and the selection column."""
@@ -373,13 +382,10 @@ class GridApp(App):
         else:
             converted = value
 
-        # Store undo info before applying
-        undo_entries: list[tuple[int, Any]] = []
+        # Snapshot for undo, then apply
+        self._undo = self._snapshot_rows(self._edit_targets)
         for row_idx in self._edit_targets:
-            old_value = getattr(self._rows[row_idx], field_name)
-            undo_entries.append((row_idx, old_value))
             self._rows[row_idx].set_field(field_name, converted)
-        self._undo = (field_name, undo_entries)
 
         targets = self._edit_targets
         self._dismiss_edit()
@@ -412,20 +418,14 @@ class GridApp(App):
         self._refresh_footer()
 
     def action_undo(self) -> None:
-        """Undo the last edit. Only available while selection is active."""
+        """Undo the last edit or query."""
         if not self._grid or self._editing or self._undo is None:
             return
-        field_name, entries = self._undo
-        for row_idx, old_value in entries:
+        for row_idx, old_overrides, old_status, old_edited in self._undo:
             row = self._rows[row_idx]
-            if old_value is None:
-                row._overrides.pop(field_name, None)
-            else:
-                row._overrides[field_name] = old_value
-            row.edited_fields.discard(field_name)
-            # Revert status if no edited fields remain
-            if not row.edited_fields:
-                row.status = RowStatus.RAW
+            row._overrides = old_overrides
+            row.status = old_status
+            row.edited_fields = old_edited
         self._undo = None
         self._grid.refresh_grid()
 
@@ -440,6 +440,7 @@ class GridApp(App):
             return
 
         targets = self._target_rows()
+        self._undo = self._snapshot_rows(targets)
 
         for row_idx in targets:
             row = self._rows[row_idx]

@@ -413,6 +413,17 @@ async def test_undo_cleared_on_esc():
         assert app._rows[0].title == "Changed"  # undo no longer available
 
 
+async def test_undo_reverts_query():
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        assert app._rows[0].status == RowStatus.RAW
+        assert app._rows[0].year == 2021
+        await pilot.press("q")
+        assert app._rows[0].status == RowStatus.AUTO
+        await pilot.press("u")
+        assert app._rows[0].status == RowStatus.RAW
+
+
 async def test_action_jumps_cursor_to_top_of_selection():
     app = GridApp(_groups())
     async with app.run_test() as pilot:
