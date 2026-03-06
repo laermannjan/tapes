@@ -20,9 +20,9 @@ COL_WIDTHS: dict[str, int] = {
 FIELD_COLS: list[str] = ["title", "year", "season", "episode", "episode_title"]
 
 _BADGE_STYLES: dict[RowStatus, tuple[str, str]] = {
-    RowStatus.RAW: ("..", "#555"),
-    RowStatus.AUTO: ("**", "#5a9"),
-    RowStatus.UNCERTAIN: ("??", "#ca3"),
+    RowStatus.RAW: ("..", "#555555"),
+    RowStatus.AUTO: ("**", "#55aa99"),
+    RowStatus.UNCERTAIN: ("??", "#ccaa33"),
     RowStatus.EDITED: ("!!", "#a78bfa"),
 }
 
@@ -63,20 +63,20 @@ def render_row(
     t = Text()
 
     if row.kind == RowKind.BLANK:
-        _col(t, "", COL_WIDTHS["status"], "#333")
-        _col(t, "", COL_WIDTHS["filepath"], "#333")
+        _col(t, "", COL_WIDTHS["status"], "#333333")
+        _col(t, "", COL_WIDTHS["filepath"], "#333333")
         for i, col_name in enumerate(FIELD_COLS):
             bg = None
             if i == cursor_col:
                 bg = BG_COL_HI
             if i in selected_cols:
                 bg = BG_CELL_SEL
-            _col(t, "", COL_WIDTHS[col_name], "#333", bg=bg)
+            _col(t, "", COL_WIDTHS[col_name], "#333333", bg=bg)
         return t
 
     is_comp = row.is_companion
-    base_style = "#555" if is_comp else "#888"
-    bright_style = "#888" if is_comp else "#ddd"
+    base_style = "#555555" if is_comp else "#888888"
+    bright_style = "#888888" if is_comp else "#dddddd"
 
     row_bg = None
     if is_cursor_row:
@@ -85,7 +85,7 @@ def render_row(
         row_bg = BG_ROW_SEL
 
     # Status badge
-    badge_text, badge_style = _BADGE_STYLES.get(row.status, ("..", "#555"))
+    badge_text, badge_style = _BADGE_STYLES.get(row.status, ("..", "#555555"))
     _col(
         t,
         badge_text.rjust(COL_WIDTHS["status"] - 1) + " ",
@@ -106,7 +106,7 @@ def render_row(
         dir_len = min(len(dir_part), len(padded_fp))
         fp_text.append(
             padded_fp[:dir_len],
-            style=f"#555 on {row_bg}" if row_bg else "#555",
+            style=f"#555555 on {row_bg}" if row_bg else "#555555",
         )
         # Filename part in bright
         remaining = padded_fp[dir_len:]
@@ -132,20 +132,20 @@ def render_row(
         if row.status == RowStatus.EDITED and col_name in row.edited_fields:
             style = "#a78bfa"
         elif row.status == RowStatus.AUTO:
-            style = "#6bc" if value else base_style
+            style = "#66bbcc" if value else base_style
         else:
             style = base_style if is_comp else (bright_style if value else base_style)
 
         bg = row_bg
         if is_cursor_row and i == cursor_col:
             bg = BG_CELL_CUR
-            style = "#fff"
+            style = "#ffffff"
         elif i == cursor_col:
             bg = BG_COL_HI
         if i in selected_cols:
             if is_sel_cursor_row and i == cursor_col:
                 bg = BG_CELL_SEL_CUR
-                style = "#fff"
+                style = "#ffffff"
             else:
                 bg = BG_CELL_SEL
 
