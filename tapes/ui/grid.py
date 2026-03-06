@@ -155,7 +155,7 @@ class GridColumnHeader(Static):
     """
 
     def render(self) -> Text:  # type: ignore[override]
-        labels = ["", "filepath", " title", " year", " S", " E", " episode title"]
+        labels = ["", "filepath", "  title", "  year", "  S", "  E", "  episode title"]
         col_keys = ["status", "filepath", "title", "year", "season", "episode", "episode_title"]
         t = Text()
         for label, key in zip(labels, col_keys):
@@ -615,7 +615,7 @@ class GridApp(App):
 
         # Collect unique groups from targets
         seen_groups: set[int] = set()
-        groups_to_query: list[tuple[ImportGroup, list[int]]] = []
+        target_groups: list[ImportGroup] = []
         for row_idx in targets:
             row = self._rows[row_idx]
             if row.kind != RowKind.FILE:
@@ -624,6 +624,22 @@ class GridApp(App):
             if group is None or id(group) in seen_groups:
                 continue
             seen_groups.add(id(group))
+            target_groups.append(group)
+
+        # Remove stale MATCH/NO_MATCH sub-rows for these groups and reset status
+        for group in target_groups:
+            for i, r in enumerate(self._rows):
+                if r.kind == RowKind.FILE and r.group is group:
+                    if r.status == RowStatus.UNCERTAIN:
+                        r.status = RowStatus.RAW
+            self._rows = [
+                r for r in self._rows
+                if not (r.kind in (RowKind.MATCH, RowKind.NO_MATCH) and r.group is group)
+            ]
+
+        # Build group row indices after clearing
+        groups_to_query: list[tuple[ImportGroup, list[int]]] = []
+        for group in target_groups:
             group_row_indices = [
                 i for i, r in enumerate(self._rows)
                 if r.kind == RowKind.FILE and r.group is group

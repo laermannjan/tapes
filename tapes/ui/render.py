@@ -10,11 +10,11 @@ from tapes.ui.models import GridRow, RowKind, RowStatus
 COL_WIDTHS: dict[str, int] = {
     "status": 5,
     "filepath": 52,
-    "title": 16,
-    "year": 6,
-    "season": 4,
-    "episode": 4,
-    "episode_title": 32,
+    "title": 18,
+    "year": 8,
+    "season": 6,
+    "episode": 6,
+    "episode_title": 34,
 }
 
 FIELD_COLS: list[str] = ["title", "year", "season", "episode", "episode_title"]
@@ -53,12 +53,20 @@ def _pad(text: str, width: int) -> str:
 
 
 def _col(
-    t: Text, value: str, width: int, style: str, bg: str | None = None, *, pad_left: int = 0
+    t: Text,
+    value: str,
+    width: int,
+    style: str,
+    bg: str | None = None,
+    *,
+    pad_left: int = 0,
+    pad_right: int = 0,
 ) -> None:
     """Append a fixed-width column to a Text object."""
     if pad_left and value:
         value = " " * pad_left + value
-    padded = _pad(value, width)
+    padded = _pad(value, width - pad_right)
+    padded += " " * pad_right
     full_style = f"{style} on {bg}" if bg else style
     t.append(padded, style=full_style)
 
@@ -113,7 +121,7 @@ def render_row(
             elif i == cursor_col:
                 bg = BG_COL_HI
             style = "#66bbcc" if value else "#333333"
-            _col(t, value, COL_WIDTHS[col_name], style, bg=bg, pad_left=1)
+            _col(t, value, COL_WIDTHS[col_name], style, bg=bg, pad_left=2, pad_right=2)
         return t
 
     if row.kind == RowKind.NO_MATCH:
@@ -208,6 +216,6 @@ def render_row(
             display_value = edit_value if edit_value is not None else ""
             display_style = f"underline {style}"
 
-        _col(t, display_value, COL_WIDTHS[col_name], display_style, bg=bg, pad_left=1)
+        _col(t, display_value, COL_WIDTHS[col_name], display_style, bg=bg, pad_left=2, pad_right=2)
 
     return t
