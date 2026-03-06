@@ -167,8 +167,8 @@ def grid_cmd(
     ),
 ) -> None:
     """Launch the grid TUI (dev command)."""
+    cfg = load_config(config_file) if config_file else TapesConfig()
     if path is not None:
-        cfg = load_config(config_file) if config_file else TapesConfig()
         groups = run_pipeline(path, config=cfg)
     else:
         groups = _mock_groups()
@@ -177,7 +177,7 @@ def grid_cmd(
         return
     from tapes.ui.grid import GridApp
 
-    tui = GridApp(groups)
+    tui = GridApp(groups, config=cfg)
     tui.run()
 
 
