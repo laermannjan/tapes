@@ -1,7 +1,7 @@
 """Tests for grid view models."""
 from pathlib import Path
 from tapes.models import FileEntry, FileMetadata, ImportGroup
-from tapes.ui.models import GridRow, RowKind, build_grid_rows
+from tapes.ui.models import GridRow, RowKind, RowStatus, build_grid_rows
 
 
 def _group(title, year=None, season=None, files=None):
@@ -111,3 +111,19 @@ def test_movie_and_episode_get_blank_between():
     rows = build_grid_rows([movie, ep])
     assert len(rows) == 3
     assert rows[1].kind == RowKind.BLANK
+
+
+def test_match_row_holds_proposed_fields():
+    match_row = GridRow(
+        kind=RowKind.MATCH,
+        group=ImportGroup(metadata=FileMetadata(title="Dune")),
+        match_fields={"title": "Dune: Part One", "year": 2021},
+        match_confidence=0.75,
+    )
+    assert match_row.match_fields["title"] == "Dune: Part One"
+    assert match_row.match_confidence == 0.75
+
+
+def test_no_match_row():
+    no_match = GridRow(kind=RowKind.NO_MATCH, group=ImportGroup(metadata=FileMetadata()))
+    assert no_match.kind == RowKind.NO_MATCH

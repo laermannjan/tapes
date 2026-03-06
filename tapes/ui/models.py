@@ -12,6 +12,7 @@ class RowKind(Enum):
     FILE = auto()
     BLANK = auto()
     MATCH = auto()  # M5: uncertain match sub-row
+    NO_MATCH = auto()  # M5: no match found
 
 
 class RowStatus(Enum):
@@ -32,6 +33,11 @@ class GridRow:
     edited_fields: set[str] = field(default_factory=set)
     frozen_fields: set[str] = field(default_factory=set)
     _overrides: dict[str, Any] = field(default_factory=dict)
+    # Match sub-row fields (only used when kind == MATCH)
+    match_fields: dict[str, Any] = field(default_factory=dict)
+    match_confidence: float = 0.0
+    # Rows owned by this match sub-row (indices populated after build)
+    owned_row_indices: list[int] = field(default_factory=list)
 
     @property
     def is_video(self) -> bool:
