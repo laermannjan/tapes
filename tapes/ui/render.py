@@ -52,8 +52,12 @@ def _pad(text: str, width: int) -> str:
     return text + " " * (width - len(text))
 
 
-def _col(t: Text, value: str, width: int, style: str, bg: str | None = None) -> None:
+def _col(
+    t: Text, value: str, width: int, style: str, bg: str | None = None, *, pad_left: int = 0
+) -> None:
     """Append a fixed-width column to a Text object."""
+    if pad_left and value:
+        value = " " * pad_left + value
     padded = _pad(value, width)
     full_style = f"{style} on {bg}" if bg else style
     t.append(padded, style=full_style)
@@ -109,7 +113,7 @@ def render_row(
             elif i == cursor_col:
                 bg = BG_COL_HI
             style = "#66bbcc" if value else "#333333"
-            _col(t, value, COL_WIDTHS[col_name], style, bg=bg)
+            _col(t, value, COL_WIDTHS[col_name], style, bg=bg, pad_left=1)
         return t
 
     if row.kind == RowKind.NO_MATCH:
@@ -204,6 +208,6 @@ def render_row(
             display_value = edit_value if edit_value is not None else ""
             display_style = f"underline {style}"
 
-        _col(t, display_value, COL_WIDTHS[col_name], display_style, bg=bg)
+        _col(t, display_value, COL_WIDTHS[col_name], display_style, bg=bg, pad_left=1)
 
     return t

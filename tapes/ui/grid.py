@@ -155,7 +155,7 @@ class GridColumnHeader(Static):
     """
 
     def render(self) -> Text:  # type: ignore[override]
-        labels = ["", "filepath", "title", "year", "S", "E", "episode title"]
+        labels = ["", "filepath", " title", " year", " S", " E", " episode title"]
         col_keys = ["status", "filepath", "title", "year", "season", "episode", "episode_title"]
         t = Text()
         for label, key in zip(labels, col_keys):
