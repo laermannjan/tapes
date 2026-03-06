@@ -31,6 +31,12 @@ class TestDefaults:
         cfg = LibraryConfig()
         assert cfg.movies == ""
         assert cfg.tv == ""
+        assert cfg.movie_template == "{title} ({year})/{title} ({year}).{ext}"
+        assert cfg.tv_template == (
+            "{title} ({year})/Season {season:02d}/"
+            "{title} - S{season:02d}E{episode:02d} - {episode_title}.{ext}"
+        )
+        assert cfg.operation == "copy"
 
     def test_tapes_config_defaults(self) -> None:
         cfg = TapesConfig()
@@ -92,3 +98,19 @@ class TestLoadConfig:
         p.write_text("just a string")
         cfg = load_config(p)
         assert cfg == TapesConfig()
+
+
+def test_library_config_defaults():
+    cfg = TapesConfig()
+    assert cfg.library.movie_template == "{title} ({year})/{title} ({year}).{ext}"
+    assert cfg.library.tv_template == (
+        "{title} ({year})/Season {season:02d}/"
+        "{title} - S{season:02d}E{episode:02d} - {episode_title}.{ext}"
+    )
+    assert cfg.library.operation == "copy"
+
+
+def test_library_config_custom():
+    cfg = TapesConfig(library=LibraryConfig(operation="move", movie_template="{title}.{ext}"))
+    assert cfg.library.operation == "move"
+    assert cfg.library.movie_template == "{title}.{ext}"

@@ -20,6 +20,12 @@ class MetadataConfig(BaseModel):
 class LibraryConfig(BaseModel):
     movies: str = ""
     tv: str = ""
+    movie_template: str = "{title} ({year})/{title} ({year}).{ext}"
+    tv_template: str = (
+        "{title} ({year})/Season {season:02d}/"
+        "{title} - S{season:02d}E{episode:02d} - {episode_title}.{ext}"
+    )
+    operation: str = "copy"
 
 
 class TapesConfig(BaseModel):
