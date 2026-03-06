@@ -46,15 +46,12 @@ def test_multiple_groups(tmp_path: Path) -> None:
     g1.add_file(FileEntry(path=v1, metadata=g1.metadata))
 
     g2 = ImportGroup(
-        metadata=FileMetadata(title="Breaking Bad", media_type="episode", season=1),
-        group_type=GroupType.SEASON,
+        metadata=FileMetadata(title="Breaking Bad", media_type="episode", season=1, episode=1),
+        group_type=GroupType.STANDALONE,
     )
-    for i in range(1, 4):
-        v = tmp_path / f"Breaking.Bad.S01E0{i}.mkv"
-        v.touch()
-        g2.add_file(FileEntry(path=v, metadata=FileMetadata(
-            title="Breaking Bad", media_type="episode", season=1, episode=i
-        )))
+    v2 = tmp_path / "Breaking.Bad.S01E01.mkv"
+    v2.touch()
+    g2.add_file(FileEntry(path=v2, metadata=g2.metadata))
 
     with patch("tapes.cli.run_pipeline", return_value=[g1, g2]):
         result = runner.invoke(app, ["import", str(tmp_path), "--no-tui"])

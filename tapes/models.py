@@ -33,7 +33,6 @@ def file_role(path: Path) -> str:
 class GroupType(Enum):
     STANDALONE = "standalone"
     MULTI_PART = "multi_part"
-    SEASON = "season"
 
 
 class GroupStatus(Enum):

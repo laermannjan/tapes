@@ -55,16 +55,16 @@ class TestSingleMovie:
         assert video_files[0].path == vid
 
 
-class TestSeasonGrouping:
-    def test_episodes_same_season_merged(self, tmp_path: Path) -> None:
+class TestEpisodeGrouping:
+    def test_episodes_same_season_stay_separate(self, tmp_path: Path) -> None:
         _make_video(tmp_path, "Breaking.Bad.S01E01.mkv")
         _make_video(tmp_path, "Breaking.Bad.S01E02.mkv")
         result = run_pipeline(tmp_path)
-        # Should be merged into a single SEASON group
-        assert len(result) == 1
-        group = result[0]
-        assert group.group_type == GroupType.SEASON
-        assert len(group.video_files) == 2
+        # Each episode is its own STANDALONE group
+        assert len(result) == 2
+        for group in result:
+            assert group.group_type == GroupType.STANDALONE
+            assert len(group.video_files) == 1
 
     def test_episodes_different_seasons_separate(self, tmp_path: Path) -> None:
         _make_video(tmp_path, "Breaking.Bad.S01E01.mkv")
@@ -141,11 +141,14 @@ class TestMixedContent:
         _make_video(tmp_path, "Breaking.Bad.S01E01.mkv")
         _make_video(tmp_path, "Breaking.Bad.S01E02.mkv")
         result = run_pipeline(tmp_path)
-        # One movie group + one season group
+        # One movie group + two episode groups, all STANDALONE
+        assert len(result) == 3
         movies = [g for g in result if g.metadata.media_type == "movie"]
-        seasons = [g for g in result if g.group_type == GroupType.SEASON]
-        assert len(movies) >= 1
-        assert len(seasons) == 1
+        episodes = [g for g in result if g.metadata.media_type == "episode"]
+        assert len(movies) == 1
+        assert len(episodes) == 2
+        for g in result:
+            assert g.group_type == GroupType.STANDALONE
 
 
 class TestAllFilesHaveGroupRef:

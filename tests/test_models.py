@@ -121,7 +121,6 @@ class TestEnums:
     def test_group_types(self):
         assert GroupType.STANDALONE.value == "standalone"
         assert GroupType.MULTI_PART.value == "multi_part"
-        assert GroupType.SEASON.value == "season"
 
     def test_group_statuses(self):
         assert GroupStatus.PENDING.value == "pending"

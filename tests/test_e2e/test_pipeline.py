@@ -85,7 +85,7 @@ class TestTVScenarios:
     """TV shows: season grouping, per-episode subtitles, multi-season, standalone."""
 
     def test_season_folder_three_episodes(self, tmp_path, make_video):
-        """Season folder with 3 episodes -> 1 SEASON group, 3 video files."""
+        """Season folder with 3 episodes -> 3 groups, each STANDALONE."""
         for ep in range(1, 4):
             make_video(
                 f"Breaking.Bad.S01E{ep:02d}.mkv",
@@ -94,15 +94,15 @@ class TestTVScenarios:
 
         groups = run_pipeline(tmp_path)
 
-        assert len(groups) == 1
-        g = groups[0]
-        assert g.group_type == GroupType.SEASON
-        assert len(g.video_files) == 3
+        assert len(groups) == 3
+        for g in groups:
+            assert g.group_type == GroupType.STANDALONE
+            assert len(g.video_files) == 1
 
     def test_episodes_with_per_episode_subtitles(
         self, tmp_path, make_video, make_companion
     ):
-        """Episodes with per-episode subtitles -> 1 group, correct subtitle count."""
+        """Episodes with per-episode subtitles -> 2 groups, each STANDALONE with 1 video + 1 subtitle."""
         for ep in range(1, 3):
             stem = f"The.Office.S02E{ep:02d}"
             make_video(f"{stem}.mkv", subdir="The.Office.S02")
@@ -110,15 +110,15 @@ class TestTVScenarios:
 
         groups = run_pipeline(tmp_path)
 
-        assert len(groups) == 1
-        g = groups[0]
-        assert g.group_type == GroupType.SEASON
-        assert len(g.video_files) == 2
-        subtitles = [f for f in g.files if f.role == "subtitle"]
-        assert len(subtitles) == 2
+        assert len(groups) == 2
+        for g in groups:
+            assert g.group_type == GroupType.STANDALONE
+            assert len(g.video_files) == 1
+            subtitles = [f for f in g.files if f.role == "subtitle"]
+            assert len(subtitles) == 1
 
     def test_multiple_seasons_stay_separate(self, tmp_path, make_video):
-        """Episodes from different seasons -> 2 separate groups."""
+        """Episodes from different seasons -> 4 separate groups, all STANDALONE."""
         make_video("Show.S01E01.mkv", subdir="Show.S01")
         make_video("Show.S01E02.mkv", subdir="Show.S01")
         make_video("Show.S02E01.mkv", subdir="Show.S02")
@@ -126,10 +126,9 @@ class TestTVScenarios:
 
         groups = run_pipeline(tmp_path)
 
-        season_groups = [g for g in groups if g.group_type == GroupType.SEASON]
-        assert len(season_groups) == 2
-        seasons = {g.metadata.season for g in season_groups}
-        assert seasons == {1, 2}
+        assert len(groups) == 4
+        for g in groups:
+            assert g.group_type == GroupType.STANDALONE
 
     def test_single_episode_stays_standalone(self, tmp_path, make_video):
         """A single episode with no peers -> STANDALONE type."""
@@ -152,17 +151,16 @@ class TestMixedScenarios:
     """Movies and episodes together, sample exclusion."""
 
     def test_movies_and_episodes_together(self, tmp_path, make_video):
-        """A movie and two same-season episodes -> correct group count."""
+        """A movie and two episodes -> 3 groups, all STANDALONE."""
         make_video("Inception.2010.mkv")
         make_video("Show.S01E01.mkv", subdir="Show.S01")
         make_video("Show.S01E02.mkv", subdir="Show.S01")
 
         groups = run_pipeline(tmp_path)
 
-        assert len(groups) == 2
-        types = {g.group_type for g in groups}
-        assert GroupType.STANDALONE in types
-        assert GroupType.SEASON in types
+        assert len(groups) == 3
+        for g in groups:
+            assert g.group_type == GroupType.STANDALONE
 
     def test_sample_files_excluded(self, tmp_path, make_video):
         """Sample files should not appear in any group."""
