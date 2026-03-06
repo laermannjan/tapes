@@ -55,32 +55,64 @@ class GridFooter(Static):
                 ("e", "edit"),
             ]
         else:
-            # Normal mode footer
+            # Count statuses
             file_rows = [r for r in self._rows if r.kind == RowKind.FILE]
-            n_files = len(file_rows)
-            n_videos = sum(1 for r in file_rows if r.is_video)
-            n_companions = sum(1 for r in file_rows if r.is_companion)
-            n_groups = sum(1 for r in self._rows if r.kind == RowKind.BLANK) + 1
+            n_auto = sum(1 for r in file_rows if r.status == RowStatus.AUTO)
+            n_uncertain = sum(1 for r in file_rows if r.status == RowStatus.UNCERTAIN)
+            n_edited = sum(1 for r in file_rows if r.status == RowStatus.EDITED)
+            n_no_match = sum(1 for r in self._rows if r.kind == RowKind.NO_MATCH)
 
-            for count, label in [
-                (n_files, "files"),
-                (n_groups, "groups"),
-                (n_videos, "videos"),
-                (n_companions, "companions"),
-            ]:
-                t.append(str(count), style="#dddddd")
-                t.append(f" {label}  ", style="#555555")
+            has_query_results = n_auto > 0 or n_uncertain > 0 or n_no_match > 0
 
-            t.append("    ", style="")
-            hints = [
-                ("e", "edit"),
-                ("v", "select"),
-                ("q", "query"),
-                ("f", "freeze"),
-                ("r", "reorg"),
-                ("p", "process"),
-                ("E", "all fields"),
-            ]
+            if has_query_results:
+                # Post-query footer
+                if n_auto:
+                    t.append("**", style="#55aa99")
+                    t.append(f" {n_auto}  ", style="#555555")
+                if n_uncertain:
+                    t.append("??", style="#ccaa33")
+                    t.append(f" {n_uncertain}  ", style="#555555")
+                if n_edited:
+                    t.append("!!", style="#a78bfa")
+                    t.append(f" {n_edited}  ", style="#555555")
+                if n_no_match:
+                    t.append("no match", style="#cc5555")
+                    t.append(f" {n_no_match}  ", style="#555555")
+
+                t.append("    ")
+                hints = [
+                    ("enter", "accept"),
+                    ("bksp", "reject"),
+                    ("q", "re-query"),
+                    ("e", "edit"),
+                    ("p", "process"),
+                ]
+            else:
+                # Normal mode footer
+                n_files = len(file_rows)
+                n_videos = sum(1 for r in file_rows if r.is_video)
+                n_companions = sum(1 for r in file_rows if r.is_companion)
+                n_groups = sum(1 for r in self._rows if r.kind == RowKind.BLANK) + 1
+
+                for count, label in [
+                    (n_files, "files"),
+                    (n_groups, "groups"),
+                    (n_videos, "videos"),
+                    (n_companions, "companions"),
+                ]:
+                    t.append(str(count), style="#dddddd")
+                    t.append(f" {label}  ", style="#555555")
+
+                t.append("    ", style="")
+                hints = [
+                    ("e", "edit"),
+                    ("v", "select"),
+                    ("q", "query"),
+                    ("f", "freeze"),
+                    ("r", "reorg"),
+                    ("p", "process"),
+                    ("E", "all fields"),
+                ]
 
         for key, desc in hints:
             t.append(key, style="#777777 underline")
