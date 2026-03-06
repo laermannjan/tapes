@@ -620,6 +620,7 @@ class GridApp(App):
 
         # Determine target rows
         self._edit_targets = self._target_rows()
+        self._jump_to_top_target(self._edit_targets)
 
         # Check if the field is frozen on the first target
         target_row = self._rows[self._edit_targets[0]]
