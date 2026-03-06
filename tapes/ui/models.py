@@ -19,7 +19,7 @@ class RowStatus(Enum):
     AUTO = "**"      # auto-accepted TMDB
     UNCERTAIN = "??" # uncertain match
     EDITED = "!!"    # user-edited
-    FROZEN = "\u2744"  # all fields frozen
+    FROZEN = "--"      # all fields frozen
 
 
 @dataclass
@@ -63,15 +63,21 @@ class GridRow:
                 self._overrides[name] = value
         self.status = RowStatus.AUTO
 
-    def freeze_field(self, name: str) -> None:
-        """Freeze a single field so it cannot be edited or overwritten."""
-        self.frozen_fields.add(name)
+    def toggle_freeze_field(self, name: str) -> None:
+        """Toggle freeze on a single field."""
+        if name in self.frozen_fields:
+            self.frozen_fields.discard(name)
+        else:
+            self.frozen_fields.add(name)
 
-    def freeze_all_fields(self) -> None:
-        """Freeze all metadata fields."""
+    def toggle_freeze_all_fields(self) -> None:
+        """Toggle freeze on all fields. Unfreezes all if all are frozen."""
         from tapes.ui.render import FIELD_COLS
-        for col in FIELD_COLS:
-            self.frozen_fields.add(col)
+        if all(f in self.frozen_fields for f in FIELD_COLS):
+            self.frozen_fields.clear()
+        else:
+            for col in FIELD_COLS:
+                self.frozen_fields.add(col)
 
     def is_frozen(self, name: str) -> bool:
         """Check if a field is frozen."""

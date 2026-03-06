@@ -24,7 +24,7 @@ _BADGE_STYLES: dict[RowStatus, tuple[str, str]] = {
     RowStatus.AUTO: ("**", "#55aa99"),
     RowStatus.UNCERTAIN: ("??", "#ccaa33"),
     RowStatus.EDITED: ("!!", "#a78bfa"),
-    RowStatus.FROZEN: ("\u2744", "#66cccc"),
+    RowStatus.FROZEN: ("--", "#66cccc"),
 }
 
 BG_ROW_CUR = "#1e1e1e"
@@ -97,15 +97,15 @@ def render_row(
     elif any(i in selected_cols for i in range(len(FIELD_COLS))):
         row_bg = BG_ROW_SEL
 
-    # Status badge
+    # Status badge in brackets: [..] [**] [!!] [--]
     badge_text, badge_style = _BADGE_STYLES.get(row.status, ("..", "#555555"))
-    _col(
-        t,
-        badge_text.rjust(COL_WIDTHS["status"] - 1) + " ",
-        COL_WIDTHS["status"],
-        badge_style,
-        bg=row_bg,
-    )
+    bracket_style = f"#333333 on {row_bg}" if row_bg else "#333333"
+    badge_full_style = f"{badge_style} on {row_bg}" if row_bg else badge_style
+    pad_style = f"on {row_bg}" if row_bg else ""
+    t.append("[", style=bracket_style)
+    t.append(badge_text, style=badge_full_style)
+    t.append("]", style=bracket_style)
+    t.append(" ", style=pad_style)
 
     # Filepath column
     fp = row.filepath

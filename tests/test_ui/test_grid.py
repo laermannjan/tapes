@@ -253,8 +253,9 @@ async def test_edit_selected_cells():
         assert app._rows[4].status == RowStatus.EDITED
         assert "title" in app._rows[0].edited_fields
         assert "title" in app._rows[4].edited_fields
-        # Selection should be cleared after edit
-        assert app.selection == set()
+        # Selection stays active after edit, cursor jumps to top
+        assert app.selection == {(0, 0), (4, 0)}
+        assert app.cursor_row == 0
 
 
 # --- Query mode tests (M4) ---
@@ -302,8 +303,9 @@ async def test_q_queries_selected_rows():
         assert app._rows[4].status == RowStatus.AUTO
         assert app._rows[4].title == "Arrival"
         assert app._rows[4].year == 2016
-        # Selection should be cleared
-        assert app.selection == set()
+        # Selection stays active, cursor jumps to top
+        assert app.selection == {(0, 0), (4, 0)}
+        assert app.cursor_row == 0
 
 
 async def test_q_blocked_during_edit():
@@ -365,3 +367,59 @@ async def test_esc_clears_freeze_not():
         assert "title" in app._rows[0].frozen_fields
         await pilot.press("escape")
         assert "title" in app._rows[0].frozen_fields  # still frozen
+
+
+async def test_f_toggles_freeze():
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        await pilot.press("f")
+        assert "title" in app._rows[0].frozen_fields
+        await pilot.press("f")
+        assert "title" not in app._rows[0].frozen_fields
+
+
+async def test_shift_f_toggles_freeze_all():
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        await pilot.press("F")
+        assert all(f in app._rows[0].frozen_fields for f in
+                   ["title", "year", "season", "episode", "episode_title"])
+        await pilot.press("F")
+        assert len(app._rows[0].frozen_fields) == 0
+
+
+async def test_undo_reverts_edit():
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        assert app._rows[0].title == "Dune"
+        await pilot.press("e")
+        app._edit_buffer = "Changed"
+        await pilot.press("enter")
+        assert app._rows[0].title == "Changed"
+        await pilot.press("u")
+        assert app._rows[0].title == "Dune"
+        assert app._rows[0].status == RowStatus.RAW
+
+
+async def test_undo_cleared_on_esc():
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        await pilot.press("e")
+        app._edit_buffer = "Changed"
+        await pilot.press("enter")
+        assert app._rows[0].title == "Changed"
+        await pilot.press("escape")  # clears undo
+        await pilot.press("u")
+        assert app._rows[0].title == "Changed"  # undo no longer available
+
+
+async def test_action_jumps_cursor_to_top_of_selection():
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        # Select row 0, move to row 4, select it, then query
+        await pilot.press("v")  # select row 0
+        await pilot.press("down", "down", "down")  # row 4
+        await pilot.press("v")  # select row 4
+        assert app.cursor_row == 4
+        await pilot.press("q")
+        assert app.cursor_row == 0  # jumped to topmost selected

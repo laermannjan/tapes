@@ -206,6 +206,7 @@ class GridApp(App):
         Binding("e", "start_edit", "Edit", show=False),
         Binding("escape", "cancel_edit", "Cancel / Clear", show=False),
         Binding("q", "query", "Query", show=False),
+        Binding("u", "undo", "Undo", show=False),
         Binding("f", "freeze", "Freeze cell", show=False),
         Binding("F", "freeze_row", "Freeze row", show=False, key_display="shift+f"),
     ]
@@ -220,6 +221,8 @@ class GridApp(App):
         self._edit_targets: list[int] = []  # row indices being edited
         self._edit_buffer: str | None = None
         self._edit_original: str = ""
+        # Undo: stores (field_name, [(row_idx, old_value), ...]) for last edit
+        self._undo: tuple[str, list[tuple[int, Any]]] | None = None
 
     @property
     def editing(self) -> bool:
@@ -268,6 +271,14 @@ class GridApp(App):
         if self._grid._sel_col is not None and self._grid._selected_rows:
             return sorted(self._grid._selected_rows)
         return [self._grid._cursor_row]
+
+    def _jump_to_top_target(self, targets: list[int]) -> None:
+        """Move cursor to the topmost target row and the selection column."""
+        if not self._grid or not targets:
+            return
+        self._grid._cursor_row = targets[0]
+        if self._grid._sel_col is not None:
+            self._grid._cursor_col = self._grid._sel_col
 
     def action_toggle_select(self) -> None:
         if not self._grid or self._editing:
@@ -362,14 +373,19 @@ class GridApp(App):
         else:
             converted = value
 
+        # Store undo info before applying
+        undo_entries: list[tuple[int, Any]] = []
         for row_idx in self._edit_targets:
+            old_value = getattr(self._rows[row_idx], field_name)
+            undo_entries.append((row_idx, old_value))
             self._rows[row_idx].set_field(field_name, converted)
+        self._undo = (field_name, undo_entries)
 
+        targets = self._edit_targets
         self._dismiss_edit()
         if self._grid:
-            self._grid.clear_selection()
+            self._jump_to_top_target(targets)
             self._grid.refresh_grid()
-        self._refresh_footer()
 
     def _dismiss_edit(self) -> None:
         """Reset edit state."""
@@ -391,8 +407,27 @@ class GridApp(App):
         if not self._grid:
             return
         self._grid.clear_selection()
+        self._undo = None
         self._grid.refresh_grid()
         self._refresh_footer()
+
+    def action_undo(self) -> None:
+        """Undo the last edit. Only available while selection is active."""
+        if not self._grid or self._editing or self._undo is None:
+            return
+        field_name, entries = self._undo
+        for row_idx, old_value in entries:
+            row = self._rows[row_idx]
+            if old_value is None:
+                row._overrides.pop(field_name, None)
+            else:
+                row._overrides[field_name] = old_value
+            row.edited_fields.discard(field_name)
+            # Revert status if no edited fields remain
+            if not row.edited_fields:
+                row.status = RowStatus.RAW
+        self._undo = None
+        self._grid.refresh_grid()
 
     def _refresh_footer(self) -> None:
         footer = self.query_one(GridFooter)
@@ -414,12 +449,11 @@ class GridApp(App):
             if result is not None:
                 row.apply_match(result)
 
-        self._grid.clear_selection()
+        self._jump_to_top_target(targets)
         self._grid.refresh_grid()
-        self._refresh_footer()
 
     def action_freeze(self) -> None:
-        """Freeze the current field for target rows."""
+        """Toggle freeze on the current field for target rows."""
         if not self._grid or self._editing:
             return
 
@@ -431,17 +465,18 @@ class GridApp(App):
             row = self._rows[row_idx]
             if row.kind != RowKind.FILE:
                 continue
-            row.freeze_field(field_name)
-            # Update status if all fields are now frozen
+            row.toggle_freeze_field(field_name)
+            # Update status based on freeze state
             if all(row.is_frozen(f) for f in FIELD_COLS):
                 row.status = RowStatus.FROZEN
+            elif row.status == RowStatus.FROZEN:
+                row.status = RowStatus.RAW
 
-        self._grid.clear_selection()
+        self._jump_to_top_target(targets)
         self._grid.refresh_grid()
-        self._refresh_footer()
 
     def action_freeze_row(self) -> None:
-        """Freeze ALL fields for target rows."""
+        """Toggle freeze on ALL fields for target rows."""
         if not self._grid or self._editing:
             return
 
@@ -451,12 +486,14 @@ class GridApp(App):
             row = self._rows[row_idx]
             if row.kind != RowKind.FILE:
                 continue
-            row.freeze_all_fields()
-            row.status = RowStatus.FROZEN
+            row.toggle_freeze_all_fields()
+            if all(row.is_frozen(f) for f in FIELD_COLS):
+                row.status = RowStatus.FROZEN
+            else:
+                row.status = RowStatus.RAW
 
-        self._grid.clear_selection()
+        self._jump_to_top_target(targets)
         self._grid.refresh_grid()
-        self._refresh_footer()
 
     def action_cursor_down(self) -> None:
         if not self._grid or self._editing:
