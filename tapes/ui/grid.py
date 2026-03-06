@@ -478,7 +478,8 @@ class GridApp(App):
                 continue
             result = mock_tmdb_lookup(row.title or "")
             if result is not None:
-                row.apply_match(result)
+                fields, _confidence = result
+                row.apply_match(fields)
 
         self._jump_to_top_target(targets)
         self._grid.refresh_grid()
@@ -495,7 +496,8 @@ class GridApp(App):
             row = self._rows[row_idx]
             result = mock_tmdb_lookup(row.title or "")
             if result is not None:
-                row.apply_match(result)
+                fields, _confidence = result
+                row.apply_match(fields)
 
         self._jump_to_top_target(targets)
         self._grid.refresh_grid()
