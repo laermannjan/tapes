@@ -324,9 +324,16 @@ class GridApp(App):
         elif self._grid._sel_col != col:
             return  # different column, blocked
 
-        for i, row in enumerate(self._rows):
-            if row.kind == RowKind.FILE and row.group is cursor_row.group:
-                self._grid._selected_rows.add(i)
+        group_rows = {i for i, row in enumerate(self._rows)
+                      if row.kind == RowKind.FILE and row.group is cursor_row.group}
+
+        if group_rows <= self._grid._selected_rows:
+            # All group rows already selected -- deselect them
+            self._grid._selected_rows -= group_rows
+            if not self._grid._selected_rows:
+                self._grid._sel_col = None
+        else:
+            self._grid._selected_rows |= group_rows
 
         self._grid.refresh_grid()
         self._refresh_footer()

@@ -460,6 +460,16 @@ async def test_shift_v_adds_to_existing_selection():
         assert app.selection == {(0, 0), (4, 0), (5, 0)}
 
 
+async def test_shift_v_toggles_group_off():
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        # Select Dune group, then shift-V again deselects it
+        await pilot.press("V")
+        assert app.selection == {(0, 0), (1, 0), (2, 0)}
+        await pilot.press("V")
+        assert app.selection == set()
+
+
 async def test_shift_q_queries_all_rows():
     app = GridApp(_groups())
     async with app.run_test() as pilot:
