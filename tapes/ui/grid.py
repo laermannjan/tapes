@@ -65,6 +65,51 @@ class GridFooter(Static):
         return t
 
 
+class GridCommandLine(Static):
+    """Displays the 'tapes import ./downloads' line at the top."""
+
+    DEFAULT_CSS = """
+    GridCommandLine {
+        height: 1;
+        padding: 0 2;
+        background: #111111;
+    }
+    """
+
+    def __init__(self, path: str = "./downloads", **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._path = path
+
+    def render(self) -> Text:  # type: ignore[override]
+        t = Text()
+        t.append("tapes import ", style="#555555")
+        t.append(self._path, style="#dddddd")
+        return t
+
+
+class GridColumnHeader(Static):
+    """Column header row aligned with the grid columns."""
+
+    DEFAULT_CSS = """
+    GridColumnHeader {
+        height: 2;
+        padding: 0 2;
+        background: #111111;
+    }
+    """
+
+    def render(self) -> Text:  # type: ignore[override]
+        labels = ["", "filepath", "title", "year", "S", "E", "episode title"]
+        col_keys = ["status", "filepath", "title", "year", "season", "episode", "episode_title"]
+        t = Text()
+        for label, key in zip(labels, col_keys):
+            t.append(_pad(label, COL_WIDTHS[key]), style="#333333")
+        t.append("\n")
+        total_width = sum(COL_WIDTHS[k] for k in col_keys)
+        t.append("\u2500" * total_width, style="#1e1e1e")
+        return t
+
+
 class GridWidget(Static):
     """Renders the entire grid as styled text lines."""
 
@@ -125,6 +170,8 @@ class GridApp(App):
 
     def compose(self) -> ComposeResult:
         with VerticalScroll(id="grid-scroll"):
+            yield GridCommandLine()
+            yield GridColumnHeader()
             self._grid = GridWidget(self._rows, id="grid")
             yield self._grid
         yield GridFooter(self._rows)
