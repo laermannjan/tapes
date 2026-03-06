@@ -9,6 +9,7 @@ from rich.text import Text
 
 from tapes.models import ImportGroup
 from tapes.ui.models import GridRow, RowKind, RowStatus, build_grid_rows
+from tapes.ui.query import mock_tmdb_lookup
 from tapes.ui.render import render_row, FIELD_COLS, COL_WIDTHS, _pad
 
 # Fields that should be stored as int
@@ -209,7 +210,7 @@ class GridApp(App):
         Binding("v", "toggle_select", "Select", show=False),
         Binding("e", "start_edit", "Edit", show=False),
         Binding("escape", "cancel_edit", "Cancel / Clear", show=False),
-        Binding("q", "quit", "Quit", show=False),
+        Binding("q", "query", "Query", show=False),
     ]
 
     def __init__(self, groups: list[ImportGroup], **kwargs) -> None:
@@ -363,6 +364,29 @@ class GridApp(App):
         footer = self.query_one(GridFooter)
         n_sel = len(self._grid._selected_rows) if self._grid and self._grid._sel_col is not None else 0
         footer.update_selection(n_sel)
+
+    def action_query(self) -> None:
+        """Query mock TMDB for cursor row or all selected rows."""
+        if not self._grid or self._editing:
+            return
+
+        # Determine target rows: selected rows or just cursor row
+        if self._grid._sel_col is not None and self._grid._selected_rows:
+            targets = sorted(self._grid._selected_rows)
+        else:
+            targets = [self._grid._cursor_row]
+
+        for row_idx in targets:
+            row = self._rows[row_idx]
+            if row.kind != RowKind.FILE:
+                continue
+            result = mock_tmdb_lookup(row.title or "")
+            if result is not None:
+                row.apply_match(result)
+
+        self._grid.clear_selection()
+        self._grid.refresh_grid()
+        self._refresh_footer()
 
     def action_cursor_down(self) -> None:
         if not self._grid or self._editing:

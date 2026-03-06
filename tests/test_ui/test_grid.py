@@ -255,3 +255,63 @@ async def test_edit_selected_cells():
         assert "title" in app._rows[4].edited_fields
         # Selection should be cleared after edit
         assert app.selection == set()
+
+
+# --- Query mode tests (M4) ---
+
+
+async def test_q_queries_and_auto_accepts():
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        # Row 0 is Dune.mkv, title="Dune"
+        assert app._rows[0].status == RowStatus.RAW
+        await pilot.press("q")
+        assert app._rows[0].status == RowStatus.AUTO
+        assert app._rows[0].title == "Dune"
+        assert app._rows[0].year == 2021
+
+
+async def test_q_no_match_stays_raw():
+    # Create a group with a title not in the mock TMDB DB
+    meta = FileMetadata(title="Unknown Movie", year=2020, media_type="movie")
+    group = ImportGroup(metadata=meta)
+    group.add_file(FileEntry(path=Path("movies/Unknown.Movie.2020.mkv"), metadata=meta))
+    app = GridApp([group])
+    async with app.run_test() as pilot:
+        assert app._rows[0].title == "Unknown Movie"
+        assert app._rows[0].status == RowStatus.RAW
+        await pilot.press("q")
+        assert app._rows[0].status == RowStatus.RAW
+
+
+async def test_q_queries_selected_rows():
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        # rows: 0=Dune.mkv 1=Dune.en.srt 2=Dune.de.srt 3=BLANK 4=Arrival.mkv
+        # Select row 0 and row 4
+        await pilot.press("v")  # select row 0
+        await pilot.press("down", "down", "down")  # row 4
+        await pilot.press("v")  # select row 4
+        assert app.selection == {(0, 0), (4, 0)}
+
+        await pilot.press("q")
+
+        assert app._rows[0].status == RowStatus.AUTO
+        assert app._rows[0].title == "Dune"
+        assert app._rows[0].year == 2021
+        assert app._rows[4].status == RowStatus.AUTO
+        assert app._rows[4].title == "Arrival"
+        assert app._rows[4].year == 2016
+        # Selection should be cleared
+        assert app.selection == set()
+
+
+async def test_q_blocked_during_edit():
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        await pilot.press("e")
+        assert app.editing
+        await pilot.press("q")
+        # Should still be editing, row unchanged
+        assert app.editing
+        assert app._rows[0].status == RowStatus.RAW

@@ -52,6 +52,12 @@ class GridRow:
         self.edited_fields.add(name)
         self.status = RowStatus.EDITED
 
+    def apply_match(self, fields: dict[str, Any]) -> None:
+        """Apply a TMDB match: set overrides and mark status as AUTO."""
+        for name, value in fields.items():
+            self._overrides[name] = value
+        self.status = RowStatus.AUTO
+
     @property
     def title(self) -> str | None:
         if "title" in self._overrides:
