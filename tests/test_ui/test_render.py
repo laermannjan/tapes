@@ -149,3 +149,27 @@ def test_episode_list_rendered():
     text = render_row(row, cursor_col=None, is_cursor_row=False)
     # Episode list should be converted to string
     assert "[1, 2]" in text.plain or "1" in text.plain
+
+
+def test_render_match_subrow():
+    match_row = GridRow(
+        kind=RowKind.MATCH,
+        group=ImportGroup(metadata=FileMetadata(title="Breaking Bad")),
+        match_fields={"title": "Breaking Bad", "year": 2008, "episode_title": "Pilot"},
+    )
+    text = render_row(match_row, cursor_col=0, is_cursor_row=False)
+    plain = text.plain
+    assert "(match)" in plain
+    assert "Breaking Bad" in plain
+    assert "2008" in plain
+    assert "Pilot" in plain
+
+
+def test_render_no_match_subrow():
+    no_match_row = GridRow(
+        kind=RowKind.NO_MATCH,
+        group=ImportGroup(metadata=FileMetadata()),
+    )
+    text = render_row(no_match_row, cursor_col=0, is_cursor_row=False)
+    plain = text.plain
+    assert "(no match)" in plain

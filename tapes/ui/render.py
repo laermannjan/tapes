@@ -87,6 +87,37 @@ def render_row(
             _col(t, "", COL_WIDTHS[col_name], "#333333", bg=bg)
         return t
 
+    if row.kind == RowKind.MATCH:
+        # Status: down-arrow indicator
+        _col(t, " \u23bf  ", COL_WIDTHS["status"], "#333333")
+        # Filepath: "(match)" in yellow
+        _col(t, "(match)", COL_WIDTHS["filepath"], "#ccaa33")
+        # Metadata columns: proposed values in cyan
+        fields = row.match_fields
+        match_values = [
+            str(fields.get("title", "")),
+            str(fields.get("year", "")) if fields.get("year") else "",
+            str(fields.get("season", "")) if fields.get("season") else "",
+            str(fields.get("episode", "")) if fields.get("episode") else "",
+            str(fields.get("episode_title", "")),
+        ]
+        for i, (col_name, value) in enumerate(zip(FIELD_COLS, match_values)):
+            bg = None
+            if is_cursor_row and i == cursor_col:
+                bg = BG_CELL_CUR
+            elif i == cursor_col:
+                bg = BG_COL_HI
+            style = "#66bbcc" if value else "#333333"
+            _col(t, value, COL_WIDTHS[col_name], style, bg=bg)
+        return t
+
+    if row.kind == RowKind.NO_MATCH:
+        _col(t, " \u23bf  ", COL_WIDTHS["status"], "#333333")
+        _col(t, "(no match)", COL_WIDTHS["filepath"], "#cc5555")
+        for col_name in FIELD_COLS:
+            _col(t, "", COL_WIDTHS[col_name], "#333333")
+        return t
+
     is_comp = row.is_companion
     base_style = "#555555" if is_comp else "#888888"
     bright_style = "#888888" if is_comp else "#dddddd"
