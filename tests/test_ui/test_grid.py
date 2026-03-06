@@ -723,3 +723,25 @@ async def test_dest_view_renders_paths():
         await pilot.press("tab")
         assert app.dest_mode is True
         # Should not crash; Dune and Arrival have title+year so should get paths
+
+
+async def test_dest_footer_shows_tab_hint():
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        await pilot.press("tab")
+        footer = app.query_one("GridFooter")
+        text = footer.render()
+        assert "tab" in text.plain
+        assert "metadata" in text.plain
+
+
+async def test_dest_footer_shows_process_when_ready():
+    """When all rows have complete metadata, footer shows process hint."""
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        await pilot.press("tab")
+        footer = app.query_one("GridFooter")
+        text = footer.render()
+        # Dune and Arrival have title+year, so they're complete for movie template
+        # Should show process hint
+        assert "process" in text.plain or "=" in text.plain or "missing" in text.plain

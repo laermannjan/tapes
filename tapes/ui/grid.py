@@ -45,14 +45,24 @@ class GridFooter(Static):
         super().__init__(**kwargs)
         self._rows = rows
         self._n_selected = 0
+        self._dest_mode: bool = False
+        self._dest_has_missing: bool = False
+        self._dest_confirming: bool = False
 
     def update_selection(self, n_selected: int) -> None:
         self._n_selected = n_selected
         self.refresh()
 
+    def update_dest_mode(self, dest_mode: bool) -> None:
+        self._dest_mode = dest_mode
+        self.refresh()
+
     def render(self) -> Text:  # type: ignore[override]
         t = Text()
         t.append(" ")
+
+        if self._dest_mode:
+            return self._render_dest(t)
 
         if self._n_selected > 0:
             # Selection mode footer
@@ -123,6 +133,66 @@ class GridFooter(Static):
                     ("p", "process"),
                     ("E", "all fields"),
                 ]
+
+        for key, desc in hints:
+            t.append(key, style="#777777 underline")
+            t.append(f" {desc}  ", style="#444444")
+
+        return t
+
+    def _render_dest(self, t: Text) -> Text:
+        """Render footer for destination view mode."""
+        file_rows = [r for r in self._rows if r.kind == RowKind.FILE]
+        n_uncertain = sum(1 for r in file_rows if r.status == RowStatus.UNCERTAIN)
+        n_match = sum(1 for r in self._rows if r.kind == RowKind.MATCH)
+        n_no_match = sum(1 for r in self._rows if r.kind == RowKind.NO_MATCH)
+        n_skipped = sum(1 for r in file_rows if getattr(r, '_skipped', False))
+
+        # Status badges
+        if n_uncertain:
+            t.append("??", style="#ccaa33")
+            t.append(f" {n_uncertain}  ", style="#555555")
+        if n_match:
+            t.append("pending", style="#ccaa33")
+            t.append(f" {n_match}  ", style="#555555")
+        if n_no_match:
+            t.append("no match", style="#cc5555")
+            t.append(f" {n_no_match}  ", style="#555555")
+        if n_skipped:
+            t.append("skipped", style="#666666")
+            t.append(f" {n_skipped}  ", style="#555555")
+
+        t.append("    ")
+
+        if n_match > 0:
+            # Uncertain matches pending accept/reject
+            hints = [
+                ("A", "accept all"),
+                ("R", "reject all"),
+                ("enter", "accept"),
+                ("bksp", "reject"),
+                ("tab", "metadata"),
+                ("esc", "quit"),
+            ]
+        elif self._dest_has_missing:
+            # Some files have missing template fields
+            hints = [
+                ("I", "ignore missing"),
+                ("F", "fill unknown"),
+                ("tab", "metadata"),
+                ("esc", "quit"),
+            ]
+        else:
+            # All resolved -- ready to process
+            n_processable = sum(
+                1 for r in file_rows
+                if not getattr(r, '_skipped', False)
+            )
+            hints = [
+                ("=", f"process {n_processable} files"),
+                ("tab", "metadata"),
+                ("esc", "quit"),
+            ]
 
         for key, desc in hints:
             t.append(key, style="#777777 underline")
@@ -649,10 +719,26 @@ class GridApp(App):
             self._undo = None
             self._grid.refresh_grid()
 
+    def _dest_has_missing(self) -> bool:
+        from tapes.ui.dest import missing_template_fields
+        for row in self._rows:
+            if row.kind != RowKind.FILE:
+                continue
+            if getattr(row, '_skipped', False) or getattr(row, '_filled_unknown', False):
+                continue
+            template = self._get_template(row)
+            if missing_template_fields(row, template):
+                return True
+        return False
+
     def _refresh_footer(self) -> None:
         footer = self.query_one(GridFooter)
         n_sel = len(self._grid._selected_rows) if self._grid and self._grid._sel_col is not None else 0
         footer.update_selection(n_sel)
+        footer._dest_mode = self._dest_mode
+        footer._dest_has_missing = self._dest_has_missing() if self._dest_mode else False
+        footer._dest_confirming = getattr(self, '_confirming', False)
+        footer.refresh()
 
     def action_toggle_dest(self) -> None:
         if self._editing:
