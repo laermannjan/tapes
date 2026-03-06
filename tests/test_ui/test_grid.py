@@ -901,3 +901,58 @@ async def test_ignore_noop_outside_dest():
         await pilot.press("I")
         # Should not crash, no rows skipped
         assert all(not r._skipped for r in app._rows)
+
+
+# --- Process confirmation tests (M6 Task 9) ---
+
+
+async def test_process_enters_confirmation():
+    """= in dest view enters confirmation when all resolved."""
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        await pilot.press("tab")
+        await pilot.press("=")
+        assert app.confirming is True
+
+
+async def test_process_confirmation_cancel():
+    """Esc cancels confirmation."""
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        await pilot.press("tab")
+        await pilot.press("=")
+        assert app.confirming is True
+        await pilot.press("escape")
+        assert app.confirming is False
+        assert app.dest_mode is True  # still in dest view
+
+
+async def test_process_blocked_with_uncertain():
+    """= should not enter confirmation when uncertain matches exist."""
+    app = GridApp(_episode_groups())
+    async with app.run_test() as pilot:
+        # Query all to get uncertain matches (Breaking Bad has confidence 0.75)
+        await pilot.press("Q")
+        await pilot.press("tab")
+        await pilot.press("=")
+        assert app.confirming is False
+
+
+async def test_process_blocked_with_missing():
+    """= should not enter confirmation when missing fields exist."""
+    meta = FileMetadata(title="Unknown Movie", media_type="movie")
+    g = ImportGroup(metadata=meta)
+    g.add_file(FileEntry(path=Path("movie.mkv"), metadata=meta))
+    app = GridApp([g])
+    async with app.run_test() as pilot:
+        await pilot.press("tab")
+        await pilot.press("=")
+        assert app.confirming is False
+
+
+async def test_process_not_in_metadata_view():
+    """= does nothing outside dest view."""
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        await pilot.press("=")
+        assert app.confirming is False

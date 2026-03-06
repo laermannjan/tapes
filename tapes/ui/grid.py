@@ -48,6 +48,7 @@ class GridFooter(Static):
         self._dest_mode: bool = False
         self._dest_has_missing: bool = False
         self._dest_confirming: bool = False
+        self._dest_operation: str = "copy"
 
     def update_selection(self, n_selected: int) -> None:
         self._n_selected = n_selected
@@ -142,6 +143,16 @@ class GridFooter(Static):
 
     def _render_dest(self, t: Text) -> Text:
         """Render footer for destination view mode."""
+        if self._dest_confirming:
+            file_rows = [r for r in self._rows if r.kind == RowKind.FILE]
+            processable = [r for r in file_rows if not r._skipped]
+            t.append(f" {self._dest_operation} {len(processable)} files to library? ", style="#dddddd")
+            hints = [("=", "confirm"), ("esc", "cancel")]
+            for key, desc in hints:
+                t.append(key, style="#777777 underline")
+                t.append(f" {desc}  ", style="#444444")
+            return t
+
         file_rows = [r for r in self._rows if r.kind == RowKind.FILE]
         n_uncertain = sum(1 for r in file_rows if r.status == RowStatus.UNCERTAIN)
         n_match = sum(1 for r in self._rows if r.kind == RowKind.MATCH)
@@ -375,6 +386,7 @@ class GridApp(App):
         Binding("R", "reject_all_uncertain", "Reject all", show=False, key_display="shift+r"),
         Binding("I", "ignore_missing", "Ignore missing", show=False, key_display="shift+i"),
         Binding("tab", "toggle_dest", "Toggle view", show=False, priority=True),
+        Binding("=", "process", "Process", show=False),
     ]
 
     def __init__(self, groups: list[ImportGroup], *, config: TapesConfig | None = None, **kwargs) -> None:
@@ -393,6 +405,7 @@ class GridApp(App):
         self._undo_rows: list[GridRow] | None = None
         self._config = config or TapesConfig()
         self._dest_mode: bool = False
+        self._confirming: bool = False
 
     @property
     def editing(self) -> bool:
@@ -401,6 +414,10 @@ class GridApp(App):
     @property
     def dest_mode(self) -> bool:
         return self._dest_mode
+
+    @property
+    def confirming(self) -> bool:
+        return self._confirming
 
     @property
     def cursor_row(self) -> int:
@@ -692,6 +709,10 @@ class GridApp(App):
             self._grid._edit_value = None
 
     def action_cancel_edit(self) -> None:
+        if self._confirming:
+            self._confirming = False
+            self._refresh_footer()
+            return
         if self._editing:
             self._dismiss_edit()
             if self._grid:
@@ -742,7 +763,8 @@ class GridApp(App):
         footer.update_selection(n_sel)
         footer._dest_mode = self._dest_mode
         footer._dest_has_missing = self._dest_has_missing() if self._dest_mode else False
-        footer._dest_confirming = getattr(self, '_confirming', False)
+        footer._dest_confirming = self._confirming
+        footer._dest_operation = self._config.library.operation
         footer.refresh()
 
     def action_toggle_dest(self) -> None:
@@ -757,6 +779,30 @@ class GridApp(App):
         header._dest_mode = self._dest_mode
         header.refresh()
         self._refresh_footer()
+
+    def action_process(self) -> None:
+        """Enter process confirmation or execute."""
+        if not self._dest_mode or not self._grid:
+            return
+        if self._confirming:
+            # Second press: execute (dry-run for now)
+            self._execute_process()
+            return
+        # Check blockers
+        has_uncertain = any(r.kind == RowKind.MATCH for r in self._rows)
+        if has_uncertain:
+            return  # blocked
+        if self._dest_has_missing():
+            return  # blocked
+        self._confirming = True
+        self._refresh_footer()
+
+    def _execute_process(self) -> None:
+        """Dry-run: print summary and exit."""
+        processable = [r for r in self._rows
+                       if r.kind == RowKind.FILE and not r._skipped]
+        op = self._config.library.operation
+        self.exit(message=f"{op} {len(processable)} files")
 
     def _get_template(self, row: GridRow) -> str:
         from tapes.models import FileMetadata
