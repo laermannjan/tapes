@@ -434,3 +434,45 @@ async def test_action_jumps_cursor_to_top_of_selection():
         assert app.cursor_row == 4
         await pilot.press("q")
         assert app.cursor_row == 0  # jumped to topmost selected
+
+
+# --- Select group / Query all tests ---
+
+
+async def test_shift_v_selects_group():
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        # rows: 0=Dune.mkv 1=Dune.en.srt 2=Dune.de.srt 3=BLANK 4=Arrival.mkv 5=Arrival.en.srt
+        # Cursor on row 0, shift-V selects all of Dune group
+        await pilot.press("V")
+        assert app.selection == {(0, 0), (1, 0), (2, 0)}
+
+
+async def test_shift_v_adds_to_existing_selection():
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        # Select row 0, move to Arrival group, shift-V adds Arrival group
+        await pilot.press("v")  # select row 0
+        await pilot.press("down", "down", "down")  # row 4 (Arrival)
+        await pilot.press("V")  # select Arrival group
+        assert app.selection == {(0, 0), (4, 0), (5, 0)}
+
+
+async def test_shift_q_queries_all_rows():
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        assert app._rows[0].status == RowStatus.RAW
+        assert app._rows[4].status == RowStatus.RAW
+        await pilot.press("Q")
+        assert app._rows[0].status == RowStatus.AUTO
+        assert app._rows[4].status == RowStatus.AUTO
+
+
+async def test_shift_q_undoable():
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        await pilot.press("Q")
+        assert app._rows[0].status == RowStatus.AUTO
+        await pilot.press("u")
+        assert app._rows[0].status == RowStatus.RAW
+        assert app._rows[4].status == RowStatus.RAW

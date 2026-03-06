@@ -205,9 +205,11 @@ class GridApp(App):
         Binding("left", "cursor_left", "Left", show=False),
         Binding("right", "cursor_right", "Right", show=False),
         Binding("v", "toggle_select", "Select", show=False),
+        Binding("V", "select_group", "Select group", show=False, key_display="shift+v"),
         Binding("e", "start_edit", "Edit", show=False),
         Binding("escape", "cancel_edit", "Cancel / Clear", show=False),
         Binding("q", "query", "Query", show=False),
+        Binding("Q", "query_all", "Query all", show=False, key_display="shift+q"),
         Binding("u", "undo", "Undo", show=False),
         Binding("f", "freeze", "Freeze cell", show=False),
         Binding("F", "freeze_row", "Freeze row", show=False, key_display="shift+f"),
@@ -305,6 +307,28 @@ class GridApp(App):
                 self._grid._sel_col = None
         else:
             self._grid._selected_rows.add(row)
+        self._grid.refresh_grid()
+        self._refresh_footer()
+
+    def action_select_group(self) -> None:
+        """Select all file rows in the cursor's group on the current column."""
+        if not self._grid or self._editing:
+            return
+        col = self._grid._cursor_col
+        cursor_row = self._rows[self._grid._cursor_row]
+        if cursor_row.kind != RowKind.FILE or cursor_row.group is None:
+            return
+
+        # Lock column (start or join existing selection)
+        if self._grid._sel_col is None:
+            self._grid._sel_col = col
+        elif self._grid._sel_col != col:
+            return  # different column, blocked
+
+        for i, row in enumerate(self._rows):
+            if row.kind == RowKind.FILE and row.group is cursor_row.group:
+                self._grid._selected_rows.add(i)
+
         self._grid.refresh_grid()
         self._refresh_footer()
 
@@ -446,6 +470,23 @@ class GridApp(App):
             row = self._rows[row_idx]
             if row.kind != RowKind.FILE:
                 continue
+            result = mock_tmdb_lookup(row.title or "")
+            if result is not None:
+                row.apply_match(result)
+
+        self._jump_to_top_target(targets)
+        self._grid.refresh_grid()
+
+    def action_query_all(self) -> None:
+        """Query mock TMDB for all file rows."""
+        if not self._grid or self._editing:
+            return
+
+        targets = self._file_rows()
+        self._undo = self._snapshot_rows(targets)
+
+        for row_idx in targets:
+            row = self._rows[row_idx]
             result = mock_tmdb_lookup(row.title or "")
             if result is not None:
                 row.apply_match(result)
