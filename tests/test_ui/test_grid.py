@@ -4,6 +4,7 @@ from pathlib import Path
 from tapes.models import FileEntry, FileMetadata, ImportGroup
 from tapes.ui.grid import GridApp
 from tapes.ui.models import RowStatus
+from tapes.ui.render import FIELD_COLS
 
 
 def _groups():
@@ -164,9 +165,8 @@ async def test_edit_confirm_updates_field():
         assert app._rows[0].title == "Dune"
         await pilot.press("e")
         assert app.editing
-        # Clear existing text and type new value
-        app._edit_input.value = ""
-        await pilot.press("D", "u", "n", "e", " ", "2")
+        # Set edit buffer directly and confirm
+        app._edit_buffer = "Dune 2"
         await pilot.press("enter")
         assert not app.editing
         assert app._rows[0].title == "Dune 2"
@@ -178,7 +178,7 @@ async def test_edit_cancel_preserves_field():
         assert app._rows[0].title == "Dune"
         await pilot.press("e")
         assert app.editing
-        app._edit_input.value = "Changed"
+        app._edit_buffer = "Changed"
         await pilot.press("escape")
         assert not app.editing
         assert app._rows[0].title == "Dune"
@@ -189,7 +189,7 @@ async def test_edit_sets_status_edited():
     async with app.run_test() as pilot:
         assert app._rows[0].status == RowStatus.RAW
         await pilot.press("e")
-        app._edit_input.value = "New Title"
+        app._edit_buffer = "New Title"
         await pilot.press("enter")
         assert app._rows[0].status == RowStatus.EDITED
 
@@ -199,7 +199,7 @@ async def test_edit_tracks_edited_fields():
     async with app.run_test() as pilot:
         assert "title" not in app._rows[0].edited_fields
         await pilot.press("e")
-        app._edit_input.value = "New Title"
+        app._edit_buffer = "New Title"
         await pilot.press("enter")
         assert "title" in app._rows[0].edited_fields
 
@@ -211,7 +211,7 @@ async def test_edit_year_converts_to_int():
         await pilot.press("right")
         assert app.cursor_col == 1
         await pilot.press("e")
-        app._edit_input.value = "2025"
+        app._edit_buffer = "2025"
         await pilot.press("enter")
         assert app._rows[0].year == 2025
         assert isinstance(app._rows[0].year, int)
@@ -223,7 +223,7 @@ async def test_edit_invalid_int_cancels_silently():
         # Move cursor to year column
         await pilot.press("right")
         await pilot.press("e")
-        app._edit_input.value = "not-a-number"
+        app._edit_buffer = "not-a-number"
         await pilot.press("enter")
         assert not app.editing
         # Year should remain unchanged
@@ -244,7 +244,7 @@ async def test_edit_selected_cells():
         assert app.selection == {(0, 0), (4, 0)}
 
         await pilot.press("e")
-        app._edit_input.value = "Shared Title"
+        app._edit_buffer = "Shared Title"
         await pilot.press("enter")
 
         assert app._rows[0].title == "Shared Title"
@@ -315,3 +315,53 @@ async def test_q_blocked_during_edit():
         # Should still be editing, row unchanged
         assert app.editing
         assert app._rows[0].status == RowStatus.RAW
+
+
+# --- Freeze tests ---
+
+
+async def test_f_freezes_cursor_cell():
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        await pilot.press("f")
+        assert "title" in app._rows[0].frozen_fields
+
+
+async def test_frozen_field_blocks_edit():
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        await pilot.press("f")  # freeze title
+        await pilot.press("e")
+        app._edit_buffer = "New"
+        await pilot.press("enter")
+        assert app._rows[0].title == "Dune"  # unchanged
+
+
+async def test_frozen_field_blocks_query():
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        # Freeze title on row 0, then query
+        await pilot.press("f")
+        assert "title" in app._rows[0].frozen_fields
+        original_title = app._rows[0].title
+        await pilot.press("q")
+        # Title should not change (frozen), but year should update
+        assert app._rows[0].title == original_title
+
+
+async def test_shift_f_freezes_entire_row():
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        await pilot.press("F")
+        for field in ["title", "year", "season", "episode", "episode_title"]:
+            assert field in app._rows[0].frozen_fields
+
+
+async def test_esc_clears_freeze_not():
+    # Esc clears selection, not freeze state
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        await pilot.press("f")
+        assert "title" in app._rows[0].frozen_fields
+        await pilot.press("escape")
+        assert "title" in app._rows[0].frozen_fields  # still frozen

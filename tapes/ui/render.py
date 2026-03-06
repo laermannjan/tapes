@@ -24,6 +24,7 @@ _BADGE_STYLES: dict[RowStatus, tuple[str, str]] = {
     RowStatus.AUTO: ("**", "#55aa99"),
     RowStatus.UNCERTAIN: ("??", "#ccaa33"),
     RowStatus.EDITED: ("!!", "#a78bfa"),
+    RowStatus.FROZEN: ("\u2744", "#66cccc"),
 }
 
 BG_ROW_CUR = "#1e1e1e"
@@ -38,8 +39,9 @@ _SEL_TEXT: dict[str, str] = {
     "#555555": "#999999",
     "#888888": "#cccccc",
     "#dddddd": "#eeeeee",
-    "#66bbcc": "#88ddee",
+    "#55aa99": "#77ccbb",
     "#a78bfa": "#c4a8ff",
+    "#66cccc": "#88eeee",
 }
 
 
@@ -64,6 +66,8 @@ def render_row(
     *,
     selected_cols: set[int] | None = None,
     is_sel_cursor_row: bool = False,
+    edit_col: int | None = None,
+    edit_value: str | None = None,
 ) -> Text:
     """Render a single GridRow as a Rich Text line."""
     if selected_cols is None:
@@ -138,10 +142,13 @@ def render_row(
     ]
 
     for i, (col_name, value) in enumerate(zip(FIELD_COLS, values)):
-        if row.status == RowStatus.EDITED and col_name in row.edited_fields:
+        # Determine base text style
+        if col_name in row.frozen_fields:
+            style = "#66cccc"
+        elif row.status == RowStatus.EDITED and col_name in row.edited_fields:
             style = "#a78bfa"
         elif row.status == RowStatus.AUTO:
-            style = "#66bbcc" if value else base_style
+            style = "#55aa99" if value else base_style
         else:
             style = base_style if is_comp else (bright_style if value else base_style)
 
@@ -153,10 +160,18 @@ def render_row(
         if i in selected_cols:
             if is_sel_cursor_row and i == cursor_col:
                 bg = BG_CELL_SEL_CUR
+                style = _SEL_TEXT.get(style, style)
             else:
                 bg = BG_CELL_SEL
                 style = _SEL_TEXT.get(style, style)
 
-        _col(t, value, COL_WIDTHS[col_name], style, bg=bg)
+        # Inline edit: show edit buffer instead of actual value
+        display_value = value
+        display_style = style
+        if is_cursor_row and edit_col is not None and i == edit_col:
+            display_value = edit_value if edit_value is not None else ""
+            display_style = f"underline {style}"
+
+        _col(t, display_value, COL_WIDTHS[col_name], display_style, bg=bg)
 
     return t

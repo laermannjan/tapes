@@ -4,7 +4,8 @@ from __future__ import annotations
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import VerticalScroll
-from textual.widgets import Input, Static
+from textual.events import Key
+from textual.widgets import Static
 from rich.text import Text
 
 from tapes.models import ImportGroup
@@ -73,6 +74,7 @@ class GridFooter(Static):
                 ("e", "edit"),
                 ("v", "select"),
                 ("q", "query"),
+                ("f", "freeze"),
                 ("r", "reorg"),
                 ("p", "process"),
                 ("E", "all fields"),
@@ -140,6 +142,8 @@ class GridWidget(Static):
         self._cursor_col = 0
         self._selected_rows: set[int] = set()
         self._sel_col: int | None = None
+        self._edit_col: int | None = None
+        self._edit_value: str | None = None
 
     @property
     def selection(self) -> set[tuple[int, int]]:
@@ -160,6 +164,9 @@ class GridWidget(Static):
             selected_cols: set[int] | None = None
             if self._sel_col is not None and i in self._selected_rows:
                 selected_cols = {self._sel_col}
+            # Only pass edit info for the cursor row
+            edit_col = self._edit_col if i == self._cursor_row else None
+            edit_value = self._edit_value if i == self._cursor_row else None
             line = render_row(
                 row,
                 cursor_col=self._cursor_col,
@@ -170,26 +177,14 @@ class GridWidget(Static):
                     and self._sel_col is not None
                     and i in self._selected_rows
                 ),
+                edit_col=edit_col,
+                edit_value=edit_value,
             )
             out.append_text(line)
         return out
 
     def refresh_grid(self) -> None:
         self.update(self.render_grid())
-
-
-class EditInput(Input):
-    """Inline text input for cell editing."""
-
-    DEFAULT_CSS = """
-    EditInput {
-        dock: bottom;
-        height: 1;
-        background: #1e1e1e;
-        border: none;
-        padding: 0 1;
-    }
-    """
 
 
 class GridApp(App):
@@ -211,6 +206,8 @@ class GridApp(App):
         Binding("e", "start_edit", "Edit", show=False),
         Binding("escape", "cancel_edit", "Cancel / Clear", show=False),
         Binding("q", "query", "Query", show=False),
+        Binding("f", "freeze", "Freeze cell", show=False),
+        Binding("F", "freeze_row", "Freeze row", show=False, key_display="shift+f"),
     ]
 
     def __init__(self, groups: list[ImportGroup], **kwargs) -> None:
@@ -221,7 +218,8 @@ class GridApp(App):
         self._editing: bool = False
         self._edit_field: str | None = None
         self._edit_targets: list[int] = []  # row indices being edited
-        self._edit_input: EditInput | None = None
+        self._edit_buffer: str | None = None
+        self._edit_original: str = ""
 
     @property
     def editing(self) -> bool:
@@ -265,6 +263,12 @@ class GridApp(App):
     def _file_rows(self) -> list[int]:
         return [i for i, r in enumerate(self._rows) if r.kind == RowKind.FILE]
 
+    def _target_rows(self) -> list[int]:
+        """Return selected rows if any, otherwise just the cursor row."""
+        if self._grid._sel_col is not None and self._grid._selected_rows:
+            return sorted(self._grid._selected_rows)
+        return [self._grid._cursor_row]
+
     def action_toggle_select(self) -> None:
         if not self._grid or self._editing:
             return
@@ -290,26 +294,54 @@ class GridApp(App):
         col = self._grid._cursor_col
         field_name = FIELD_COLS[col]
 
-        # Determine target rows: selected rows or cursor row
-        if self._grid._sel_col is not None and self._grid._selected_rows:
-            self._edit_targets = sorted(self._grid._selected_rows)
-        else:
-            self._edit_targets = [self._grid._cursor_row]
+        # Determine target rows
+        self._edit_targets = self._target_rows()
+
+        # Check if the field is frozen on the first target
+        target_row = self._rows[self._edit_targets[0]]
+        if target_row.is_frozen(field_name):
+            return
 
         self._edit_field = field_name
 
         # Get current value from first target row
-        target_row = self._rows[self._edit_targets[0]]
-        current_value = getattr(target_row, field_name) or ""
+        current_value = str(getattr(target_row, field_name) or "")
 
         self._editing = True
-        self._edit_input = EditInput(
-            value=str(current_value),
-            placeholder=field_name,
-            id="edit-input",
-        )
-        self.mount(self._edit_input)
-        self._edit_input.focus()
+        self._edit_original = current_value
+        self._edit_buffer = current_value
+
+        # Update grid widget for inline rendering
+        self._grid._edit_col = col
+        self._grid._edit_value = self._edit_buffer
+        self._grid.refresh_grid()
+
+    def on_key(self, event: Key) -> None:
+        """Capture keypresses during inline edit mode."""
+        if not self._editing:
+            return
+
+        event.prevent_default()
+        event.stop()
+
+        if event.key == "enter":
+            self._commit_edit(self._edit_buffer or "")
+            return
+        elif event.key == "escape":
+            self._dismiss_edit()
+            if self._grid:
+                self._grid.refresh_grid()
+            return
+        elif event.key == "backspace":
+            if self._edit_buffer:
+                self._edit_buffer = self._edit_buffer[:-1]
+        elif event.character and event.is_printable:
+            self._edit_buffer = (self._edit_buffer or "") + event.character
+
+        # Update inline display
+        if self._grid:
+            self._grid._edit_value = self._edit_buffer
+            self._grid.refresh_grid()
 
     def _commit_edit(self, value: str) -> None:
         """Apply the edited value to target rows."""
@@ -324,6 +356,8 @@ class GridApp(App):
             except (ValueError, TypeError):
                 # Invalid int -- cancel silently
                 self._dismiss_edit()
+                if self._grid:
+                    self._grid.refresh_grid()
                 return
         else:
             converted = value
@@ -338,21 +372,21 @@ class GridApp(App):
         self._refresh_footer()
 
     def _dismiss_edit(self) -> None:
-        """Remove the edit input and reset edit state."""
+        """Reset edit state."""
         self._editing = False
         self._edit_field = None
         self._edit_targets = []
-        if self._edit_input:
-            self._edit_input.remove()
-            self._edit_input = None
-
-    def on_input_submitted(self, event: Input.Submitted) -> None:
-        if self._editing:
-            self._commit_edit(event.value)
+        self._edit_buffer = None
+        self._edit_original = ""
+        if self._grid:
+            self._grid._edit_col = None
+            self._grid._edit_value = None
 
     def action_cancel_edit(self) -> None:
         if self._editing:
             self._dismiss_edit()
+            if self._grid:
+                self._grid.refresh_grid()
             return
         if not self._grid:
             return
@@ -370,11 +404,7 @@ class GridApp(App):
         if not self._grid or self._editing:
             return
 
-        # Determine target rows: selected rows or just cursor row
-        if self._grid._sel_col is not None and self._grid._selected_rows:
-            targets = sorted(self._grid._selected_rows)
-        else:
-            targets = [self._grid._cursor_row]
+        targets = self._target_rows()
 
         for row_idx in targets:
             row = self._rows[row_idx]
@@ -383,6 +413,46 @@ class GridApp(App):
             result = mock_tmdb_lookup(row.title or "")
             if result is not None:
                 row.apply_match(result)
+
+        self._grid.clear_selection()
+        self._grid.refresh_grid()
+        self._refresh_footer()
+
+    def action_freeze(self) -> None:
+        """Freeze the current field for target rows."""
+        if not self._grid or self._editing:
+            return
+
+        col = self._grid._cursor_col
+        field_name = FIELD_COLS[col]
+        targets = self._target_rows()
+
+        for row_idx in targets:
+            row = self._rows[row_idx]
+            if row.kind != RowKind.FILE:
+                continue
+            row.freeze_field(field_name)
+            # Update status if all fields are now frozen
+            if all(row.is_frozen(f) for f in FIELD_COLS):
+                row.status = RowStatus.FROZEN
+
+        self._grid.clear_selection()
+        self._grid.refresh_grid()
+        self._refresh_footer()
+
+    def action_freeze_row(self) -> None:
+        """Freeze ALL fields for target rows."""
+        if not self._grid or self._editing:
+            return
+
+        targets = self._target_rows()
+
+        for row_idx in targets:
+            row = self._rows[row_idx]
+            if row.kind != RowKind.FILE:
+                continue
+            row.freeze_all_fields()
+            row.status = RowStatus.FROZEN
 
         self._grid.clear_selection()
         self._grid.refresh_grid()

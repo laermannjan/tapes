@@ -19,6 +19,7 @@ class RowStatus(Enum):
     AUTO = "**"      # auto-accepted TMDB
     UNCERTAIN = "??" # uncertain match
     EDITED = "!!"    # user-edited
+    FROZEN = "\u2744"  # all fields frozen
 
 
 @dataclass
@@ -29,6 +30,7 @@ class GridRow:
     group: ImportGroup | None = None
     status: RowStatus = RowStatus.RAW
     edited_fields: set[str] = field(default_factory=set)
+    frozen_fields: set[str] = field(default_factory=set)
     _overrides: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -48,6 +50,8 @@ class GridRow:
 
     def set_field(self, name: str, value: Any) -> None:
         """Set an override for a field, mark it edited, update status."""
+        if name in self.frozen_fields:
+            return
         self._overrides[name] = value
         self.edited_fields.add(name)
         self.status = RowStatus.EDITED
@@ -55,8 +59,23 @@ class GridRow:
     def apply_match(self, fields: dict[str, Any]) -> None:
         """Apply a TMDB match: set overrides and mark status as AUTO."""
         for name, value in fields.items():
-            self._overrides[name] = value
+            if name not in self.frozen_fields:
+                self._overrides[name] = value
         self.status = RowStatus.AUTO
+
+    def freeze_field(self, name: str) -> None:
+        """Freeze a single field so it cannot be edited or overwritten."""
+        self.frozen_fields.add(name)
+
+    def freeze_all_fields(self) -> None:
+        """Freeze all metadata fields."""
+        from tapes.ui.render import FIELD_COLS
+        for col in FIELD_COLS:
+            self.frozen_fields.add(col)
+
+    def is_frozen(self, name: str) -> bool:
+        """Check if a field is frozen."""
+        return name in self.frozen_fields
 
     @property
     def title(self) -> str | None:
