@@ -116,6 +116,70 @@ def _meta_parts(meta: FileMetadata) -> list[tuple[str, str]]:
     return parts
 
 
+def _mock_groups() -> list[ImportGroup]:
+    """Return mock ImportGroups matching the HTML mockup for grid dev."""
+    # -- Dune --
+    dune_meta = FileMetadata(media_type="movie", title="Dune", year=2021)
+    dune = ImportGroup(metadata=dune_meta)
+    dune.add_file(FileEntry(path=Path("Dune.2021.2160p.BluRay.x265.mkv"), metadata=dune_meta))
+    dune.add_file(FileEntry(path=Path("Dune.2021.2160p.BluRay.x265.en.srt")))
+    dune.add_file(FileEntry(path=Path("Dune.2021.2160p.BluRay.x265.de.srt")))
+
+    # -- Arrival --
+    arrival_meta = FileMetadata(media_type="movie", title="Arrival", year=2016)
+    arrival = ImportGroup(metadata=arrival_meta)
+    arrival.add_file(FileEntry(path=Path("Arrival.2016.1080p.WEB-DL.mkv"), metadata=arrival_meta))
+    arrival.add_file(FileEntry(path=Path("Arrival.2016.1080p.WEB-DL.en.srt")))
+
+    # -- Breaking Bad S01 --
+    bb_meta = FileMetadata(media_type="episode", title="Breaking Bad", season=1)
+    bb = ImportGroup(metadata=bb_meta)
+    for ep in (1, 2, 3):
+        ep_meta = FileMetadata(
+            media_type="episode", title="Breaking Bad", season=1, episode=ep
+        )
+        bb.add_file(
+            FileEntry(
+                path=Path(f"Breaking.Bad.S01E{ep:02d}.720p.mkv"), metadata=ep_meta
+            )
+        )
+        bb.add_file(FileEntry(path=Path(f"Breaking.Bad.S01E{ep:02d}.720p.en.srt")))
+
+    # -- random_clip --
+    clip_meta = FileMetadata(media_type="movie", title="Interstellar")
+    clip = ImportGroup(metadata=clip_meta)
+    clip.add_file(FileEntry(path=Path("random_clip.avi"), metadata=clip_meta))
+
+    # -- bonus_featurette --
+    bonus_meta = FileMetadata()
+    bonus = ImportGroup(metadata=bonus_meta)
+    bonus.add_file(FileEntry(path=Path("bonus_featurette.mkv")))
+
+    return [dune, arrival, bb, clip, bonus]
+
+
+@app.command("grid")
+def grid_cmd(
+    path: Path = typer.Argument(None, help="Directory to scan (uses mock data if omitted)"),
+    config_file: Optional[Path] = typer.Option(
+        None, "--config", "-c", help="Path to config file"
+    ),
+) -> None:
+    """Launch the grid TUI (dev command)."""
+    if path is not None:
+        cfg = load_config(config_file) if config_file else TapesConfig()
+        groups = run_pipeline(path, config=cfg)
+    else:
+        groups = _mock_groups()
+    if not groups:
+        console.print("No video files found.")
+        return
+    from tapes.ui.grid import GridApp
+
+    tui = GridApp(groups)
+    tui.run()
+
+
 def _print_scan(root: Path, groups: list[ImportGroup]) -> None:
     """Print file-level scan results with metadata."""
     try:
