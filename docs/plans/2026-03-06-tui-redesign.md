@@ -25,8 +25,8 @@ nothing → guessit → TMDB → result → destination
   path. A merge of values from various sources and manual edits.
 - **source** -- something that provides metadata values. Built-in sources:
   `from filename` (guessit), `TMDB #1`, `TMDB #2`, etc.
-- **staged** -- the file's result is accepted, ready to be processed (moved/
-  copied to library).
+- **staged** -- the file is ready to be processed (moved/copied to library).
+  Staging is purely a readiness marker -- it does not modify metadata.
 - **unstaged** -- the file needs attention (unidentified, low confidence, or
   user hasn't reviewed yet).
 - **ignored** -- not a media file, or user explicitly skipped it.
@@ -53,15 +53,14 @@ Shows the scanned directory as a tree with destinations:
 Markers: `✓` staged, `○` unstaged (needs attention), no marker = ignored/dimmed.
 
 Directories are collapsible. `enter` on a directory toggles expand/collapse.
-`enter` on a file drills into the detail view.
+`enter` on a file (or selection) drills into the detail view.
 
-Staging: `space` toggles staged/unstaged on cursor file. `space` on a directory
-toggles all children recursively. `v` enters range select mode (contiguous
-block), `space` stages/unstages the range, `v` again clears the range.
+### 2. Detail view (per file or selection)
 
-### 2. Detail view (per file)
+Shows the result alongside sources for cherry-picking. Works identically for
+a single file or a multi-file selection.
 
-Shows the file's result alongside sources for cherry-picking:
+**Single file:**
 
 ```
  Breaking.Bad.S01E01.720p.BluRay.x264.mkv
@@ -76,13 +75,31 @@ Shows the file's result alongside sources for cherry-picking:
  codec         x264          ┃  x264             ·               ·
  source        BluRay        ┃  BluRay           ·               ·
 ╶──────────────────────────────────────────────────────────────────────────────╴
- enter: apply/edit   shift-enter: apply all   r: refresh   esc: back
+ enter: apply/edit   shift-enter: apply all   r: re-query   esc: back
 ```
+
+**Multi-file selection:**
+
+```
+ 3 files selected
+ → (various destinations)
+╶──────────────────────────────────────────────────────────────────────────────╴
+                result       ┃  from filename
+ title         Breaking Bad  ┃  BB
+ year          (various)     ┃  ·
+ season        1             ┃  1
+ episode       (various)     ┃  (various)
+ ep. title     (various)     ┃  (various)
+╶──────────────────────────────────────────────────────────────────────────────╴
+ enter: apply/edit   r: re-query (shared)   esc: back
+```
+
+`(various)` appears where selected files have differing values.
 
 The `┃` separator visually distinguishes the result (left, what will be used)
 from sources (right, reference material).
 
-`·` represents empty/missing values.
+`·` represents empty/missing values in a source.
 
 The destination line at the top updates live as the result changes.
 
@@ -105,11 +122,12 @@ template actually needs are displayed.
 | Key | Action |
 |-----|--------|
 | `j/k` or `↑/↓` | navigate rows |
-| `enter` | drill into file detail / toggle folder expand |
+| `enter` | drill into file/selection detail / toggle folder expand |
 | `space` | toggle staged/unstaged (recursive on folders) |
 | `v` | toggle range select mode |
-| `c` | commit (process all staged files, with confirmation) |
-| `r` | refresh: re-run pipeline (guessit + TMDB) on cursor/selection |
+| `a` | accept best TMDB match for cursor/selection (apply regardless of confidence) |
+| `c` | commit: process all staged files (with confirmation) |
+| `r` | refresh: re-run pipeline per file (re-query TMDB using each file's own result values) |
 | `x` | ignore file (skip, won't be processed) |
 
 ### Detail view
@@ -121,7 +139,7 @@ template actually needs are displayed.
 | `enter` on source field | copy that value into result |
 | `enter` on source header | apply all non-empty fields from source to result |
 | `shift-enter` on source header | apply all fields including clearing empties |
-| `r` | re-query TMDB using current result values |
+| `r` | re-query TMDB using current (shared) result values |
 | `esc` | back to file tree |
 
 ## Auto-pipeline behavior
@@ -130,22 +148,22 @@ On startup, tapes runs the full pipeline automatically:
 
 1. Scan files, build tree
 2. Extract metadata from filenames (guessit) → fills result
-3. Query TMDB using extracted metadata → adds source columns
-4. Auto-accept: if a TMDB match exceeds confidence threshold, overlay its
-   non-empty fields onto result (never overwrite filled values with blanks)
-5. Auto-stage files with confident matches
+3. Query TMDB per file using extracted metadata → populates source columns
+4. Auto-accept: if a TMDB match exceeds confidence threshold, apply its
+   non-empty fields to result (never overwrite existing values with blanks)
+5. Auto-stage files with confident auto-accepted matches
 
-Whether auto-accept replaces result values or leaves them for manual review
-is configurable. Default: auto-accept confident matches.
+Whether auto-accept is enabled is configurable. Default: auto-accept and
+auto-stage confident matches.
 
 ## Applying sources to result
 
 When applying a source to the result (whether auto or manual):
 
-- **`enter` on source header / auto-accept:** fill result fields where the
-  source has a value. Skip fields where the source is empty. Never overwrite
-  existing result values with nothing. This preserves guessit-only fields
-  (codec, resolution) that TMDB doesn't know about.
+- **`enter` on source header / auto-accept / `a` in tree:** fill result fields
+  where the source has a value. Skip fields where the source is empty. Never
+  overwrite existing result values with nothing. This preserves guessit-only
+  fields (codec, resolution) that TMDB doesn't know about.
 
 - **`shift-enter` on source header:** fill ALL result fields from source,
   including clearing fields the source doesn't have. Use when you want to
@@ -154,12 +172,52 @@ When applying a source to the result (whether auto or manual):
 - **`enter` on individual source field:** copy that single value into the
   corresponding result field. Fine-grained cherry-picking.
 
-## Metadata layering
+## Staging
 
-The result is built up from sources but is its own thing. There's no implicit
-layering at runtime -- the result is just a dict of field values. Sources are
-kept around for reference (the user can always see what guessit extracted or
-what TMDB returned) but the result is the single source of truth.
+Staging is purely a readiness marker. It does not modify metadata.
+
+- `space` toggles staged/unstaged. That's it.
+- `space` on a folder toggles all children recursively.
+- `v` enters range select, `space` stages/unstages the range, `v` clears range.
+
+A file can be staged regardless of whether it has TMDB matches, whether matches
+were accepted, or whether metadata was manually edited. Staging means: "process
+this file with whatever is currently in its result."
+
+## Two kinds of refresh
+
+**`r` in tree view (per-file refresh):**
+Re-runs the pipeline for each file in the cursor/selection individually. Each
+file is queried using its own complete result values. Confident matches are
+auto-accepted (non-empty fields applied to result, empty fields left alone).
+Use after bulk-editing shared fields to fan out individual queries.
+
+**`r` in detail view (shared refresh):**
+Queries TMDB once using the shared result values (fields showing `(various)`
+are omitted from the query). Returns shared source columns. Use to find
+matches based on manually corrected metadata.
+
+## Accept best match
+
+**`a` in tree view:**
+Applies the best TMDB match (highest confidence) to result for cursor/selection,
+regardless of confidence level. Same application rules as auto-accept: non-empty
+source values overwrite result, empty source values don't clear result.
+
+Use when the pipeline returned correct but low-confidence matches and the user
+wants to bulk-accept them without drilling into each file.
+
+## Metadata model
+
+The result is just a dict of field values. There is no implicit layering at
+runtime. Sources are kept around as reference (the user can always see what
+guessit extracted or what TMDB returned) but the result is the single source
+of truth.
+
+Every file is a first-class citizen. There is no special "companion" concept
+in the TUI. Subtitles, artwork, and other non-video files are just files with
+their own result metadata. Guessit extracts similar metadata from similarly-
+named files naturally.
 
 Undo tracks changes to the result, so any apply/edit can be reverted.
 
@@ -168,16 +226,6 @@ Undo tracks changes to the result, so any apply/edit can be reverted.
 Full row highlight (like lazygit), not a cell crosshair cursor. In the tree
 view, the cursor highlights one row. In the detail view, the cursor highlights
 one cell in the field/source grid.
-
-## Companion files
-
-Companion files (subtitles, artwork) inherit metadata from their video file.
-They appear in the tree under the same directory. Their destinations are
-computed from the same result plus their own extension/language suffix.
-
-Staging a video file auto-stages its companions. The detail view for a
-companion shows the inherited result (read-only) with a note about which
-video file it's linked to.
 
 ## Processing
 
