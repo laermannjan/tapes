@@ -39,19 +39,7 @@ nothing → guessit → TMDB → result → destination
 Shows the scanned files with destinations. Two display modes toggled with
 backtick (`` ` ``), inspired by lazygit's file tree toggle:
 
-**Flat mode (default):** filenames relative to the import path.
-
-```
- ✓ Breaking.Bad.S01E01.720p.mkv        → TV/Breaking Bad (2008)/S01/…E01 - Pilot.mkv
- ✓ Breaking.Bad.S01E01.en.srt          → TV/Breaking Bad (2008)/S01/…E01 - Pilot.en.srt
- ✓ Breaking.Bad.S01E02.720p.mkv        → TV/Breaking Bad (2008)/S01/…E02 - Cat's in the Bag.mkv
- ○ movie_final_cut.mkv                 → ???
-   thumbs.db
- ✓ subfolder/Inception.2010.1080p.mkv  → Movies/Inception (2010)/Inception (2010).mkv
- ✓ subfolder/Inception.2010.en.srt     → Movies/Inception (2010)/Inception (2010).en.srt
-```
-
-**Tree mode:** lazygit-style with unicode arrows for folders.
+**Tree mode (default):** lazygit-style with unicode arrows for folders.
 
 ```
  ✓ Breaking.Bad.S01E01.720p.mkv   → TV/Breaking Bad (2008)/S01/…E01 - Pilot.mkv
@@ -73,6 +61,18 @@ Folders use `▶` (collapsed) / `▼` (expanded). `enter` on a folder toggles:
 `space` on a folder toggles staged/unstaged for all children recursively.
 
 Markers: `✓` staged, `○` unstaged (needs attention), no marker = ignored/dimmed.
+
+**Flat mode:** filenames relative to the import path, no folder structure.
+
+```
+ ✓ Breaking.Bad.S01E01.720p.mkv        → TV/Breaking Bad (2008)/S01/…E01 - Pilot.mkv
+ ✓ Breaking.Bad.S01E01.en.srt          → TV/Breaking Bad (2008)/S01/…E01 - Pilot.en.srt
+ ✓ Breaking.Bad.S01E02.720p.mkv        → TV/Breaking Bad (2008)/S01/…E02 - Cat's in the Bag.mkv
+ ○ movie_final_cut.mkv                 → ???
+   thumbs.db
+ ✓ subfolder/Inception.2010.1080p.mkv  → Movies/Inception (2010)/Inception (2010).mkv
+ ✓ subfolder/Inception.2010.en.srt     → Movies/Inception (2010)/Inception (2010).en.srt
+```
 
 `enter` on a file (or selection) drills into the detail view.
 
