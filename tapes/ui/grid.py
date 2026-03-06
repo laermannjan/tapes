@@ -9,7 +9,60 @@ from rich.text import Text
 
 from tapes.models import ImportGroup
 from tapes.ui.models import GridRow, RowKind, build_grid_rows
-from tapes.ui.render import render_row, FIELD_COLS
+from tapes.ui.render import render_row, FIELD_COLS, COL_WIDTHS, _pad
+
+
+class GridFooter(Static):
+    """Bottom bar with file/group counts and keybinding hints."""
+
+    DEFAULT_CSS = """
+    GridFooter {
+        dock: bottom;
+        height: 1;
+        background: #0e0e0e;
+        border-top: solid #1e1e1e;
+    }
+    """
+
+    def __init__(self, rows: list[GridRow], **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._rows = rows
+
+    def render(self) -> Text:  # type: ignore[override]
+        file_rows = [r for r in self._rows if r.kind == RowKind.FILE]
+        n_files = len(file_rows)
+        n_videos = sum(1 for r in file_rows if r.is_video)
+        n_companions = sum(1 for r in file_rows if r.is_companion)
+        n_groups = sum(1 for r in self._rows if r.kind == RowKind.BLANK) + 1
+
+        t = Text()
+        t.append(" ")
+        # Counts section
+        for count, label in [
+            (n_files, "files"),
+            (n_groups, "groups"),
+            (n_videos, "videos"),
+            (n_companions, "companions"),
+        ]:
+            t.append(str(count), style="#dddddd")
+            t.append(f" {label}  ", style="#555555")
+
+        t.append("    ", style="")
+
+        # Keybinding hints
+        hints = [
+            ("e", "edit"),
+            ("v", "select"),
+            ("q", "query"),
+            ("r", "reorg"),
+            ("p", "process"),
+            ("E", "all fields"),
+        ]
+        for key, desc in hints:
+            t.append(key, style="#777777 underline")
+            t.append(f" {desc}  ", style="#444444")
+
+        return t
 
 
 class GridWidget(Static):
@@ -74,6 +127,7 @@ class GridApp(App):
         with VerticalScroll(id="grid-scroll"):
             self._grid = GridWidget(self._rows, id="grid")
             yield self._grid
+        yield GridFooter(self._rows)
 
     def on_mount(self) -> None:
         self._skip_to_file(1)
