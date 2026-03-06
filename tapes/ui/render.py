@@ -88,10 +88,11 @@ def render_row(
         return t
 
     if row.kind == RowKind.MATCH:
+        row_bg = BG_ROW_CUR if is_cursor_row else None
         # Status: down-arrow indicator
-        _col(t, " \u23bf  ", COL_WIDTHS["status"], "#333333")
+        _col(t, " \u23bf  ", COL_WIDTHS["status"], "#333333", bg=row_bg)
         # Filepath: "(match)" in yellow
-        _col(t, "(match)", COL_WIDTHS["filepath"], "#ccaa33")
+        _col(t, "(match)", COL_WIDTHS["filepath"], "#ccaa33", bg=row_bg)
         # Metadata columns: proposed values in cyan
         fields = row.match_fields
         match_values = [
@@ -102,7 +103,7 @@ def render_row(
             str(fields.get("episode_title", "")),
         ]
         for i, (col_name, value) in enumerate(zip(FIELD_COLS, match_values)):
-            bg = None
+            bg = row_bg
             if is_cursor_row and i == cursor_col:
                 bg = BG_CELL_CUR
             elif i == cursor_col:
