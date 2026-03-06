@@ -1,0 +1,12 @@
+  api is run with the appropriate search parameters filled by the current values in that rows metadata fields. for rows that share all the query
+  parameters we only need to run the query once and populate results to all sharing rows.
+  9.1. query might return no, one, or multiple matches. we only care about the one top results. and we extract some of the crucial metadata: year, title, season, episode,
+  episode_title if they are available. if it's a match we're confident in (avg. similarity of the fields with their respective query results)
+  we replace the fields with the query result. if we're not confident enough (below a threshold) we inform the user by highlighting the unconfident row and 
+  9.3. for groups that the query params (title + year + season + episode), we only run one query and only show the resulting match/no match under the 
+  first row of that block. accepting/rejecting the match does so for the entire bock. when accepting the entire block is updated accordingly.
+  so if in the above example there would also be companion srt files and we accepted the match, those companion files would also have their metadata 
+  fields updated like the episode mkv.
+  
+  10. the user can enter a process mode from normal mode, the metadata field columns are then replaced by the path where the file would be copied or moved to.
+  that path is relative to a preconfigured library root. the path is generated based on a preconfigured template that is populated with the current metadata field values.
