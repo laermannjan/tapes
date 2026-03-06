@@ -825,6 +825,12 @@ class GridApp(App):
         footer.refresh()
 
     def action_toggle_dest(self) -> None:
+        if len(self._screen_stack) > 1:
+            # Delegate tab to modal's field navigation
+            modal = self._screen_stack[-1]
+            if hasattr(modal, "action_next_field"):
+                modal.action_next_field()
+            return
         if self._editing:
             return
         self._dest_mode = not self._dest_mode

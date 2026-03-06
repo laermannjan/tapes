@@ -978,10 +978,15 @@ async def test_shift_e_opens_edit_modal():
         await pilot.pause()
         await pilot.press("backspace", "backspace", "backspace")
         await pilot.press("!", "!", "!")
+        # Move to year, change it (tests int conversion)
+        await pilot.press("tab")
+        await pilot.press("backspace", "backspace", "backspace", "backspace")
+        await pilot.press("2", "0", "2", "5")
         await pilot.press("enter")
         await pilot.pause()
         row = app._rows[0]
         assert row.title == "Incept!!!"
+        assert row.year == 2025
 
 
 async def test_shift_e_cancel_discards_changes():
