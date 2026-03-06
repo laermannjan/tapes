@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>tapes UI mockup 002</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a1a1a;
+    color: #888;
+    font-family: 'SF Mono', 'Cascadia Code', 'JetBrains Mono', 'Fira Code', 'Menlo', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  .story { max-width: 1200px; margin: 0 auto; padding: 40px 20px 80px; }
+
+  /* -- narration -------------------------------------------------- */
+  .narration {
+    color: #c9a0dc;
+    font-family: 'Inter', 'Helvetica Neue', sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    margin: 48px 0 16px;
+    padding: 0 4px;
+  }
+  .narration:first-child { margin-top: 0; }
+  .narration em { font-style: italic; color: #d4b0e8; }
+  .narration code {
+    font-family: 'SF Mono', 'Cascadia Code', monospace;
+    font-size: 12px;
+    background: #2a2a2a;
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: #ccc;
+  }
+  .narration .step {
+    display: inline-block;
+    color: #7a6a8a;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-right: 8px;
+  }
+
+  /* -- terminal frame --------------------------------------------- */
+  .term {
+    background: #111;
+    border: 1px solid #222;
+    border-radius: 6px;
+    overflow: hidden;
+    margin: 12px 0;
+  }
+  .term-body {
+    padding: 12px 16px;
+    overflow-x: auto;
+  }
+  .term-footer {
+    background: #0e0e0e;
+    border-top: 1px solid #1e1e1e;
+    padding: 4px 16px;
+    font-size: 12px;
+    color: #444;
+    white-space: pre;
+  }
+
+  /* -- grid rows -------------------------------------------------- */
+  .row {
+    white-space: nowrap;
+    line-height: 1.55;
+    padding: 0;
+  }
+  .row-focused {
+    background: #1a1a1a;
+    margin: 0 -16px;
+    padding: 0 16px;
+  }
+  .row-blank { height: 1.55em; }
+  .header-text {
+    white-space: pre;
+    color: #333;
+    line-height: 1.55;
+  }
+
+  /* -- columns via ch units --------------------------------------- */
+  /* All column spans use inline-block. Empty spans need min-height  */
+  /* so their background (col-hi, cell-sel, cell-cur) still renders. */
+  .c-st, .c-fp, .c-ti, .c-yr, .c-sn, .c-ep, .c-et {
+    display: inline-block;
+    min-height: 1.55em;
+    vertical-align: top;
+  }
+  .c-st   { width: 5ch;  text-align: right; padding-right: 1ch; }
+  .c-fp   { width: 52ch; }
+  .c-ti   { width: 16ch; }
+  .c-yr   { width: 6ch;  }
+  .c-sn   { width: 4ch;  }
+  .c-ep   { width: 4ch;  }
+  .c-et   { min-width: 32ch; }
+
+  /* process mode: destination replaces all metadata cols */
+  .c-dest { display: inline-block; }
+
+  /* match sub-row: arrow + label in filepath area */
+  .c-matchlabel { display: inline-block; width: 52ch; }
+
+  /* -- color tokens ----------------------------------------------- */
+  .w   { color: #ddd; }
+  .t   { color: #888; }
+  .d   { color: #555; }
+  .dd  { color: #333; }
+
+  .grn { color: #5a9; }
+  .ylw { color: #ca3; }
+  .red { color: #c55; }
+  .cyn { color: #6bc; }
+  .pur { color: #a78bfa; }
+
+  .badge-raw  { color: #555; }
+  .badge-auto { color: #5a9; }
+  .badge-unc  { color: #ca3; }
+  .badge-edit { color: #a78bfa; }
+
+  /* -- crosshair cursor ----------------------------------------- */
+  /* row and column highlight are equal strength.                   */
+  /* active cell = intersection = additive (2x as bright).         */
+  .row-cur {
+    background: #1e1e1e;
+    margin: 0 -16px;
+    padding: 0 16px;
+  }
+  .col-hi {
+    background: #1e1e1e;
+  }
+  /* intersection: both row + col = 2x */
+  .cell-cur {
+    background: #2c2c2c;
+    color: #fff;
+  }
+
+  /* -- selection (column-locked, possibly non-adjacent) ---------- */
+  /* Monochrome gray -- no color tint. Selection = brighter backlight. */
+  /* selected cell: noticeably brighter than column highlight */
+  .cell-sel {
+    background: #363636;
+  }
+  /* row containing a selected cell */
+  .row-sel {
+    background: #1c1c1c;
+    margin: 0 -16px;
+    padding: 0 16px;
+  }
+  /* the cursor row during selection */
+  .row-sel-cur {
+    background: #1c1c1c;
+    margin: 0 -16px;
+    padding: 0 16px;
+  }
+  /* cursor cell within selection: brightest */
+  .cell-sel.cell-cur {
+    background: #3c3c3c;
+    color: #fff;
+  }
+
+  /* separators */
+  .sep { display: block; height: 1px; background: #1e1e1e; margin: 6px 0; }
+
+  /* keybinding hints */
+  .key { color: #777; text-decoration: underline; text-underline-offset: 2px; }
+  .hint { color: #444; }
+
+  /* -- modal overlay ---------------------------------------------- */
+  .modal-overlay {
+    display: block;
+    margin: 4px -16px;
+    padding: 8px 16px;
+    background: #181818;
+    border: 1px solid #2a2a2a;
+    border-radius: 4px;
+  }
+  .modal-title {
+    color: #ddd;
+    font-weight: bold;
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #222;
+  }
+  .modal-row { line-height: 1.55; white-space: nowrap; }
+  .modal-row-active { background: #252525; margin: 0 -8px; padding: 0 8px; }
+  .c-mname  { display: inline-block; width: 16ch; color: #555; }
+  .c-mvalue { color: #ddd; }
+  .c-mvarious { color: #555; font-style: italic; }
+
+  /* -- color reference -------------------------------------------- */
+  .color-ref {
+    margin: 24px 0;
+    padding: 16px;
+    background: #111;
+    border: 1px solid #222;
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.8;
+    white-space: pre-wrap;
+  }
+  .color-ref .label { display: inline-block; width: 12ch; }
+
+  /* -- freeform pre blocks (prompts, post-import) ----------------- */
+  .pre { white-space: pre; line-height: 1.55; }
+</style>
+</head>
+<body>
+<div class="story">
+
+<!-- ============================================================ -->
+<p class="narration">
+  <span class="step">color language</span>
+  Reference for the color system. Monochrome base, color used sparingly for meaning.
+</p>
+
+<div class="color-ref"><span class="label w">white</span> <span class="w">primary text, video filenames, focused content, important values</span>
+<span class="label d">dim grey</span> <span class="d">companions, unfocused rows, chrome, separators, secondary info</span>
+<span class="label grn">green</span> <span class="grn">confirmed: auto-accepted TMDB match</span>
+<span class="label badge-edit">purple</span> <span class="badge-edit">user-edited: manually changed fields</span>
+<span class="label ylw">yellow</span> <span class="ylw">uncertain: needs attention, pending matches, warnings</span>
+<span class="label red">red</span> <span class="red">problem: no match found, errors</span>
+<span class="label cyn">cyan</span> <span class="cyn">TMDB data: distinguishes database results from local extraction</span>
+
+<span class="d">status badges:</span>  <span class="badge-raw">..</span> <span class="d">guessit</span>   <span class="badge-auto">**</span> <span class="d">auto-accepted</span>   <span class="badge-unc">??</span> <span class="d">uncertain</span>   <span class="badge-edit">!!</span> <span class="d">user-edited</span></div>
+
+<!-- ============================================================ -->
+<p class="narration">
+  <span class="step">1. normal mode</span>
+  After <code>tapes import /downloads</code> scans and extracts metadata via guessit.
+  Grid shows every file as a row. Status badge on the left, filepath, then metadata
+  columns. Companions are dimmed. Groups separated by empty lines. Cursor (block
+  highlight) is on the first metadata field of the first row.
+</p>
+
+<div class="term">
+<div class="term-body">
+  <div class="row"><span class="d">tapes import</span> <span class="w">./downloads</span></div>
+  <div class="sep"></div>
+  <div class="row"><span class="c-st"></span><span class="c-fp dd">filepath</span><span class="c-ti dd">title</span><span class="c-yr dd">year</span><span class="c-sn dd">S</span><span class="c-ep dd">E</span><span class="c-et dd">episode title</span></div>
+  <div class="sep"></div>
+
+  <!-- crosshair: row-cur on row, col-hi on title col, cell-cur on intersection -->
+  <div class="row row-cur"><span class="c-st badge-raw">..</span><span class="c-fp"><span class="d">movies/</span><span class="w">Dune.2021.2160p.BluRay.x265.mkv</span></span><span class="c-ti cell-cur">Dune</span><span class="c-yr t">2021</span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp d">movies/Dune.2021.en.srt</span><span class="c-ti col-hi d">Dune</span><span class="c-yr d">2021</span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp d">movies/Dune.2021.de.srt</span><span class="c-ti col-hi d">Dune</span><span class="c-yr d">2021</span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+
+  <div class="row row-blank"><span class="c-st"></span><span class="c-fp"></span><span class="c-ti col-hi"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp"><span class="d">movies/</span><span class="t">Arrival.2016.1080p.WEB-DL.mkv</span></span><span class="c-ti col-hi t">Arrival</span><span class="c-yr t">2016</span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp d">movies/Arrival.2016.en.srt</span><span class="c-ti col-hi d">Arrival</span><span class="c-yr d">2016</span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+
+  <div class="row row-blank"><span class="c-st"></span><span class="c-fp"></span><span class="c-ti col-hi"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp"><span class="d">tv/breaking-bad/s01/</span><span class="t">Breaking.Bad.S01E01.720p.mkv</span></span><span class="c-ti col-hi t">Breaking Bad</span><span class="c-yr"></span><span class="c-sn t">1</span><span class="c-ep t">1</span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp d">tv/breaking-bad/s01/S01E01.en.srt</span><span class="c-ti col-hi d">Breaking Bad</span><span class="c-yr"></span><span class="c-sn d">1</span><span class="c-ep d">1</span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp"><span class="d">tv/breaking-bad/s01/</span><span class="t">Breaking.Bad.S01E02.720p.mkv</span></span><span class="c-ti col-hi t">Breaking Bad</span><span class="c-yr"></span><span class="c-sn t">1</span><span class="c-ep t">2</span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp d">tv/breaking-bad/s01/S01E02.en.srt</span><span class="c-ti col-hi d">Breaking Bad</span><span class="c-yr"></span><span class="c-sn d">1</span><span class="c-ep d">2</span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp"><span class="d">tv/breaking-bad/s01/</span><span class="t">Breaking.Bad.S01E03.720p.mkv</span></span><span class="c-ti col-hi t">Breaking Bad</span><span class="c-yr"></span><span class="c-sn t">1</span><span class="c-ep t">3</span><span class="c-et"></span></div>
+
+  <div class="row row-blank"><span class="c-st"></span><span class="c-fp"></span><span class="c-ti col-hi"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp t">random_clip.avi</span><span class="c-ti col-hi t">Interstellar</span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp t">bonus_featurette.mkv</span><span class="c-ti col-hi"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+</div>
+<div class="term-footer"><span class="w">12</span> <span class="d">files</span>  <span class="w">5</span> <span class="d">groups</span>  <span class="w">7</span> <span class="d">videos</span>  <span class="w">5</span> <span class="d">companions</span>      <span class="key">e</span> <span class="hint">edit</span>  <span class="key">v</span> <span class="hint">select</span>  <span class="key">q</span> <span class="hint">query</span>  <span class="key">r</span> <span class="hint">reorg</span>  <span class="key">p</span> <span class="hint">process</span>  <span class="key">E</span> <span class="hint">all fields</span></div>
+</div>
+
+<!-- ============================================================ -->
+<p class="narration">
+  <span class="step">2. select mode</span>
+  Non-adjacent selection on the title column. Three cells selected:
+  Dune.mkv, Arrival.mkv, and Arrival.en.srt. The entire title column is
+  backlit. Selected cells are brighter. Selection is monochrome gray --
+  no color tint.
+</p>
+
+<div class="term">
+<div class="term-body">
+  <div class="row"><span class="d">tapes import</span> <span class="w">./downloads</span></div>
+  <div class="sep"></div>
+  <div class="row"><span class="c-st"></span><span class="c-fp dd">filepath</span><span class="c-ti col-hi dd">title</span><span class="c-yr dd">year</span><span class="c-sn dd">S</span><span class="c-ep dd">E</span><span class="c-et dd">episode title</span></div>
+  <div class="sep"></div>
+
+  <div class="row row-sel"><span class="c-st badge-raw">..</span><span class="c-fp"><span class="d">movies/</span><span class="w">Dune.2021.2160p.BluRay.x265.mkv</span></span><span class="c-ti cell-sel">Dune</span><span class="c-yr t">2021</span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp d">movies/Dune.2021.en.srt</span><span class="c-ti col-hi d">Dune</span><span class="c-yr d">2021</span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp d">movies/Dune.2021.de.srt</span><span class="c-ti col-hi d">Dune</span><span class="c-yr d">2021</span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+
+  <div class="row row-blank"><span class="c-st"></span><span class="c-fp"></span><span class="c-ti col-hi"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+
+  <div class="row row-sel"><span class="c-st badge-raw">..</span><span class="c-fp"><span class="d">movies/</span><span class="t">Arrival.2016.1080p.WEB-DL.mkv</span></span><span class="c-ti cell-sel">Arrival</span><span class="c-yr t">2016</span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+  <div class="row row-sel-cur"><span class="c-st badge-raw">..</span><span class="c-fp d">movies/Arrival.2016.en.srt</span><span class="c-ti cell-sel cell-cur">Arrival</span><span class="c-yr d">2016</span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+
+  <div class="row row-blank"><span class="c-st"></span><span class="c-fp"></span><span class="c-ti col-hi"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp"><span class="d">tv/breaking-bad/s01/</span><span class="t">Breaking.Bad.S01E01.720p.mkv</span></span><span class="c-ti col-hi t">Breaking Bad</span><span class="c-yr"></span><span class="c-sn t">1</span><span class="c-ep t">1</span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp d">tv/breaking-bad/s01/S01E01.en.srt</span><span class="c-ti col-hi d">Breaking Bad</span><span class="c-yr"></span><span class="c-sn d">1</span><span class="c-ep d">1</span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp"><span class="d">tv/breaking-bad/s01/</span><span class="t">Breaking.Bad.S01E02.720p.mkv</span></span><span class="c-ti col-hi t">Breaking Bad</span><span class="c-yr"></span><span class="c-sn t">1</span><span class="c-ep t">2</span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp d">tv/breaking-bad/s01/S01E02.en.srt</span><span class="c-ti col-hi d">Breaking Bad</span><span class="c-yr"></span><span class="c-sn d">1</span><span class="c-ep d">2</span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp"><span class="d">tv/breaking-bad/s01/</span><span class="t">Breaking.Bad.S01E03.720p.mkv</span></span><span class="c-ti col-hi t">Breaking Bad</span><span class="c-yr"></span><span class="c-sn t">1</span><span class="c-ep t">3</span><span class="c-et"></span></div>
+
+  <div class="row row-blank"><span class="c-st"></span><span class="c-fp"></span><span class="c-ti col-hi"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp t">random_clip.avi</span><span class="c-ti col-hi t">Interstellar</span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp t">bonus_featurette.mkv</span><span class="c-ti col-hi"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+</div>
+<div class="term-footer"><span class="w">3</span> <span class="d">selected</span>      <span class="key">e</span> <span class="hint">edit selected</span>  <span class="key">q</span> <span class="hint">query selected</span>  <span class="key">esc</span> <span class="hint">deselect</span></div>
+</div>
+
+<!-- ============================================================ -->
+<p class="narration">
+  <span class="step">2b. adjacent selection at bottom</span>
+  User selects the title column on the two unmatched files at the bottom.
+  Title column is backlit throughout. Selected cells are brighter.
+</p>
+
+<div class="term">
+<div class="term-body">
+  <div class="row"><span class="d">tapes import</span> <span class="w">./downloads</span></div>
+  <div class="sep"></div>
+  <div class="row"><span class="c-st"></span><span class="c-fp dd">filepath</span><span class="c-ti col-hi dd">title</span><span class="c-yr dd">year</span><span class="c-sn dd">S</span><span class="c-ep dd">E</span><span class="c-et dd">episode title</span></div>
+  <div class="sep"></div>
+
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp"><span class="d">movies/</span><span class="w">Dune.2021.2160p.BluRay.x265.mkv</span></span><span class="c-ti col-hi t">Dune</span><span class="c-yr t">2021</span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp d">movies/Dune.2021.en.srt</span><span class="c-ti col-hi d">Dune</span><span class="c-yr d">2021</span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp d">movies/Dune.2021.de.srt</span><span class="c-ti col-hi d">Dune</span><span class="c-yr d">2021</span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+
+  <div class="row row-blank"><span class="c-st"></span><span class="c-fp"></span><span class="c-ti col-hi"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp"><span class="d">movies/</span><span class="t">Arrival.2016.1080p.WEB-DL.mkv</span></span><span class="c-ti col-hi t">Arrival</span><span class="c-yr t">2016</span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp d">movies/Arrival.2016.en.srt</span><span class="c-ti col-hi d">Arrival</span><span class="c-yr d">2016</span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+
+  <div class="row row-blank"><span class="c-st"></span><span class="c-fp"></span><span class="c-ti col-hi"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp"><span class="d">tv/breaking-bad/s01/</span><span class="t">Breaking.Bad.S01E01.720p.mkv</span></span><span class="c-ti col-hi t">Breaking Bad</span><span class="c-yr"></span><span class="c-sn t">1</span><span class="c-ep t">1</span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp d">tv/breaking-bad/s01/S01E01.en.srt</span><span class="c-ti col-hi d">Breaking Bad</span><span class="c-yr"></span><span class="c-sn d">1</span><span class="c-ep d">1</span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp"><span class="d">tv/breaking-bad/s01/</span><span class="t">Breaking.Bad.S01E02.720p.mkv</span></span><span class="c-ti col-hi t">Breaking Bad</span><span class="c-yr"></span><span class="c-sn t">1</span><span class="c-ep t">2</span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp d">tv/breaking-bad/s01/S01E02.en.srt</span><span class="c-ti col-hi d">Breaking Bad</span><span class="c-yr"></span><span class="c-sn d">1</span><span class="c-ep d">2</span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp"><span class="d">tv/breaking-bad/s01/</span><span class="t">Breaking.Bad.S01E03.720p.mkv</span></span><span class="c-ti col-hi t">Breaking Bad</span><span class="c-yr"></span><span class="c-sn t">1</span><span class="c-ep t">3</span><span class="c-et"></span></div>
+
+  <div class="row row-blank"><span class="c-st"></span><span class="c-fp"></span><span class="c-ti col-hi"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+
+  <div class="row row-sel"><span class="c-st badge-raw">..</span><span class="c-fp t">random_clip.avi</span><span class="c-ti cell-sel">Interstellar</span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+  <div class="row row-sel-cur"><span class="c-st badge-raw">..</span><span class="c-fp t">bonus_featurette.mkv</span><span class="c-ti cell-sel cell-cur"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+</div>
+<div class="term-footer"><span class="w">2</span> <span class="d">selected</span>      <span class="key">e</span> <span class="hint">edit selected</span>  <span class="key">q</span> <span class="hint">query selected</span>  <span class="key">esc</span> <span class="hint">deselect</span></div>
+</div>
+
+<!-- ============================================================ -->
+<p class="narration">
+  <span class="step">3. query results</span>
+  User presses <code>q</code> with no selection to query all rows. TMDB matches come back.
+  Confident matches auto-replaced (status <code>**</code>, values in cyan).
+  Uncertain matches show <code>??</code> badge with a match sub-row. No-match rows get red indicator.
+  Companions inherit the same result as their video.
+</p>
+
+<div class="term">
+<div class="term-body">
+  <div class="row"><span class="d">tapes import</span> <span class="w">./downloads</span></div>
+  <div class="sep"></div>
+  <div class="row"><span class="c-st"></span><span class="c-fp dd">filepath</span><span class="c-ti dd">title</span><span class="c-yr dd">year</span><span class="c-sn dd">S</span><span class="c-ep dd">E</span><span class="c-et dd">episode title</span></div>
+  <div class="sep"></div>
+
+  <div class="row row-cur"><span class="c-st badge-auto">**</span><span class="c-fp"><span class="d">movies/</span><span class="w">Dune.2021.2160p.BluRay.x265.mkv</span></span><span class="c-ti cell-cur"><span class="cyn">Dune: Part One</span></span><span class="c-yr cyn">2021</span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st badge-auto">**</span><span class="c-fp d">movies/Dune.2021.en.srt</span><span class="c-ti col-hi d">Dune: Part One</span><span class="c-yr d">2021</span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st badge-auto">**</span><span class="c-fp d">movies/Dune.2021.de.srt</span><span class="c-ti col-hi d">Dune: Part One</span><span class="c-yr d">2021</span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+
+  <div class="row row-blank"><span class="c-st"></span><span class="c-fp"></span><span class="c-ti col-hi"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+
+  <div class="row"><span class="c-st badge-auto">**</span><span class="c-fp"><span class="d">movies/</span><span class="t">Arrival.2016.1080p.WEB-DL.mkv</span></span><span class="c-ti col-hi cyn">Arrival</span><span class="c-yr cyn">2016</span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st badge-auto">**</span><span class="c-fp d">movies/Arrival.2016.en.srt</span><span class="c-ti col-hi d">Arrival</span><span class="c-yr d">2016</span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+
+  <div class="row row-blank"><span class="c-st"></span><span class="c-fp"></span><span class="c-ti col-hi"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+
+  <div class="row"><span class="c-st badge-unc">??</span><span class="c-fp"><span class="d">tv/breaking-bad/s01/</span><span class="w">Breaking.Bad.S01E01.720p.mkv</span></span><span class="c-ti col-hi t">Breaking Bad</span><span class="c-yr"></span><span class="c-sn t">1</span><span class="c-ep t">1</span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st dd">&#x23BF;</span><span class="c-fp ylw">(match)</span><span class="c-ti col-hi cyn">Breaking Bad</span><span class="c-yr cyn">2008</span><span class="c-sn cyn">1</span><span class="c-ep cyn">1</span><span class="c-et cyn">Pilot</span></div>
+  <div class="row"><span class="c-st badge-unc">??</span><span class="c-fp d">tv/breaking-bad/s01/S01E01.en.srt</span><span class="c-ti col-hi d">Breaking Bad</span><span class="c-yr"></span><span class="c-sn d">1</span><span class="c-ep d">1</span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st badge-unc">??</span><span class="c-fp"><span class="d">tv/breaking-bad/s01/</span><span class="t">Breaking.Bad.S01E02.720p.mkv</span></span><span class="c-ti col-hi t">Breaking Bad</span><span class="c-yr"></span><span class="c-sn t">1</span><span class="c-ep t">2</span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st badge-unc">??</span><span class="c-fp d">tv/breaking-bad/s01/S01E02.en.srt</span><span class="c-ti col-hi d">Breaking Bad</span><span class="c-yr"></span><span class="c-sn d">1</span><span class="c-ep d">2</span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st badge-unc">??</span><span class="c-fp"><span class="d">tv/breaking-bad/s01/</span><span class="t">Breaking.Bad.S01E03.720p.mkv</span></span><span class="c-ti col-hi t">Breaking Bad</span><span class="c-yr"></span><span class="c-sn t">1</span><span class="c-ep t">3</span><span class="c-et"></span></div>
+
+  <div class="row row-blank"><span class="c-st"></span><span class="c-fp"></span><span class="c-ti col-hi"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp t">random_clip.avi</span><span class="c-ti col-hi t">Interstellar</span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st dd">&#x23BF;</span><span class="c-fp red">(no match)</span><span class="c-ti col-hi"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp t">bonus_featurette.mkv</span><span class="c-ti col-hi"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st dd">&#x23BF;</span><span class="c-fp red">(no match)</span><span class="c-ti col-hi"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+</div>
+<div class="term-footer"><span class="badge-auto">**</span> <span class="d">5</span>  <span class="badge-unc">??</span> <span class="d">5</span>  <span class="red">no match</span> <span class="d">2</span>      <span class="key">enter</span> <span class="hint">accept</span>  <span class="key">bksp</span> <span class="hint">reject</span>  <span class="key">q</span> <span class="hint">re-query</span>  <span class="key">e</span> <span class="hint">edit</span>  <span class="key">p</span> <span class="hint">process</span></div>
+</div>
+
+<!-- ============================================================ -->
+<p class="narration">
+  <span class="step">4. after accepting match</span>
+  User pressed <code>enter</code> on the Breaking Bad match. All rows updated with TMDB data.
+  Status flipped to <code>**</code>. Match sub-row disappears. TMDB values in cyan.
+</p>
+
+<div class="term">
+<div class="term-body">
+  <div class="row"><span class="d">tapes import</span> <span class="w">./downloads</span></div>
+  <div class="sep"></div>
+  <div class="row"><span class="c-st"></span><span class="c-fp dd">filepath</span><span class="c-ti dd">title</span><span class="c-yr dd">year</span><span class="c-sn dd">S</span><span class="c-ep dd">E</span><span class="c-et dd">episode title</span></div>
+  <div class="sep"></div>
+
+  <div class="row"><span class="c-st badge-auto">**</span><span class="c-fp"><span class="d">movies/</span><span class="w">Dune.2021.2160p.BluRay.x265.mkv</span></span><span class="c-ti cyn">Dune: Part One</span><span class="c-yr cyn">2021</span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et col-hi"></span></div>
+  <div class="row"><span class="c-st badge-auto">**</span><span class="c-fp d">movies/Dune.2021.en.srt</span><span class="c-ti d">Dune: Part One</span><span class="c-yr d">2021</span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et col-hi"></span></div>
+  <div class="row"><span class="c-st badge-auto">**</span><span class="c-fp d">movies/Dune.2021.de.srt</span><span class="c-ti d">Dune: Part One</span><span class="c-yr d">2021</span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et col-hi"></span></div>
+
+  <div class="row row-blank"><span class="c-st"></span><span class="c-fp"></span><span class="c-ti"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et col-hi"></span></div>
+
+  <div class="row"><span class="c-st badge-auto">**</span><span class="c-fp"><span class="d">movies/</span><span class="t">Arrival.2016.1080p.WEB-DL.mkv</span></span><span class="c-ti cyn">Arrival</span><span class="c-yr cyn">2016</span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et col-hi"></span></div>
+  <div class="row"><span class="c-st badge-auto">**</span><span class="c-fp d">movies/Arrival.2016.en.srt</span><span class="c-ti d">Arrival</span><span class="c-yr d">2016</span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et col-hi"></span></div>
+
+  <div class="row row-blank"><span class="c-st"></span><span class="c-fp"></span><span class="c-ti"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et col-hi"></span></div>
+
+  <div class="row"><span class="c-st badge-auto">**</span><span class="c-fp"><span class="d">tv/breaking-bad/s01/</span><span class="t">Breaking.Bad.S01E01.720p.mkv</span></span><span class="c-ti cyn">Breaking Bad</span><span class="c-yr cyn">2008</span><span class="c-sn cyn">1</span><span class="c-ep cyn">1</span><span class="c-et col-hi cyn">Pilot</span></div>
+  <div class="row"><span class="c-st badge-auto">**</span><span class="c-fp d">tv/breaking-bad/s01/S01E01.en.srt</span><span class="c-ti d">Breaking Bad</span><span class="c-yr d">2008</span><span class="c-sn d">1</span><span class="c-ep d">1</span><span class="c-et col-hi d">Pilot</span></div>
+  <div class="row"><span class="c-st badge-auto">**</span><span class="c-fp"><span class="d">tv/breaking-bad/s01/</span><span class="t">Breaking.Bad.S01E02.720p.mkv</span></span><span class="c-ti cyn">Breaking Bad</span><span class="c-yr cyn">2008</span><span class="c-sn cyn">1</span><span class="c-ep cyn">2</span><span class="c-et col-hi cyn">Cat's in the Bag...</span></div>
+  <div class="row"><span class="c-st badge-auto">**</span><span class="c-fp d">tv/breaking-bad/s01/S01E02.en.srt</span><span class="c-ti d">Breaking Bad</span><span class="c-yr d">2008</span><span class="c-sn d">1</span><span class="c-ep d">2</span><span class="c-et col-hi d">Cat's in the Bag...</span></div>
+  <div class="row row-cur"><span class="c-st badge-auto">**</span><span class="c-fp"><span class="d">tv/breaking-bad/s01/</span><span class="w">Breaking.Bad.S01E03.720p.mkv</span></span><span class="c-ti cyn">Breaking Bad</span><span class="c-yr cyn">2008</span><span class="c-sn cyn">1</span><span class="c-ep cyn">3</span><span class="c-et cell-cur"><span class="cyn">...And the Bag's in the River</span></span></div>
+
+  <div class="row row-blank"><span class="c-st"></span><span class="c-fp"></span><span class="c-ti"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et col-hi"></span></div>
+
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp t">random_clip.avi</span><span class="c-ti t">Interstellar</span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et col-hi"></span></div>
+  <div class="row"><span class="c-st dd">&#x23BF;</span><span class="c-fp red">(no match)</span><span class="c-ti"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et col-hi"></span></div>
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp t">bonus_featurette.mkv</span><span class="c-ti"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et col-hi"></span></div>
+  <div class="row"><span class="c-st dd">&#x23BF;</span><span class="c-fp red">(no match)</span><span class="c-ti"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et col-hi"></span></div>
+</div>
+<div class="term-footer"><span class="badge-auto">**</span> <span class="d">10</span>  <span class="red">no match</span> <span class="d">2</span>      <span class="key">e</span> <span class="hint">edit</span>  <span class="key">v</span> <span class="hint">select</span>  <span class="key">q</span> <span class="hint">query</span>  <span class="key">r</span> <span class="hint">reorg</span>  <span class="key">p</span> <span class="hint">process</span>  <span class="key">E</span> <span class="hint">all fields</span></div>
+</div>
+
+<!-- ============================================================ -->
+<p class="narration">
+  <span class="step">5. inline edit</span>
+  User navigates to <em>random_clip.avi</em>, presses <code>e</code> on the year field.
+  Inline text input. Status flips to <code>!!</code> on confirm. Only the edited
+  field turns purple; title was already present from guessit.
+</p>
+
+<div class="term">
+<div class="term-body">
+  <div class="row"><span class="d">  ...</span></div>
+  <div class="row row-blank"><span class="c-st"></span><span class="c-fp"></span><span class="c-ti"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+  <div class="row row-cur"><span class="c-st badge-raw">..</span><span class="c-fp w">random_clip.avi</span><span class="c-ti t">Interstellar</span><span class="c-yr cell-cur"><span class="w">2014</span><span class="dd">|</span></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp t">bonus_featurette.mkv</span><span class="c-ti"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+</div>
+<div class="term-footer"><span class="d">editing: year</span>      <span class="key">enter</span> <span class="hint">confirm</span>  <span class="key">esc</span> <span class="hint">cancel</span></div>
+</div>
+
+<!-- ============================================================ -->
+<p class="narration">
+  After confirming title and year edits, the row shows <code>!!</code> badge in purple.
+</p>
+
+<div class="term">
+<div class="term-body">
+  <div class="row"><span class="d">  ...</span></div>
+  <div class="row row-blank"><span class="c-st"></span><span class="c-fp"></span><span class="c-ti"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+  <div class="row row-cur"><span class="c-st badge-edit">!!</span><span class="c-fp w">random_clip.avi</span><span class="c-ti w">Interstellar</span><span class="c-yr cell-cur"><span class="pur">2014</span></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp t">bonus_featurette.mkv</span><span class="c-ti"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+</div>
+<div class="term-footer"><span class="badge-auto">**</span> <span class="d">10</span>  <span class="badge-edit">!!</span> <span class="d">1</span>  <span class="red">no match</span> <span class="d">1</span>      <span class="key">e</span> <span class="hint">edit</span>  <span class="key">v</span> <span class="hint">select</span>  <span class="key">q</span> <span class="hint">query</span>  <span class="key">r</span> <span class="hint">reorg</span>  <span class="key">p</span> <span class="hint">process</span></div>
+</div>
+
+<!-- ============================================================ -->
+<p class="narration">
+  <span class="step">6. metadata editor modal (Shift+E)</span>
+  User presses <code>Shift+E</code> on <em>random_clip.avi</em>. Modal overlay shows
+  all available metadata fields. Default columns above the separator, additional
+  columns below. Tab between fields, enter to save, esc to cancel.
+</p>
+
+<div class="term">
+<div class="term-body">
+  <div class="row"><span class="d">  ...</span></div>
+  <div class="row row-blank"><span class="c-st"></span><span class="c-fp"></span><span class="c-ti"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st badge-edit">!!</span><span class="c-fp w">random_clip.avi</span><span class="c-ti w">Interstellar</span><span class="c-yr pur">2014</span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+  <div class="row row-blank"><span class="c-st"></span><span class="c-fp"></span><span class="c-ti"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+  <div class="modal-overlay">
+    <div class="modal-title">random_clip.avi</div>
+    <div class="modal-row"><span class="c-mname">title</span><span class="c-mvalue">Interstellar</span></div>
+    <div class="modal-row"><span class="c-mname">year</span><span class="c-mvalue">2014</span></div>
+    <div class="modal-row"><span class="c-mname">media_type</span><span class="c-mvalue">movie</span></div>
+    <div class="modal-row"><span class="c-mname">season</span></div>
+    <div class="modal-row"><span class="c-mname">episode</span></div>
+    <div class="modal-row"><span class="c-mname">episode_title</span></div>
+    <div class="modal-row"><span class="c-mname">tmdb_id</span></div>
+    <div class="sep"></div>
+    <div class="modal-row modal-row-active"><span class="c-mname">codec</span><span class="c-mvalue">x264<span class="dd">|</span></span></div>
+    <div class="modal-row"><span class="c-mname">resolution</span></div>
+    <div class="modal-row"><span class="c-mname">hdr</span></div>
+    <div class="modal-row"><span class="c-mname">media_source</span></div>
+    <div class="modal-row"><span class="c-mname">audio</span></div>
+    <div class="modal-row"><span class="c-mname">container</span><span class="c-mvalue">avi</span></div>
+    <div class="modal-row" style="margin-top: 8px;"><span class="key">tab</span> <span class="hint">next</span>  <span class="key">shift-tab</span> <span class="hint">prev</span>  <span class="key">enter</span> <span class="hint">save</span>  <span class="key">esc</span> <span class="hint">cancel</span></div>
+  </div>
+  <div class="row row-blank"><span class="c-st"></span><span class="c-fp"></span><span class="c-ti"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+  <div class="row"><span class="c-st badge-raw">..</span><span class="c-fp t">bonus_featurette.mkv</span><span class="c-ti"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+</div>
+</div>
+
+<!-- ============================================================ -->
+<p class="narration">
+  <span class="step">6b. modal with multi-selection</span>
+  Multiple rows selected (all Breaking Bad episodes) then <code>Shift+E</code>.
+  Fields with differing values show <em>(various)</em>. Typing overwrites all;
+  leaving <em>(various)</em> preserves individual values.
+</p>
+
+<div class="term">
+<div class="term-body">
+  <div class="modal-overlay">
+    <div class="modal-title">5 files selected</div>
+    <div class="modal-row"><span class="c-mname">title</span><span class="c-mvalue">Breaking Bad</span></div>
+    <div class="modal-row"><span class="c-mname">year</span><span class="c-mvalue">2008</span></div>
+    <div class="modal-row"><span class="c-mname">media_type</span><span class="c-mvalue">episode</span></div>
+    <div class="modal-row"><span class="c-mname">season</span><span class="c-mvalue">1</span></div>
+    <div class="modal-row"><span class="c-mname">episode</span><span class="c-mvarious">(various)</span></div>
+    <div class="modal-row"><span class="c-mname">episode_title</span><span class="c-mvarious">(various)</span></div>
+    <div class="modal-row"><span class="c-mname">tmdb_id</span><span class="c-mvalue">1396</span></div>
+    <div class="sep"></div>
+    <div class="modal-row"><span class="c-mname">codec</span></div>
+    <div class="modal-row"><span class="c-mname">resolution</span><span class="c-mvarious">(various)</span></div>
+    <div class="modal-row"><span class="c-mname">hdr</span></div>
+    <div class="modal-row"><span class="c-mname">media_source</span></div>
+    <div class="modal-row"><span class="c-mname">audio</span></div>
+    <div class="modal-row"><span class="c-mname">container</span><span class="c-mvalue">mkv</span></div>
+    <div class="modal-row" style="margin-top: 8px;"><span class="key">tab</span> <span class="hint">next</span>  <span class="key">shift-tab</span> <span class="hint">prev</span>  <span class="key">enter</span> <span class="hint">save</span>  <span class="key">esc</span> <span class="hint">cancel</span></div>
+  </div>
+</div>
+</div>
+
+<!-- ============================================================ -->
+<p class="narration">
+  <span class="step">7. process mode</span>
+  User presses <code>p</code>. Metadata columns replaced by destination paths.
+  Status badge replaced by operation mode. Confirmation screen only.
+</p>
+
+<div class="term">
+<div class="term-body">
+  <div class="row"><span class="d">tapes import</span> <span class="w">./downloads</span>   <span class="d">library:</span> <span class="w">/media/library</span>   <span class="d">mode:</span> <span class="w">copy</span></div>
+  <div class="sep"></div>
+
+  <div class="row"><span class="c-st grn">copy</span><span class="c-fp"><span class="d">movies/</span><span class="w">Dune.2021.2160p.BluRay.x265.mkv</span></span><span class="c-dest t">Movies/Dune Part One (2021)/Dune Part One (2021).mkv</span></div>
+  <div class="row"><span class="c-st grn">copy</span><span class="c-fp d">movies/Dune.2021.en.srt</span><span class="c-dest d">Movies/Dune Part One (2021)/Dune Part One (2021).en.srt</span></div>
+  <div class="row"><span class="c-st grn">copy</span><span class="c-fp d">movies/Dune.2021.de.srt</span><span class="c-dest d">Movies/Dune Part One (2021)/Dune Part One (2021).de.srt</span></div>
+
+  <div class="row row-blank"><span class="c-st"></span><span class="c-fp"></span><span class="c-ti"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+
+  <div class="row"><span class="c-st grn">copy</span><span class="c-fp"><span class="d">movies/</span><span class="t">Arrival.2016.1080p.WEB-DL.mkv</span></span><span class="c-dest t">Movies/Arrival (2016)/Arrival (2016).mkv</span></div>
+  <div class="row"><span class="c-st grn">copy</span><span class="c-fp d">movies/Arrival.2016.en.srt</span><span class="c-dest d">Movies/Arrival (2016)/Arrival (2016).en.srt</span></div>
+
+  <div class="row row-blank"><span class="c-st"></span><span class="c-fp"></span><span class="c-ti"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+
+  <div class="row"><span class="c-st grn">copy</span><span class="c-fp"><span class="d">tv/breaking-bad/s01/</span><span class="t">Breaking.Bad.S01E01.720p.mkv</span></span><span class="c-dest t">TV/Breaking Bad (2008)/S01/Breaking Bad - S01E01 - Pilot.mkv</span></div>
+  <div class="row"><span class="c-st grn">copy</span><span class="c-fp d">tv/breaking-bad/s01/S01E01.en.srt</span><span class="c-dest d">TV/Breaking Bad (2008)/S01/Breaking Bad - S01E01 - Pilot.en.srt</span></div>
+  <div class="row"><span class="c-st grn">copy</span><span class="c-fp"><span class="d">tv/breaking-bad/s01/</span><span class="t">Breaking.Bad.S01E02.720p.mkv</span></span><span class="c-dest t">TV/Breaking Bad (2008)/S01/Breaking Bad - S01E02 - Cat's in the Bag....mkv</span></div>
+  <div class="row"><span class="c-st grn">copy</span><span class="c-fp d">tv/breaking-bad/s01/S01E02.en.srt</span><span class="c-dest d">TV/Breaking Bad (2008)/S01/Breaking Bad - S01E02 - Cat's in the Bag....en.srt</span></div>
+  <div class="row"><span class="c-st grn">copy</span><span class="c-fp"><span class="d">tv/breaking-bad/s01/</span><span class="t">Breaking.Bad.S01E03.720p.mkv</span></span><span class="c-dest t">TV/Breaking Bad (2008)/S01/Breaking Bad - S01E03 - ...And the Bag's in the River.mkv</span></div>
+
+  <div class="row row-blank"><span class="c-st"></span><span class="c-fp"></span><span class="c-ti"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+
+  <div class="row"><span class="c-st grn">copy</span><span class="c-fp w">random_clip.avi</span><span class="c-dest t">Movies/Interstellar (2014)/Interstellar (2014).avi</span></div>
+
+  <div class="row row-blank"><span class="c-st"></span><span class="c-fp"></span><span class="c-ti"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+
+  <div class="row"><span class="c-st d">--</span><span class="c-fp d">bonus_featurette.mkv</span><span class="c-dest d">(skipped -- no match)</span></div>
+</div>
+<div class="term-footer"><span class="w">11</span> <span class="d">files to copy</span>  <span class="d">1 skipped</span>      <span class="key">enter</span> <span class="hint">confirm and copy</span>  <span class="key">esc</span> <span class="hint">go back</span></div>
+</div>
+
+<!-- ============================================================ -->
+<p class="narration">
+  <span class="step">7b. process mode with pending uncertain matches</span>
+  If <code>??</code> rows still exist when pressing <code>p</code>, a prompt appears first.
+</p>
+
+<div class="term">
+<div class="term-body">
+  <div class="pre"><span class="d">  5 files have uncertain matches.</span>
+
+<span class="row row-focused">  <span class="w">&gt;</span>  <span class="w">accept all uncertain and enter process mode</span></span>
+     <span class="t">reject all uncertain and enter process mode</span>
+     <span class="t">cancel</span></div>
+</div>
+</div>
+
+<!-- ============================================================ -->
+<p class="narration">
+  <span class="step">8. post-import output</span>
+  After confirming, TUI exits. Plain terminal output -- greppable.
+</p>
+
+<div class="term">
+<div class="term-body">
+  <div class="row"><span class="d">copying 11 files...</span></div>
+  <div class="row row-blank"><span class="c-st"></span><span class="c-fp"></span><span class="c-ti"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+
+  <div class="row"><span class="c-st grn">ok</span><span class="c-fp t">Dune.2021.2160p.BluRay.x265.mkv</span><span class="c-dest d">Movies/Dune Part One (2021)/Dune Part One (2021).mkv</span></div>
+  <div class="row"><span class="c-st grn">ok</span><span class="c-fp d">Dune.2021.en.srt</span><span class="c-dest d">Movies/Dune Part One (2021)/Dune Part One (2021).en.srt</span></div>
+  <div class="row"><span class="c-st grn">ok</span><span class="c-fp d">Dune.2021.de.srt</span><span class="c-dest d">Movies/Dune Part One (2021)/Dune Part One (2021).de.srt</span></div>
+  <div class="row"><span class="c-st grn">ok</span><span class="c-fp t">Arrival.2016.1080p.WEB-DL.mkv</span><span class="c-dest d">Movies/Arrival (2016)/Arrival (2016).mkv</span></div>
+  <div class="row"><span class="c-st grn">ok</span><span class="c-fp d">Arrival.2016.en.srt</span><span class="c-dest d">Movies/Arrival (2016)/Arrival (2016).en.srt</span></div>
+  <div class="row"><span class="c-st grn">ok</span><span class="c-fp t">Breaking.Bad.S01E01.720p.mkv</span><span class="c-dest d">TV/Breaking Bad (2008)/S01/Breaking Bad - S01E01 - Pilot.mkv</span></div>
+  <div class="row"><span class="c-st grn">ok</span><span class="c-fp d">S01E01.en.srt</span><span class="c-dest d">TV/Breaking Bad (2008)/S01/Breaking Bad - S01E01 - Pilot.en.srt</span></div>
+  <div class="row"><span class="c-st grn">ok</span><span class="c-fp t">Breaking.Bad.S01E02.720p.mkv</span><span class="c-dest d">TV/Breaking Bad (2008)/S01/Breaking Bad - S01E02 - Cat's in the Bag....mkv</span></div>
+  <div class="row"><span class="c-st grn">ok</span><span class="c-fp d">S01E02.en.srt</span><span class="c-dest d">TV/Breaking Bad (2008)/S01/Breaking Bad - S01E02 - Cat's in the Bag....en.srt</span></div>
+  <div class="row"><span class="c-st grn">ok</span><span class="c-fp t">Breaking.Bad.S01E03.720p.mkv</span><span class="c-dest d">TV/Breaking Bad (2008)/S01/Breaking Bad - S01E03 - ...And the Bag's in the River.mkv</span></div>
+  <div class="row"><span class="c-st grn">ok</span><span class="c-fp t">random_clip.avi</span><span class="c-dest d">Movies/Interstellar (2014)/Interstellar (2014).avi</span></div>
+
+  <div class="row row-blank"><span class="c-st"></span><span class="c-fp"></span><span class="c-ti"></span><span class="c-yr"></span><span class="c-sn"></span><span class="c-ep"></span><span class="c-et"></span></div>
+  <div class="row"><span class="d">copied</span> <span class="w">11</span> <span class="d">files</span>   <span class="d">skipped</span> <span class="w">1</span>   <span class="d">errors</span> <span class="w">0</span></div>
+</div>
+</div>
+
+</div><!-- /story -->
+</body>
+</html>

@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>tapes TUI walkthrough</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1e1e1e;
+    color: #999;
+    font-family: 'SF Mono', 'Cascadia Code', 'JetBrains Mono', 'Fira Code', 'Menlo', monospace;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  .story { max-width: 960px; margin: 0 auto; padding: 40px 20px; }
+  .narration {
+    color: #c9a0dc;
+    font-family: 'Inter', 'Helvetica Neue', sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    margin: 40px 0 16px;
+    padding: 0 4px;
+  }
+  .narration:first-child { margin-top: 0; }
+  .narration em { font-style: italic; color: #d4b0e8; }
+  .narration code {
+    font-family: 'SF Mono', 'Cascadia Code', monospace;
+    font-size: 12px;
+    background: #2a2a2a;
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: #ccc;
+  }
+  .narration .step {
+    display: inline-block;
+    color: #7a6a8a;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-right: 8px;
+  }
+
+  .term {
+    background: #161616;
+    border: 1px solid #2a2a2a;
+    border-radius: 6px;
+    overflow: hidden;
+    margin: 12px 0;
+  }
+  .term-body {
+    padding: 12px 16px;
+    overflow-x: auto;
+    white-space: pre;
+  }
+
+  .t  { color: #888; }
+  .tb { color: #ccc; }
+  .td { color: #555; }
+  .tu { color: #bbb; text-decoration: underline; text-underline-offset: 2px; }
+  .ts { color: #444; text-decoration: line-through; text-decoration-color: #333; }
+
+  .row-focus { background: #252525; display: block; margin: 0 -16px; padding: 0 16px; }
+
+  .status-bar {
+    background: #1a1a1a;
+    border-top: 1px solid #2a2a2a;
+    padding: 4px 16px;
+    color: #555;
+    font-size: 12px;
+  }
+
+  .sep { display: block; height: 1px; background: #222; margin: 8px 0; }
+</style>
+</head>
+<body>
+<div class="story">
+
+<!-- ============================================================ -->
+<p class="narration">
+  <span class="step">scan output</span>
+  For reference, this is what <code>tapes scan /downloads</code> already looks like today.
+  Files grouped, path on the left, guessit metadata on the right. This is our starting
+  point -- we make this navigatable and add a destination column.
+</p>
+
+<div class="term">
+<div class="term-body"><span class="td">scanning</span> <span class="tb">./downloads</span>
+
+  <span class="td">movies/</span><span class="t">Dune.2021.2160p.BluRay.x265.mkv</span>            <span class="td">movie Dune 2021</span>
+  <span class="td">movies/Dune.2021.en.srt</span>                         <span class="td">subtitle</span>
+  <span class="td">movies/Dune.2021.de.srt</span>                         <span class="td">subtitle</span>
+  <span class="td">movies/poster.jpg</span>                               <span class="td">artwork</span>
+
+  <span class="td">movies/</span><span class="t">Arrival.2016.1080p.WEB-DL.mkv</span>              <span class="td">movie Arrival 2016</span>
+  <span class="td">movies/Arrival.2016.en.srt</span>                      <span class="td">subtitle</span>
+
+  <span class="td">tv/breaking-bad/s01/</span><span class="t">Breaking.Bad.S01E01.720p.mkv</span>  <span class="td">episode Breaking Bad S01E01</span>
+  <span class="td">tv/breaking-bad/s01/S01E01.en.srt</span>               <span class="td">subtitle</span>
+  <span class="td">tv/breaking-bad/s01/</span><span class="t">Breaking.Bad.S01E02.720p.mkv</span>  <span class="td">episode Breaking Bad S01E02</span>
+  <span class="td">tv/breaking-bad/s01/S01E02.en.srt</span>               <span class="td">subtitle</span>
+  <span class="td">tv/breaking-bad/s01/</span><span class="t">Breaking.Bad.S01E03.720p.mkv</span>  <span class="td">episode Breaking Bad S01E03</span>
+  <span class="td">tv/breaking-bad/s01/poster.jpg</span>                  <span class="td">artwork</span>
+
+  <span class="t">random_clip.avi</span>                                   <span class="td">movie</span>
+
+  <span class="t">bonus_featurette.mkv</span>                              <span class="td">movie</span>
+
+  <span class="tb">5</span><span class="td"> groups  </span><span class="tb">7</span><span class="td"> videos  </span><span class="tb">7</span><span class="td"> companions</span>
+</div>
+</div>
+
+<!-- ============================================================ -->
+<p class="narration">
+  <span class="step">1. launch</span>
+  User runs <code>tapes import /downloads</code>. After scanning, identification runs
+  and finds TMDB matches. The review screen shows the same file listing but now with
+  a destination column on the right. Groups with high-confidence matches are
+  auto-accepted. The cursor lands on the first group that needs attention.
+</p>
+
+<div class="term">
+<div class="term-body"><span class="td">tapes import ./downloads</span>
+
+  <span class="td">**</span>  <span class="td">movies/</span><span class="t">Dune.2021.2160p.BluRay.x265.mkv</span>         <span class="td">Movies/Dune Part One (2021)/Dune Part One (2021).mkv</span>
+      <span class="td">movies/Dune.2021.en.srt</span>                      <span class="td">Movies/Dune Part One (2021)/...en.srt</span>
+      <span class="td">movies/Dune.2021.de.srt</span>                      <span class="td">Movies/Dune Part One (2021)/...de.srt</span>
+      <span class="td">movies/poster.jpg</span>                            <span class="td">Movies/Dune Part One (2021)/poster.jpg</span>
+
+  <span class="td">**</span>  <span class="td">movies/</span><span class="t">Arrival.2016.1080p.WEB-DL.mkv</span>           <span class="td">Movies/Arrival (2016)/Arrival (2016).mkv</span>
+      <span class="td">movies/Arrival.2016.en.srt</span>                   <span class="td">Movies/Arrival (2016)/...en.srt</span>
+
+  <span class="td">**</span>  <span class="td">tv/breaking-bad/s01/</span><span class="t">Breaking.Bad.S01E01.mkv</span>  <span class="td">TV/Breaking Bad (2008)/S01/...S01E01.mkv</span>
+      <span class="td">tv/breaking-bad/s01/S01E01.en.srt</span>            <span class="td">TV/Breaking Bad (2008)/S01/...S01E01.en.srt</span>
+      <span class="td">tv/breaking-bad/s01/</span><span class="t">Breaking.Bad.S01E02.mkv</span>  <span class="td">TV/Breaking Bad (2008)/S01/...S01E02.mkv</span>
+      <span class="td">tv/breaking-bad/s01/S01E02.en.srt</span>            <span class="td">TV/Breaking Bad (2008)/S01/...S01E02.en.srt</span>
+      <span class="td">tv/breaking-bad/s01/</span><span class="t">Breaking.Bad.S01E03.mkv</span>  <span class="td">TV/Breaking Bad (2008)/S01/...S01E03.mkv</span>
+      <span class="td">tv/breaking-bad/s01/poster.jpg</span>               <span class="td">TV/Breaking Bad (2008)/S01/poster.jpg</span>
+
+<span class="row-focus">  <span class="tb">&gt;</span>  <span class="t">random_clip.avi</span>                              <span class="td">no match</span>
+</span>
+  <span class="t">..</span>  <span class="t">bonus_featurette.mkv</span>                           <span class="td">no match</span>
+
+<span class="sep"></span><span class="td">  ** 3  pending 2  </span><span class="tu">a</span><span class="td"> accept </span><span class="tu">s</span><span class="td"> skip </span><span class="tu">/</span><span class="td"> search </span><span class="tu">?</span><span class="td"> manual </span><span class="tu">p</span><span class="td"> split </span><span class="tu">m</span><span class="td"> merge </span><span class="tu">e</span><span class="td"> edit </span><span class="tu">q</span><span class="td"> quit</span>
+</div>
+</div>
+
+<!-- ============================================================ -->
+<p class="narration">
+  <span class="step">2. skip</span>
+  User presses <code>s</code> twice to skip both unmatched files. Cursor auto-advances
+  each time. With nothing pending, focus moves to the submit options.
+</p>
+
+<div class="term">
+<div class="term-body"><span class="td">tapes import ./downloads</span>
+
+  <span class="td">**</span>  <span class="td">movies/</span><span class="t">Dune.2021.2160p.BluRay.x265.mkv</span>         <span class="td">Movies/Dune Part One (2021)/Dune Part One (2021).mkv</span>
+      <span class="td">movies/Dune.2021.en.srt</span>                      <span class="td">Movies/Dune Part One (2021)/...en.srt</span>
+      <span class="td">movies/Dune.2021.de.srt</span>                      <span class="td">Movies/Dune Part One (2021)/...de.srt</span>
+      <span class="td">movies/poster.jpg</span>                            <span class="td">Movies/Dune Part One (2021)/poster.jpg</span>
+
+  <span class="td">**</span>  <span class="td">movies/</span><span class="t">Arrival.2016.1080p.WEB-DL.mkv</span>           <span class="td">Movies/Arrival (2016)/Arrival (2016).mkv</span>
+      <span class="td">movies/Arrival.2016.en.srt</span>                   <span class="td">Movies/Arrival (2016)/...en.srt</span>
+
+  <span class="td">**</span>  <span class="td">tv/breaking-bad/s01/</span><span class="t">Breaking.Bad.S01E01.mkv</span>  <span class="td">TV/Breaking Bad (2008)/S01/...S01E01.mkv</span>
+      <span class="td">tv/breaking-bad/s01/S01E01.en.srt</span>            <span class="td">TV/Breaking Bad (2008)/S01/...S01E01.en.srt</span>
+      <span class="td">tv/breaking-bad/s01/</span><span class="t">Breaking.Bad.S01E02.mkv</span>  <span class="td">TV/Breaking Bad (2008)/S01/...S01E02.mkv</span>
+      <span class="td">tv/breaking-bad/s01/S01E02.en.srt</span>            <span class="td">TV/Breaking Bad (2008)/S01/...S01E02.en.srt</span>
+      <span class="td">tv/breaking-bad/s01/</span><span class="t">Breaking.Bad.S01E03.mkv</span>  <span class="td">TV/Breaking Bad (2008)/S01/...S01E03.mkv</span>
+      <span class="td">tv/breaking-bad/s01/poster.jpg</span>               <span class="td">TV/Breaking Bad (2008)/S01/poster.jpg</span>
+
+  <span class="td">--</span>  <span class="ts">random_clip.avi</span>
+  <span class="td">--</span>  <span class="ts">bonus_featurette.mkv</span>
+
+<span class="sep"></span><span class="td">  ** 3  skipped 2</span>
+
+<span class="row-focus">  <span class="tb">&gt;</span>  <span class="tb">proceed + auto-accepted</span>    <span class="td">3 groups, 7 videos</span>
+</span>     <span class="t">cancel</span>
+</div>
+</div>
+
+<!-- ============================================================ -->
+<p class="narration">
+  <span class="step">3. review a group</span>
+  Instead of proceeding, user navigates back up to the Breaking Bad group to inspect it.
+  The cursor highlights the group. All the info is already visible -- source on the left,
+  destination on the right. No expand/collapse needed.
+</p>
+
+<div class="term">
+<div class="term-body"><span class="td">tapes import ./downloads</span>
+
+  <span class="td">**</span>  <span class="td">movies/</span><span class="t">Dune.2021.2160p.BluRay.x265.mkv</span>         <span class="td">Movies/Dune Part One (2021)/Dune Part One (2021).mkv</span>
+      <span class="td">movies/Dune.2021.en.srt</span>                      <span class="td">Movies/Dune Part One (2021)/...en.srt</span>
+      <span class="td">movies/Dune.2021.de.srt</span>                      <span class="td">Movies/Dune Part One (2021)/...de.srt</span>
+      <span class="td">movies/poster.jpg</span>                            <span class="td">Movies/Dune Part One (2021)/poster.jpg</span>
+
+  <span class="td">**</span>  <span class="td">movies/</span><span class="t">Arrival.2016.1080p.WEB-DL.mkv</span>           <span class="td">Movies/Arrival (2016)/Arrival (2016).mkv</span>
+      <span class="td">movies/Arrival.2016.en.srt</span>                   <span class="td">Movies/Arrival (2016)/...en.srt</span>
+
+<span class="row-focus">  <span class="tb">&gt;</span>  <span class="td">tv/breaking-bad/s01/</span><span class="tb">Breaking.Bad.S01E01.mkv</span>  <span class="t">TV/Breaking Bad (2008)/S01/...S01E01.mkv</span>
+      <span class="td">tv/breaking-bad/s01/S01E01.en.srt</span>            <span class="t">TV/Breaking Bad (2008)/S01/...S01E01.en.srt</span>
+      <span class="td">tv/breaking-bad/s01/</span><span class="tb">Breaking.Bad.S01E02.mkv</span>  <span class="t">TV/Breaking Bad (2008)/S01/...S01E02.mkv</span>
+      <span class="td">tv/breaking-bad/s01/S01E02.en.srt</span>            <span class="t">TV/Breaking Bad (2008)/S01/...S01E02.en.srt</span>
+      <span class="td">tv/breaking-bad/s01/</span><span class="tb">Breaking.Bad.S01E03.mkv</span>  <span class="t">TV/Breaking Bad (2008)/S01/...S01E03.mkv</span>
+      <span class="td">tv/breaking-bad/s01/poster.jpg</span>               <span class="t">TV/Breaking Bad (2008)/S01/poster.jpg</span>
+</span>
+  <span class="td">--</span>  <span class="ts">random_clip.avi</span>
+  <span class="td">--</span>  <span class="ts">bonus_featurette.mkv</span>
+
+<span class="sep"></span><span class="td">  ** 3  skipped 2  </span><span class="tu">a</span><span class="td"> accept </span><span class="tu">s</span><span class="td"> skip </span><span class="tu">/</span><span class="td"> search </span><span class="tu">?</span><span class="td"> manual </span><span class="tu">p</span><span class="td"> split </span><span class="tu">m</span><span class="td"> merge </span><span class="tu">e</span><span class="td"> edit </span><span class="tu">q</span><span class="td"> quit</span>
+</div>
+</div>
+
+<!-- ============================================================ -->
+<p class="narration">
+  <span class="step">4. split</span>
+  User sees S01E03 doesn't belong. Presses <code>p</code> to split. Checkboxes appear
+  next to each file in the group. Same place, no modal.
+</p>
+
+<div class="term">
+<div class="term-body">
+<span class="row-focus">  <span class="tb">&gt;</span>  <span class="td">tv/breaking-bad/s01/</span><span class="tb">Breaking.Bad.S01E01.mkv</span>  <span class="td">split -- select files for new group</span>
+
+      <span class="td">[ ]</span>  <span class="t">Breaking.Bad.S01E01.720p.mkv</span>
+      <span class="td">[ ]</span>  <span class="td">S01E01.en.srt</span>
+      <span class="td">[ ]</span>  <span class="t">Breaking.Bad.S01E02.720p.mkv</span>
+      <span class="td">[ ]</span>  <span class="td">S01E02.en.srt</span>
+      <span class="tb">[x]</span>  <span class="tb">Breaking.Bad.S01E03.720p.mkv</span>                                   <span class="tb">&lt;</span>
+      <span class="td">[ ]</span>  <span class="td">poster.jpg</span>
+
+      <span class="td">1 selected  </span><span class="tu">space</span><span class="td"> toggle </span><span class="tu">enter</span><span class="td"> confirm </span><span class="tu">esc</span><span class="td"> cancel</span>
+</span>
+  <span class="td">--</span>  <span class="ts">random_clip.avi</span>
+  <span class="td">--</span>  <span class="ts">bonus_featurette.mkv</span>
+</div>
+</div>
+
+<!-- ============================================================ -->
+<p class="narration">
+  User confirms. S01E03 becomes its own group below, pending with no match.
+  The original group's destination paths remain unchanged.
+</p>
+
+<div class="term">
+<div class="term-body">
+<span class="row-focus">  <span class="tb">&gt;</span>  <span class="td">tv/breaking-bad/s01/</span><span class="tb">Breaking.Bad.S01E01.mkv</span>  <span class="t">TV/Breaking Bad (2008)/S01/...S01E01.mkv</span>
+      <span class="td">tv/breaking-bad/s01/S01E01.en.srt</span>            <span class="t">TV/Breaking Bad (2008)/S01/...S01E01.en.srt</span>
+      <span class="td">tv/breaking-bad/s01/</span><span class="tb">Breaking.Bad.S01E02.mkv</span>  <span class="t">TV/Breaking Bad (2008)/S01/...S01E02.mkv</span>
+      <span class="td">tv/breaking-bad/s01/S01E02.en.srt</span>            <span class="t">TV/Breaking Bad (2008)/S01/...S01E02.en.srt</span>
+      <span class="td">tv/breaking-bad/s01/poster.jpg</span>               <span class="t">TV/Breaking Bad (2008)/S01/poster.jpg</span>
+</span>
+  <span class="t">..</span>  <span class="t">Breaking.Bad.S01E03.720p.mkv</span>                   <span class="td">no match</span>
+
+  <span class="td">--</span>  <span class="ts">random_clip.avi</span>
+  <span class="td">--</span>  <span class="ts">bonus_featurette.mkv</span>
+</div>
+</div>
+
+<!-- ============================================================ -->
+<p class="narration">
+  <span class="step">5. search</span>
+  User moves to the split episode and presses <code>/</code> to search TMDB.
+  A minimal search form appears inline.
+</p>
+
+<div class="term">
+<div class="term-body">
+<span class="row-focus">  <span class="tb">&gt;</span>  <span class="t">Breaking.Bad.S01E03.720p.mkv</span>                   <span class="td">no match</span>
+
+      <span class="td">search tmdb</span>
+      <span class="td">type</span>   <span class="t">tv</span>
+      <span class="td">title</span>  <span class="tb">Better Call Saul</span><span class="t">|</span>
+      <span class="td">year</span>
+
+      <span class="tu">enter</span><span class="td"> search  </span><span class="tu">tab</span><span class="td"> next field  </span><span class="tu">esc</span><span class="td"> cancel</span>
+</span>
+  <span class="td">--</span>  <span class="ts">random_clip.avi</span>
+  <span class="td">--</span>  <span class="ts">bonus_featurette.mkv</span>
+</div>
+</div>
+
+<!-- ============================================================ -->
+<p class="narration">
+  Results come back. User picks the match and presses <code>a</code> to accept.
+  The destination column fills in.
+</p>
+
+<div class="term">
+<div class="term-body">
+<span class="row-focus">  <span class="tb">&gt;</span>  <span class="t">Breaking.Bad.S01E03.720p.mkv</span>                   <span class="t">TV/Better Call Saul (2015)/S01/...S01E03.mkv</span>
+
+      <span class="td">match</span>   <span class="t">Better Call Saul (2015)</span>  <span class="td">tmdb:60059  78%</span>
+              <span class="td">Better Call Saul (anime)</span>  <span class="td">tmdb:99421  22%</span>
+
+      <span class="tu">a</span><span class="td"> accept </span><span class="tu">s</span><span class="td"> skip </span><span class="tu">/</span><span class="td"> search again </span><span class="tu">?</span><span class="td"> manual</span>
+</span>
+  <span class="td">--</span>  <span class="ts">random_clip.avi</span>
+  <span class="td">--</span>  <span class="ts">bonus_featurette.mkv</span>
+</div>
+</div>
+
+<!-- ============================================================ -->
+<p class="narration">
+  <span class="step">6. done</span>
+  All groups reviewed. Summary and submit options.
+</p>
+
+<div class="term">
+<div class="term-body"><span class="td">tapes import ./downloads</span>
+
+  <span class="td">**</span>  <span class="td">movies/</span><span class="t">Dune.2021.2160p.BluRay.x265.mkv</span>         <span class="td">Movies/Dune Part One (2021)/Dune Part One (2021).mkv</span>
+      <span class="td">movies/Dune.2021.en.srt</span>                      <span class="td">Movies/Dune Part One (2021)/...en.srt</span>
+      <span class="td">movies/Dune.2021.de.srt</span>                      <span class="td">Movies/Dune Part One (2021)/...de.srt</span>
+      <span class="td">movies/poster.jpg</span>                            <span class="td">Movies/Dune Part One (2021)/poster.jpg</span>
+
+  <span class="td">**</span>  <span class="td">movies/</span><span class="t">Arrival.2016.1080p.WEB-DL.mkv</span>           <span class="td">Movies/Arrival (2016)/Arrival (2016).mkv</span>
+      <span class="td">movies/Arrival.2016.en.srt</span>                   <span class="td">Movies/Arrival (2016)/...en.srt</span>
+
+  <span class="td">ok</span>  <span class="td">tv/breaking-bad/s01/</span><span class="t">Breaking.Bad.S01E01.mkv</span>  <span class="td">TV/Breaking Bad (2008)/S01/...S01E01.mkv</span>
+      <span class="td">tv/breaking-bad/s01/S01E01.en.srt</span>            <span class="td">TV/Breaking Bad (2008)/S01/...S01E01.en.srt</span>
+      <span class="td">tv/breaking-bad/s01/</span><span class="t">Breaking.Bad.S01E02.mkv</span>  <span class="td">TV/Breaking Bad (2008)/S01/...S01E02.mkv</span>
+      <span class="td">tv/breaking-bad/s01/S01E02.en.srt</span>            <span class="td">TV/Breaking Bad (2008)/S01/...S01E02.en.srt</span>
+      <span class="td">tv/breaking-bad/s01/poster.jpg</span>               <span class="td">TV/Breaking Bad (2008)/S01/poster.jpg</span>
+
+  <span class="td">ok</span>  <span class="t">Breaking.Bad.S01E03.720p.mkv</span>                   <span class="td">TV/Better Call Saul (2015)/S01/...S01E03.mkv</span>
+
+  <span class="td">--</span>  <span class="ts">random_clip.avi</span>
+  <span class="td">--</span>  <span class="ts">bonus_featurette.mkv</span>
+
+<span class="sep"></span><span class="td">  ok 2  ** 2  skipped 2</span>
+
+<span class="row-focus">  <span class="tb">&gt;</span>  <span class="tb">proceed + auto-accepted</span>    <span class="td">4 groups, 7 videos</span>
+</span>     <span class="t">proceed confirmed only</span>    <span class="td">2 groups, 3 videos</span>
+     <span class="t">cancel</span>
+</div>
+</div>
+
+<!-- ============================================================ -->
+<p class="narration">
+  <span class="step">7. import output</span>
+  User confirms. TUI exits. Plain terminal output -- greppable, pipe-delimited.
+</p>
+
+<div class="term">
+<div class="term-body"><span class="td">importing 7 videos + companions from 4 groups...</span>
+
+  <span class="td">copy</span>  <span class="t">Dune.2021.2160p.BluRay.x265.mkv</span>         <span class="td">Movies/Dune Part One (2021)/Dune Part One (2021).mkv</span>
+  <span class="td">copy</span>  <span class="t">Dune.2021.en.srt</span>                        <span class="td">Movies/Dune Part One (2021)/...en.srt</span>
+  <span class="td">copy</span>  <span class="t">Dune.2021.de.srt</span>                        <span class="td">Movies/Dune Part One (2021)/...de.srt</span>
+  <span class="td">copy</span>  <span class="t">poster.jpg</span>                              <span class="td">Movies/Dune Part One (2021)/poster.jpg</span>
+
+  <span class="td">copy</span>  <span class="t">Arrival.2016.1080p.WEB-DL.mkv</span>           <span class="td">Movies/Arrival (2016)/Arrival (2016).mkv</span>
+  <span class="td">copy</span>  <span class="t">Arrival.2016.en.srt</span>                     <span class="td">Movies/Arrival (2016)/...en.srt</span>
+
+  <span class="td">copy</span>  <span class="t">Breaking.Bad.S01E01.720p.mkv</span>            <span class="td">TV/Breaking Bad (2008)/S01/...S01E01.mkv</span>
+  <span class="td">copy</span>  <span class="t">S01E01.en.srt</span>                           <span class="td">TV/Breaking Bad (2008)/S01/...S01E01.en.srt</span>
+  <span class="td">copy</span>  <span class="t">Breaking.Bad.S01E02.720p.mkv</span>            <span class="td">TV/Breaking Bad (2008)/S01/...S01E02.mkv</span>
+  <span class="td">copy</span>  <span class="t">S01E02.en.srt</span>                           <span class="td">TV/Breaking Bad (2008)/S01/...S01E02.en.srt</span>
+  <span class="td">copy</span>  <span class="t">poster.jpg</span>                              <span class="td">TV/Breaking Bad (2008)/S01/poster.jpg</span>
+
+  <span class="td">copy</span>  <span class="t">Breaking.Bad.S01E03.720p.mkv</span>            <span class="td">TV/Better Call Saul (2015)/S01/...S01E03.mkv</span>
+
+<span class="td">imported 7 videos, 5 companions   skipped 2   errors 0</span>
+</div>
+</div>
+
+</div><!-- /story -->
+</body>
+</html>
