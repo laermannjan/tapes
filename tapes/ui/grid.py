@@ -4,12 +4,15 @@ from __future__ import annotations
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import VerticalScroll
-from textual.widgets import Static
+from textual.widgets import Input, Static
 from rich.text import Text
 
 from tapes.models import ImportGroup
-from tapes.ui.models import GridRow, RowKind, build_grid_rows
+from tapes.ui.models import GridRow, RowKind, RowStatus, build_grid_rows
 from tapes.ui.render import render_row, FIELD_COLS, COL_WIDTHS, _pad
+
+# Fields that should be stored as int
+_INT_FIELDS = {"year", "season", "episode"}
 
 
 class GridFooter(Static):
@@ -174,6 +177,20 @@ class GridWidget(Static):
         self.update(self.render_grid())
 
 
+class EditInput(Input):
+    """Inline text input for cell editing."""
+
+    DEFAULT_CSS = """
+    EditInput {
+        dock: bottom;
+        height: 1;
+        background: #1e1e1e;
+        border: none;
+        padding: 0 1;
+    }
+    """
+
+
 class GridApp(App):
     """Spreadsheet-like grid TUI for reviewing imports."""
 
@@ -190,7 +207,8 @@ class GridApp(App):
         Binding("left", "cursor_left", "Left", show=False),
         Binding("right", "cursor_right", "Right", show=False),
         Binding("v", "toggle_select", "Select", show=False),
-        Binding("escape", "clear_selection", "Clear selection", show=False),
+        Binding("e", "start_edit", "Edit", show=False),
+        Binding("escape", "cancel_edit", "Cancel / Clear", show=False),
         Binding("q", "quit", "Quit", show=False),
     ]
 
@@ -199,6 +217,14 @@ class GridApp(App):
         self._groups = groups
         self._rows = build_grid_rows(groups)
         self._grid: GridWidget | None = None
+        self._editing: bool = False
+        self._edit_field: str | None = None
+        self._edit_targets: list[int] = []  # row indices being edited
+        self._edit_input: EditInput | None = None
+
+    @property
+    def editing(self) -> bool:
+        return self._editing
 
     @property
     def cursor_row(self) -> int:
@@ -239,7 +265,7 @@ class GridApp(App):
         return [i for i, r in enumerate(self._rows) if r.kind == RowKind.FILE]
 
     def action_toggle_select(self) -> None:
-        if not self._grid:
+        if not self._grid or self._editing:
             return
         row = self._grid._cursor_row
         col = self._grid._cursor_col
@@ -257,7 +283,76 @@ class GridApp(App):
         self._grid.refresh_grid()
         self._refresh_footer()
 
-    def action_clear_selection(self) -> None:
+    def action_start_edit(self) -> None:
+        if not self._grid or self._editing:
+            return
+        col = self._grid._cursor_col
+        field_name = FIELD_COLS[col]
+
+        # Determine target rows: selected rows or cursor row
+        if self._grid._sel_col is not None and self._grid._selected_rows:
+            self._edit_targets = sorted(self._grid._selected_rows)
+        else:
+            self._edit_targets = [self._grid._cursor_row]
+
+        self._edit_field = field_name
+
+        # Get current value from first target row
+        target_row = self._rows[self._edit_targets[0]]
+        current_value = getattr(target_row, field_name) or ""
+
+        self._editing = True
+        self._edit_input = EditInput(
+            value=str(current_value),
+            placeholder=field_name,
+            id="edit-input",
+        )
+        self.mount(self._edit_input)
+        self._edit_input.focus()
+
+    def _commit_edit(self, value: str) -> None:
+        """Apply the edited value to target rows."""
+        field_name = self._edit_field
+        if not field_name:
+            return
+
+        # Type conversion
+        if field_name in _INT_FIELDS:
+            try:
+                converted: str | int = int(value)
+            except (ValueError, TypeError):
+                # Invalid int -- cancel silently
+                self._dismiss_edit()
+                return
+        else:
+            converted = value
+
+        for row_idx in self._edit_targets:
+            self._rows[row_idx].set_field(field_name, converted)
+
+        self._dismiss_edit()
+        if self._grid:
+            self._grid.clear_selection()
+            self._grid.refresh_grid()
+        self._refresh_footer()
+
+    def _dismiss_edit(self) -> None:
+        """Remove the edit input and reset edit state."""
+        self._editing = False
+        self._edit_field = None
+        self._edit_targets = []
+        if self._edit_input:
+            self._edit_input.remove()
+            self._edit_input = None
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        if self._editing:
+            self._commit_edit(event.value)
+
+    def action_cancel_edit(self) -> None:
+        if self._editing:
+            self._dismiss_edit()
+            return
         if not self._grid:
             return
         self._grid.clear_selection()
@@ -270,7 +365,7 @@ class GridApp(App):
         footer.update_selection(n_sel)
 
     def action_cursor_down(self) -> None:
-        if not self._grid:
+        if not self._grid or self._editing:
             return
         file_rows = self._file_rows()
         cur = self._grid._cursor_row
@@ -281,7 +376,7 @@ class GridApp(App):
                 return
 
     def action_cursor_up(self) -> None:
-        if not self._grid:
+        if not self._grid or self._editing:
             return
         file_rows = self._file_rows()
         cur = self._grid._cursor_row
@@ -292,7 +387,7 @@ class GridApp(App):
                 return
 
     def action_cursor_right(self) -> None:
-        if not self._grid:
+        if not self._grid or self._editing:
             return
         # Block column change while selection is active
         if self._grid._sel_col is not None:
@@ -302,7 +397,7 @@ class GridApp(App):
             self._grid.refresh_grid()
 
     def action_cursor_left(self) -> None:
-        if not self._grid:
+        if not self._grid or self._editing:
             return
         # Block column change while selection is active
         if self._grid._sel_col is not None:

@@ -3,6 +3,7 @@ from pathlib import Path
 
 from tapes.models import FileEntry, FileMetadata, ImportGroup
 from tapes.ui.grid import GridApp
+from tapes.ui.models import RowStatus
 
 
 def _groups():
@@ -143,3 +144,114 @@ async def test_selection_locks_column():
         await pilot.press("right")
         assert app.selection == {(0, 0)}
         assert app.cursor_col == 0
+
+
+# --- Edit mode tests (M3) ---
+
+
+async def test_e_enters_edit_mode():
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        assert not app.editing
+        await pilot.press("e")
+        assert app.editing
+
+
+async def test_edit_confirm_updates_field():
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        # Cursor on row 0 (Dune), col 0 (title)
+        assert app._rows[0].title == "Dune"
+        await pilot.press("e")
+        assert app.editing
+        # Clear existing text and type new value
+        app._edit_input.value = ""
+        await pilot.press("D", "u", "n", "e", " ", "2")
+        await pilot.press("enter")
+        assert not app.editing
+        assert app._rows[0].title == "Dune 2"
+
+
+async def test_edit_cancel_preserves_field():
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        assert app._rows[0].title == "Dune"
+        await pilot.press("e")
+        assert app.editing
+        app._edit_input.value = "Changed"
+        await pilot.press("escape")
+        assert not app.editing
+        assert app._rows[0].title == "Dune"
+
+
+async def test_edit_sets_status_edited():
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        assert app._rows[0].status == RowStatus.RAW
+        await pilot.press("e")
+        app._edit_input.value = "New Title"
+        await pilot.press("enter")
+        assert app._rows[0].status == RowStatus.EDITED
+
+
+async def test_edit_tracks_edited_fields():
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        assert "title" not in app._rows[0].edited_fields
+        await pilot.press("e")
+        app._edit_input.value = "New Title"
+        await pilot.press("enter")
+        assert "title" in app._rows[0].edited_fields
+
+
+async def test_edit_year_converts_to_int():
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        # Move cursor to year column (col 1)
+        await pilot.press("right")
+        assert app.cursor_col == 1
+        await pilot.press("e")
+        app._edit_input.value = "2025"
+        await pilot.press("enter")
+        assert app._rows[0].year == 2025
+        assert isinstance(app._rows[0].year, int)
+
+
+async def test_edit_invalid_int_cancels_silently():
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        # Move cursor to year column
+        await pilot.press("right")
+        await pilot.press("e")
+        app._edit_input.value = "not-a-number"
+        await pilot.press("enter")
+        assert not app.editing
+        # Year should remain unchanged
+        assert app._rows[0].year == 2021
+        assert app._rows[0].status == RowStatus.RAW
+
+
+async def test_edit_selected_cells():
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        # rows: 0=Dune.mkv 1=Dune.en.srt 2=Dune.de.srt 3=BLANK 4=Arrival.mkv
+        # Select rows 0 and 4 (both video files) on title column
+        await pilot.press("v")  # select row 0
+        await pilot.press("down")
+        await pilot.press("down")
+        await pilot.press("down")  # row 4 (Arrival)
+        await pilot.press("v")  # select row 4
+        assert app.selection == {(0, 0), (4, 0)}
+
+        await pilot.press("e")
+        app._edit_input.value = "Shared Title"
+        await pilot.press("enter")
+
+        assert app._rows[0].title == "Shared Title"
+        assert app._rows[4].title == "Shared Title"
+        assert app._rows[0].status == RowStatus.EDITED
+        assert app._rows[4].status == RowStatus.EDITED
+        assert "title" in app._rows[0].edited_fields
+        assert "title" in app._rows[4].edited_fields
+        # Selection should be cleared after edit
+        assert app.selection == set()

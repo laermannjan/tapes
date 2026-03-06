@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum, auto
+from typing import Any
 
 from tapes.models import FileEntry, FileMetadata, ImportGroup
 
@@ -28,6 +29,7 @@ class GridRow:
     group: ImportGroup | None = None
     status: RowStatus = RowStatus.RAW
     edited_fields: set[str] = field(default_factory=set)
+    _overrides: dict[str, Any] = field(default_factory=dict)
 
     @property
     def is_video(self) -> bool:
@@ -44,24 +46,40 @@ class GridRow:
             return self.group.metadata
         return FileMetadata()
 
+    def set_field(self, name: str, value: Any) -> None:
+        """Set an override for a field, mark it edited, update status."""
+        self._overrides[name] = value
+        self.edited_fields.add(name)
+        self.status = RowStatus.EDITED
+
     @property
     def title(self) -> str | None:
+        if "title" in self._overrides:
+            return self._overrides["title"]
         return self._meta().title
 
     @property
     def year(self) -> int | None:
+        if "year" in self._overrides:
+            return self._overrides["year"]
         return self._meta().year
 
     @property
     def season(self) -> int | None:
+        if "season" in self._overrides:
+            return self._overrides["season"]
         return self._meta().season
 
     @property
     def episode(self) -> int | list[int] | None:
+        if "episode" in self._overrides:
+            return self._overrides["episode"]
         return self._meta().episode
 
     @property
     def episode_title(self) -> str | None:
+        if "episode_title" in self._overrides:
+            return self._overrides["episode_title"]
         return None  # TMDB only, not from guessit
 
     @property
