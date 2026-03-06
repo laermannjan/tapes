@@ -35,7 +35,7 @@ class GridFooter(Static):
     DEFAULT_CSS = """
     GridFooter {
         dock: bottom;
-        height: 1;
+        height: 2;
         background: #0e0e0e;
         border-top: solid #1e1e1e;
     }
@@ -366,8 +366,8 @@ class GridApp(App):
     """
 
     BINDINGS = [
-        Binding("up", "cursor_up", "Up", show=False),
-        Binding("down", "cursor_down", "Down", show=False),
+        Binding("up", "cursor_up", "Up", show=False, priority=True),
+        Binding("down", "cursor_down", "Down", show=False, priority=True),
         Binding("left", "cursor_left", "Left", show=False),
         Binding("right", "cursor_right", "Right", show=False),
         Binding("v", "toggle_select", "Select", show=False),
