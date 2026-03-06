@@ -35,8 +35,9 @@ their metadata and reorganizing.
 [status] filepath                          | title | year | season | episode | episode_title
 ```
 
-- **Status badge** (left margin): `..` guessit raw, `**` auto-accepted TMDB,
-  `??` uncertain TMDB match, `!!` user-edited
+- **Status badge** (left margin, in dimmed brackets): `[..]` guessit raw,
+  `[**]` auto-accepted TMDB, `[??]` uncertain TMDB match, `[!!]` user-edited,
+  `[--]` frozen
 - **Filepath** (left-aligned): relative to the scan root. For videos, the
   filename portion is white; the directory prefix is dim. For companions,
   the entire path is dim.
@@ -90,24 +91,43 @@ and presses `r` to reorganize, which moves it to the correct group.
 
 ### Select (v)
 
-- Selection is **column-locked**: only vertical, never multiple columns
-- Selection highlighting is **monochrome gray** -- no color tint. Selected
-  cells are brighter than the column highlight; selected rows get a subtle
-  full-row highlight.
-- Press `v` on a field to select it
-- Hold `v` + up/down arrows to extend selection across rows (same column)
-- Non-adjacent rows can be selected (selection can skip groups/rows)
-- Empty cells can be selected (they still show the selection highlight)
-- `esc` to deselect
+- Selection is **column-locked**: only vertical, never multiple columns.
+  Left/right navigation is blocked while selection is active.
+- Selection highlighting is **mossy green** (`#3a5a3a` for selected cells,
+  `#1a241a` for selected rows, `#4a6a4a` for selected+cursor). Dim text
+  gets boosted via `_SEL_TEXT` lookup for readability on green backgrounds.
+- `v` activates **selecting mode**: the current cell is selected, and
+  subsequent up/down arrow presses add cells to the selection.
+- `v` again **pauses** selecting mode: selection stays visible and active,
+  but cursor moves freely without adding cells.
+- `v` again **resumes** selecting from the current position.
+- `V` (shift-v) selects all file rows in the cursor's group. If the group
+  is already fully selected, it deselects the group instead (toggle).
+- Non-adjacent selection: pause selecting, navigate, resume selecting
+  elsewhere, or use `V` on different groups.
+- `esc` clears the entire selection.
+- Actions (`e`, `q`, `f`) that work on selections default to the cursor
+  cell when no selection is active.
 
 ### Edit (e) -- inline
 
 - No selection: edits the field under the cursor
 - With selection: edits all selected fields simultaneously
-- Inline text input replaces the field content
-- `esc` to cancel, `enter` to confirm
-- On confirm, only the **changed fields** turn purple. Unchanged fields
-  retain their original color. The row's status badge becomes `!!`.
+- Live inline editing: the cell shows the edit buffer with underline styling.
+  No separate input widget -- typing happens directly in the cell.
+- `esc` to cancel (no changes applied), `enter` to confirm
+- On confirm, only the **changed fields** turn purple (`#a78bfa`). Unchanged
+  fields retain their original color. The row's status badge becomes `[!!]`.
+- Int fields (`year`, `season`, `episode`) are validated on confirm; invalid
+  input cancels silently.
+- Selection persists after edit. Cursor jumps to the topmost selected row.
+- Frozen fields cannot be edited (edit is blocked).
+
+### Undo (u)
+
+- Reverts the last edit or query action.
+- Restores full row state (overrides, status, edited fields).
+- Undo is cleared when selection is cleared via `esc`.
 
 ### Edit all fields (Shift+E) -- modal
 
@@ -133,10 +153,21 @@ multiple fields on a row without navigating between columns.
 - Cursor tracks the file it was on (follows the row, not the position)
 - No-op if nothing changed
 
-### Query (q)
+### Freeze (f / F)
 
-- No selection: queries ALL rows
+- `f` toggles freeze on the current field for the cursor cell or selected cells.
+  Pressing again unfreezes.
+- `F` (shift-f) toggles freeze on ALL fields for the cursor row or selected rows.
+- Frozen fields are skipped by query and cannot be edited.
+- Frozen fields are rendered in cyan (`#66cccc`). When all fields are frozen,
+  status badge becomes `[--]`.
+- Selection persists after freeze. Cursor jumps to topmost selected row.
+
+### Query (q / Q)
+
+- No selection: queries the cursor row
 - With selection: queries only selected rows
+- `Q` (shift-q) queries ALL file rows regardless of selection
 - Before querying, rows with identical query parameters are grouped so each
   unique query runs only once. Companions sharing a video's metadata get the
   same result.
@@ -198,40 +229,53 @@ If `??` rows exist, the user is prompted:
 Minimal palette. Monochrome base (grey/white/black). Color is used sparingly
 and consistently to convey meaning.
 
-| Color      | Meaning                                          |
-|------------|--------------------------------------------------|
-| **White**  | Primary text, draws attention (video filenames, focused content, important values) |
-| **Dim grey** | Secondary (companions, unfocused rows, chrome, separators) |
-| **Yellow** | Uncertain, needs attention (`??` matches, warnings) |
-| **Green**  | Confirmed, good to go (`**` auto-accepted, accepted states) |
-| **Purple** | User-edited (`!!` manually changed fields)       |
-| **Red**    | Problem, no match, error states                  |
-| **Cyan**   | Data originating from TMDB (distinguishes database results from local extraction) |
+| Color      | Hex       | Meaning                                          |
+|------------|-----------|--------------------------------------------------|
+| **White**  | `#dddddd` | Primary text (video filenames, important values)  |
+| **Dim grey** | `#555555` | Secondary (companions, unfocused rows, chrome)  |
+| **Yellow** | `#ccaa33` | Uncertain, needs attention (`[??]` matches)      |
+| **Green**  | `#55aa99` | Auto-accepted TMDB (`[**]` badge and field text) |
+| **Purple** | `#a78bfa` | User-edited (`[!!]` manually changed fields)     |
+| **Red**    |           | Problem, no match, error states                  |
+| **Cyan**   | `#66cccc` | Frozen fields and `[--]` badge                   |
+| **Mossy green** | `#3a5a3a` | Selected cell background                    |
 
 ### Status badge colors
 
-| Badge | Meaning             | Color    |
-|-------|---------------------|----------|
-| `..`  | Guessit raw         | Dim grey |
-| `**`  | Auto-accepted TMDB  | Green    |
-| `??`  | Uncertain match     | Yellow   |
-| `!!`  | User-edited         | Purple   |
+Badges are rendered in dimmed brackets: `[badge]`. Brackets are `#333333`.
+
+| Badge  | Meaning             | Color        |
+|--------|---------------------|--------------|
+| `[..]` | Guessit raw         | `#555555`    |
+| `[**]` | Auto-accepted TMDB  | `#55aa99`    |
+| `[??]` | Uncertain match     | `#ccaa33`    |
+| `[!!]` | User-edited         | `#a78bfa`    |
+| `[--]` | Frozen              | `#66cccc`    |
 
 ## Keybindings summary
 
 | Key          | Context       | Action                                    |
 |--------------|---------------|-------------------------------------------|
 | Arrow keys   | Normal        | Navigate cursor between fields and rows   |
-| `v`          | Normal        | Enter select mode on current field        |
-| `v` + arrows | Select        | Extend selection                          |
+| Arrow keys   | Selecting     | Navigate and add cells to selection       |
+| `v`          | Normal        | Start selecting mode (adds current cell)  |
+| `v`          | Selecting     | Pause selecting (selection stays, cursor free) |
+| `v`          | Paused        | Resume selecting from current position    |
+| `V`          | Any           | Toggle-select all rows in cursor's group  |
 | `e`          | Normal/Select | Edit field(s) inline                      |
+| `u`          | Normal/Select | Undo last edit or query                   |
 | `Shift+E`    | Normal/Select | Open metadata editor modal (all fields)   |
+| `f`          | Normal/Select | Toggle freeze on field(s)                 |
+| `F`          | Normal/Select | Toggle freeze on entire row(s)            |
+| `q`          | Normal/Select | Query TMDB (cursor row or selection)      |
+| `Q`          | Any           | Query TMDB (all rows)                     |
 | `r`          | Normal        | Reorganize (re-sort, re-group)            |
-| `q`          | Normal/Select | Query TMDB (all or selection)             |
+| `enter`      | Edit          | Confirm edit                              |
 | `enter`      | Match row     | Accept uncertain match                    |
 | `backspace`  | Match row     | Reject uncertain match                    |
 | `p`          | Normal        | Enter process mode                        |
-| `esc`        | Any sub-mode  | Cancel / return to normal mode            |
+| `esc`        | Edit          | Cancel edit (selection preserved)         |
+| `esc`        | Select        | Clear selection and undo history          |
 
 ## Visual reference
 
@@ -255,9 +299,15 @@ edit, modal edit, process mode, and post-import output.
 - **Inline search (`/`)**: no longer a separate action. Query (`q`) on a single
   selected row achieves the same thing. Select the row with `v`, press `q`.
 
+## Resolved from implementation
+
+- **Column header row**: yes, with dimmed labels and a horizontal separator
+- **Column widths**: fixed (`status:5, filepath:52, title:16, year:6,
+  season:4, episode:4, episode_title:32`). Truncation uses ellipsis char.
+- **Cursor foreground**: never changes text color, only background
+
 ## Open questions for future iterations
 
-- Exact column widths and truncation strategy for narrow terminals
+- Truncation strategy for very narrow terminals
 - How many metadata columns to show by default vs hiding behind a scroll
-- Whether the grid should have a header row with column names
 - Scrolling behavior for large file lists
