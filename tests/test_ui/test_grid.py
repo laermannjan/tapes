@@ -607,3 +607,71 @@ async def test_undo_after_accept():
         # MATCH row should be back
         match_rows = [r for r in app._rows if r.kind == RowKind.MATCH]
         assert len(match_rows) >= 1
+
+
+# --- Selection hierarchy tests (shift-S, shift-A) ---
+
+
+def _show_groups():
+    """Two seasons of the same show, plus a movie."""
+    groups = []
+    for season in (1, 2):
+        for ep in (1, 2):
+            meta = FileMetadata(
+                media_type="episode", title="Breaking Bad", season=season, episode=ep
+            )
+            g = ImportGroup(metadata=meta)
+            g.add_file(FileEntry(path=Path(f"BB.S{season:02d}E{ep:02d}.mkv"), metadata=meta))
+            groups.append(g)
+
+    movie_meta = FileMetadata(media_type="movie", title="El Camino", year=2019)
+    movie = ImportGroup(metadata=movie_meta)
+    movie.add_file(FileEntry(path=Path("El.Camino.mkv"), metadata=movie_meta))
+    groups.append(movie)
+    return groups
+
+
+async def test_shift_s_selects_season():
+    """S selects all episodes of the same season."""
+    app = GridApp(_show_groups())
+    async with app.run_test() as pilot:
+        # S01E01=0, S01E02=1, BLANK=2, S02E01=3, S02E02=4, BLANK=5, ElCamino=6
+        await pilot.press("S")
+        selected_rows = app._grid._selected_rows
+        assert 0 in selected_rows
+        assert 1 in selected_rows
+        assert len(selected_rows) == 2
+
+
+async def test_shift_a_selects_show():
+    """A selects all episodes of the same show."""
+    app = GridApp(_show_groups())
+    async with app.run_test() as pilot:
+        await pilot.press("A")
+        selected_rows = app._grid._selected_rows
+        # All 4 BB episodes
+        assert len(selected_rows) == 4
+
+
+async def test_shift_s_on_movie_same_as_shift_v():
+    """S on a movie group acts the same as V (selects the group)."""
+    app = GridApp(_show_groups())
+    async with app.run_test() as pilot:
+        # Navigate to El Camino (row 6)
+        for _ in range(6):
+            await pilot.press("down")
+        # Verify we're on El Camino
+        assert app._rows[app.cursor_row].group.metadata.title == "El Camino"
+        await pilot.press("S")
+        selected_rows = app._grid._selected_rows
+        assert len(selected_rows) == 1
+
+
+async def test_shift_s_toggles_off():
+    """S toggles season selection off when all season rows already selected."""
+    app = GridApp(_show_groups())
+    async with app.run_test() as pilot:
+        await pilot.press("S")
+        assert len(app._grid._selected_rows) == 2
+        await pilot.press("S")
+        assert len(app._grid._selected_rows) == 0

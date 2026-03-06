@@ -247,6 +247,8 @@ class GridApp(App):
         Binding("u", "undo", "Undo", show=False),
         Binding("enter", "accept_match", "Accept", show=False),
         Binding("backspace", "reject_match", "Reject", show=False),
+        Binding("S", "select_season", "Select season", show=False, key_display="shift+s"),
+        Binding("A", "select_show", "Select show", show=False, key_display="shift+a"),
         Binding("f", "freeze", "Freeze cell", show=False),
         Binding("F", "freeze_row", "Freeze row", show=False, key_display="shift+f"),
     ]
@@ -371,6 +373,91 @@ class GridApp(App):
                 self._grid._sel_col = None
         else:
             self._grid._selected_rows |= group_rows
+
+        self._grid.refresh_grid()
+        self._refresh_footer()
+
+    def action_select_season(self) -> None:
+        """Select all file rows of the same show+season as cursor row."""
+        if not self._grid or self._editing:
+            return
+        cursor_row = self._rows[self._grid._cursor_row]
+        if cursor_row.kind != RowKind.FILE or cursor_row.group is None:
+            return
+
+        meta = cursor_row.group.metadata
+        col = self._grid._cursor_col
+
+        # For non-episodes, fall back to group selection
+        if meta.media_type != "episode" or meta.title is None or meta.season is None:
+            self.action_select_group()
+            return
+
+        if self._grid._sel_col is None:
+            self._grid._sel_col = col
+        elif self._grid._sel_col != col:
+            return
+
+        title_lower = meta.title.lower()
+        season = meta.season
+
+        season_rows = {
+            i for i, r in enumerate(self._rows)
+            if r.kind == RowKind.FILE
+            and r.group is not None
+            and r.group.metadata.media_type == "episode"
+            and r.group.metadata.title is not None
+            and r.group.metadata.title.lower() == title_lower
+            and r.group.metadata.season == season
+        }
+
+        if season_rows <= self._grid._selected_rows:
+            self._grid._selected_rows -= season_rows
+            if not self._grid._selected_rows:
+                self._grid._sel_col = None
+        else:
+            self._grid._selected_rows |= season_rows
+
+        self._grid.refresh_grid()
+        self._refresh_footer()
+
+    def action_select_show(self) -> None:
+        """Select all file rows of the same show as cursor row."""
+        if not self._grid or self._editing:
+            return
+        cursor_row = self._rows[self._grid._cursor_row]
+        if cursor_row.kind != RowKind.FILE or cursor_row.group is None:
+            return
+
+        meta = cursor_row.group.metadata
+        col = self._grid._cursor_col
+
+        if meta.media_type != "episode" or meta.title is None:
+            self.action_select_group()
+            return
+
+        if self._grid._sel_col is None:
+            self._grid._sel_col = col
+        elif self._grid._sel_col != col:
+            return
+
+        title_lower = meta.title.lower()
+
+        show_rows = {
+            i for i, r in enumerate(self._rows)
+            if r.kind == RowKind.FILE
+            and r.group is not None
+            and r.group.metadata.media_type == "episode"
+            and r.group.metadata.title is not None
+            and r.group.metadata.title.lower() == title_lower
+        }
+
+        if show_rows <= self._grid._selected_rows:
+            self._grid._selected_rows -= show_rows
+            if not self._grid._selected_rows:
+                self._grid._sel_col = None
+        else:
+            self._grid._selected_rows |= show_rows
 
         self._grid.refresh_grid()
         self._refresh_footer()
