@@ -19,6 +19,9 @@ COL_WIDTHS: dict[str, int] = {
 
 FIELD_COLS: list[str] = ["title", "year", "season", "episode", "episode_title"]
 
+# Combined width of all metadata columns (single dest path column)
+DEST_COL_WIDTH = sum(COL_WIDTHS[c] for c in FIELD_COLS)
+
 _BADGE_STYLES: dict[RowStatus, tuple[str, str]] = {
     RowStatus.RAW: ("..", "#555555"),
     RowStatus.AUTO: ("**", "#55aa99"),
@@ -219,3 +222,96 @@ def render_row(
         _col(t, display_value, COL_WIDTHS[col_name], display_style, bg=bg, pad_left=2, pad_right=2)
 
     return t
+
+
+def render_dest_row(
+    row: GridRow,
+    is_cursor_row: bool,
+    operation: str,
+    dest_path: str | None,
+    missing: list[str] | None,
+    *,
+    skipped: bool = False,
+    unknown_fields: list[str] | None = None,
+) -> Text:
+    """Render a row in destination view."""
+    t = Text()
+    row_bg = BG_ROW_CUR if is_cursor_row else None
+
+    is_comp = row.kind == RowKind.FILE and row.is_companion
+    base_style = "#555555" if is_comp else "#888888"
+    bright_style = "#888888" if is_comp else "#dddddd"
+
+    if row.kind == RowKind.BLANK:
+        total = COL_WIDTHS["status"] + COL_WIDTHS["filepath"] + DEST_COL_WIDTH
+        _col(t, "", total, "#333333")
+        return t
+
+    if row.kind == RowKind.NO_MATCH:
+        _col(t, " \u23bf  ", COL_WIDTHS["status"], "#333333")
+        _col(t, "(no match)", COL_WIDTHS["filepath"], "#cc5555")
+        _col(t, "", DEST_COL_WIDTH, "#333333")
+        return t
+
+    # Status column: operation label
+    if skipped:
+        op_style = "#555555"
+    else:
+        op_style = "#888888"
+    op_display = _pad(operation, COL_WIDTHS["status"])
+    op_full = f"{op_style} on {row_bg}" if row_bg else op_style
+    t.append(op_display, style=op_full)
+
+    # Filepath column
+    if row.kind == RowKind.MATCH:
+        _col(t, "(match)", COL_WIDTHS["filepath"], "#ccaa33", bg=row_bg)
+    else:
+        fp = row.filepath
+        p = PurePosixPath(fp)
+        if len(p.parts) > 1 and row.is_video:
+            dir_part = str(p.parent) + "/"
+            padded_fp = _pad(dir_part + p.name, COL_WIDTHS["filepath"])
+            fp_text = Text()
+            dir_len = min(len(dir_part), len(padded_fp))
+            fp_text.append(
+                padded_fp[:dir_len],
+                style=f"#555555 on {row_bg}" if row_bg else "#555555",
+            )
+            fp_text.append(
+                padded_fp[dir_len:],
+                style=f"{bright_style} on {row_bg}" if row_bg else bright_style,
+            )
+            t.append_text(fp_text)
+        else:
+            style = base_style if is_comp else bright_style
+            _col(t, fp, COL_WIDTHS["filepath"], style, bg=row_bg)
+
+    # Destination path column
+    if skipped:
+        _col(t, "(skipped)", DEST_COL_WIDTH, "#555555", bg=row_bg, pad_left=2)
+    elif missing:
+        missing_str = "(missing: " + ", ".join(missing) + ")"
+        _col(t, missing_str, DEST_COL_WIDTH, "#cc5555", bg=row_bg, pad_left=2)
+    elif dest_path is not None:
+        if unknown_fields:
+            _render_dest_with_unknown(t, dest_path, DEST_COL_WIDTH, bright_style, row_bg)
+        else:
+            _col(t, dest_path, DEST_COL_WIDTH, bright_style, bg=row_bg, pad_left=2)
+    else:
+        _col(t, "", DEST_COL_WIDTH, "#333333", bg=row_bg)
+
+    return t
+
+
+def _render_dest_with_unknown(
+    t: Text, path: str, width: int, style: str, bg: str | None,
+) -> None:
+    """Render a destination path with 'unknown' segments highlighted yellow."""
+    padded = _pad("  " + path, width)
+    full_style = f"{style} on {bg}" if bg else style
+    warn_style = f"#ccaa33 on {bg}" if bg else "#ccaa33"
+    parts = padded.split("unknown")
+    for i, part in enumerate(parts):
+        t.append(part, style=full_style)
+        if i < len(parts) - 1:
+            t.append("unknown", style=warn_style)

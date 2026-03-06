@@ -5,7 +5,7 @@ from rich.text import Text
 
 from tapes.models import FileEntry, FileMetadata, ImportGroup
 from tapes.ui.models import GridRow, RowKind, RowStatus
-from tapes.ui.render import render_row, COL_WIDTHS, FIELD_COLS
+from tapes.ui.render import render_row, render_dest_row, COL_WIDTHS, FIELD_COLS
 
 
 def _file_row(
@@ -173,3 +173,89 @@ def test_render_no_match_subrow():
     text = render_row(no_match_row, cursor_col=0, is_cursor_row=False)
     plain = text.plain
     assert "(no match)" in plain
+
+
+def test_render_dest_row_valid_path():
+    row = _file_row("movies/Dune.mkv", title="Dune", year=2021)
+    text = render_dest_row(
+        row, is_cursor_row=False, operation="copy",
+        dest_path="Dune (2021)/Dune (2021).mkv", missing=None,
+    )
+    assert "copy" in text.plain
+    assert "Dune.mkv" in text.plain
+    assert "Dune (2021)/Dune (2021).mkv" in text.plain
+
+
+def test_render_dest_row_missing_fields():
+    row = _file_row("test.mkv", title="Test")
+    text = render_dest_row(
+        row, is_cursor_row=False, operation="copy",
+        dest_path=None, missing=["year"],
+    )
+    assert "copy" in text.plain
+    assert "(missing:" in text.plain
+    assert "year" in text.plain
+
+
+def test_render_dest_row_skipped():
+    row = _file_row("test.mkv", title="Test")
+    text = render_dest_row(
+        row, is_cursor_row=False, operation="skip",
+        dest_path=None, missing=None, skipped=True,
+    )
+    assert "skip" in text.plain
+    assert "(skipped)" in text.plain
+
+
+def test_render_dest_row_with_unknown():
+    row = _file_row("test.mkv", title="Test")
+    text = render_dest_row(
+        row, is_cursor_row=False, operation="copy",
+        dest_path="Test (unknown)/Test (unknown).mkv",
+        missing=None, unknown_fields=["year"],
+    )
+    assert "copy" in text.plain
+    assert "unknown" in text.plain
+
+
+def test_render_dest_row_cursor_highlight():
+    row = _file_row("test.mkv", title="Test", year=2021)
+    text = render_dest_row(
+        row, is_cursor_row=True, operation="copy",
+        dest_path="Test (2021)/Test (2021).mkv", missing=None,
+    )
+    # Should render without error, with row cursor bg
+    assert "Test (2021)" in text.plain
+
+
+def test_render_dest_match_row():
+    group = ImportGroup(metadata=FileMetadata(title="Test"))
+    row = GridRow(
+        kind=RowKind.MATCH, group=group,
+        match_fields={"title": "Test", "year": 2021},
+    )
+    text = render_dest_row(
+        row, is_cursor_row=False, operation="copy",
+        dest_path="Test (2021)/Test (2021).mkv", missing=None,
+    )
+    assert "(match)" in text.plain
+    assert "Test (2021)" in text.plain
+
+
+def test_render_dest_blank_row():
+    row = GridRow(kind=RowKind.BLANK)
+    text = render_dest_row(
+        row, is_cursor_row=False, operation="",
+        dest_path=None, missing=None,
+    )
+    assert text.plain.strip() == ""
+
+
+def test_render_dest_no_match_row():
+    group = ImportGroup(metadata=FileMetadata(title="X"))
+    row = GridRow(kind=RowKind.NO_MATCH, group=group)
+    text = render_dest_row(
+        row, is_cursor_row=False, operation="",
+        dest_path=None, missing=None,
+    )
+    assert "(no match)" in text.plain
