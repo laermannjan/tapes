@@ -27,37 +27,53 @@ class GridFooter(Static):
     def __init__(self, rows: list[GridRow], **kwargs) -> None:
         super().__init__(**kwargs)
         self._rows = rows
+        self._n_selected = 0
+
+    def update_selection(self, n_selected: int) -> None:
+        self._n_selected = n_selected
+        self.refresh()
 
     def render(self) -> Text:  # type: ignore[override]
-        file_rows = [r for r in self._rows if r.kind == RowKind.FILE]
-        n_files = len(file_rows)
-        n_videos = sum(1 for r in file_rows if r.is_video)
-        n_companions = sum(1 for r in file_rows if r.is_companion)
-        n_groups = sum(1 for r in self._rows if r.kind == RowKind.BLANK) + 1
-
         t = Text()
         t.append(" ")
-        # Counts section
-        for count, label in [
-            (n_files, "files"),
-            (n_groups, "groups"),
-            (n_videos, "videos"),
-            (n_companions, "companions"),
-        ]:
-            t.append(str(count), style="#dddddd")
-            t.append(f" {label}  ", style="#555555")
 
-        t.append("    ", style="")
+        if self._n_selected > 0:
+            # Selection mode footer
+            t.append(str(self._n_selected), style="#dddddd")
+            t.append(" selected  ", style="#555555")
+            t.append("    ", style="")
+            hints = [
+                ("v", "toggle"),
+                ("esc", "clear"),
+                ("e", "edit"),
+            ]
+        else:
+            # Normal mode footer
+            file_rows = [r for r in self._rows if r.kind == RowKind.FILE]
+            n_files = len(file_rows)
+            n_videos = sum(1 for r in file_rows if r.is_video)
+            n_companions = sum(1 for r in file_rows if r.is_companion)
+            n_groups = sum(1 for r in self._rows if r.kind == RowKind.BLANK) + 1
 
-        # Keybinding hints
-        hints = [
-            ("e", "edit"),
-            ("v", "select"),
-            ("q", "query"),
-            ("r", "reorg"),
-            ("p", "process"),
-            ("E", "all fields"),
-        ]
+            for count, label in [
+                (n_files, "files"),
+                (n_groups, "groups"),
+                (n_videos, "videos"),
+                (n_companions, "companions"),
+            ]:
+                t.append(str(count), style="#dddddd")
+                t.append(f" {label}  ", style="#555555")
+
+            t.append("    ", style="")
+            hints = [
+                ("e", "edit"),
+                ("v", "select"),
+                ("q", "query"),
+                ("r", "reorg"),
+                ("p", "process"),
+                ("E", "all fields"),
+            ]
+
         for key, desc in hints:
             t.append(key, style="#777777 underline")
             t.append(f" {desc}  ", style="#444444")
@@ -118,16 +134,38 @@ class GridWidget(Static):
         self.rows = rows
         self._cursor_row = 0
         self._cursor_col = 0
+        self._selected_rows: set[int] = set()
+        self._sel_col: int | None = None
+
+    @property
+    def selection(self) -> set[tuple[int, int]]:
+        """Return set of (row, col) for all selected cells."""
+        if self._sel_col is None:
+            return set()
+        return {(r, self._sel_col) for r in self._selected_rows}
+
+    def clear_selection(self) -> None:
+        self._selected_rows.clear()
+        self._sel_col = None
 
     def render_grid(self) -> Text:
         out = Text()
         for i, row in enumerate(self.rows):
             if i > 0:
                 out.append("\n")
+            selected_cols: set[int] | None = None
+            if self._sel_col is not None and i in self._selected_rows:
+                selected_cols = {self._sel_col}
             line = render_row(
                 row,
                 cursor_col=self._cursor_col,
                 is_cursor_row=(i == self._cursor_row),
+                selected_cols=selected_cols,
+                is_sel_cursor_row=(
+                    i == self._cursor_row
+                    and self._sel_col is not None
+                    and i in self._selected_rows
+                ),
             )
             out.append_text(line)
         return out
@@ -151,6 +189,8 @@ class GridApp(App):
         Binding("down", "cursor_down", "Down", show=False),
         Binding("left", "cursor_left", "Left", show=False),
         Binding("right", "cursor_right", "Right", show=False),
+        Binding("v", "toggle_select", "Select", show=False),
+        Binding("escape", "clear_selection", "Clear selection", show=False),
         Binding("q", "quit", "Quit", show=False),
     ]
 
@@ -167,6 +207,11 @@ class GridApp(App):
     @property
     def cursor_col(self) -> int:
         return self._grid._cursor_col if self._grid else 0
+
+    @property
+    def selection(self) -> set[tuple[int, int]]:
+        """Return set of (row, col) for all selected cells."""
+        return self._grid.selection if self._grid else set()
 
     def compose(self) -> ComposeResult:
         with VerticalScroll(id="grid-scroll"):
@@ -193,14 +238,55 @@ class GridApp(App):
     def _file_rows(self) -> list[int]:
         return [i for i, r in enumerate(self._rows) if r.kind == RowKind.FILE]
 
+    def action_toggle_select(self) -> None:
+        if not self._grid:
+            return
+        row = self._grid._cursor_row
+        col = self._grid._cursor_col
+        if self._grid._sel_col is None:
+            # Start new selection, lock column
+            self._grid._sel_col = col
+            self._grid._selected_rows.add(row)
+        elif self._grid._sel_col != col:
+            # Different column -- clear and start fresh
+            self._grid.clear_selection()
+            self._grid._sel_col = col
+            self._grid._selected_rows.add(row)
+        else:
+            # Same column -- toggle this row
+            if row in self._grid._selected_rows:
+                self._grid._selected_rows.discard(row)
+                if not self._grid._selected_rows:
+                    self._grid._sel_col = None
+            else:
+                self._grid._selected_rows.add(row)
+        self._grid.refresh_grid()
+        self._refresh_footer()
+
+    def action_clear_selection(self) -> None:
+        if not self._grid:
+            return
+        self._grid.clear_selection()
+        self._grid.refresh_grid()
+        self._refresh_footer()
+
+    def _refresh_footer(self) -> None:
+        footer = self.query_one(GridFooter)
+        n_sel = len(self._grid._selected_rows) if self._grid and self._grid._sel_col is not None else 0
+        footer.update_selection(n_sel)
+
     def action_cursor_down(self) -> None:
         if not self._grid:
             return
         file_rows = self._file_rows()
         cur = self._grid._cursor_row
+        has_selection = self._grid._sel_col is not None
         for idx in file_rows:
             if idx > cur:
                 self._grid._cursor_row = idx
+                if has_selection:
+                    self._grid._selected_rows.add(idx)
+                    self._refresh_footer()
                 self._grid.refresh_grid()
                 return
 
@@ -209,9 +295,13 @@ class GridApp(App):
             return
         file_rows = self._file_rows()
         cur = self._grid._cursor_row
+        has_selection = self._grid._sel_col is not None
         for idx in reversed(file_rows):
             if idx < cur:
                 self._grid._cursor_row = idx
+                if has_selection:
+                    self._grid._selected_rows.add(idx)
+                    self._refresh_footer()
                 self._grid.refresh_grid()
                 return
 
@@ -220,6 +310,9 @@ class GridApp(App):
             return
         if self._grid._cursor_col < len(FIELD_COLS) - 1:
             self._grid._cursor_col += 1
+            if self._grid._sel_col is not None:
+                self._grid.clear_selection()
+                self._refresh_footer()
             self._grid.refresh_grid()
 
     def action_cursor_left(self) -> None:
@@ -227,4 +320,7 @@ class GridApp(App):
             return
         if self._grid._cursor_col > 0:
             self._grid._cursor_col -= 1
+            if self._grid._sel_col is not None:
+                self._grid.clear_selection()
+                self._refresh_footer()
             self._grid.refresh_grid()
