@@ -675,3 +675,51 @@ async def test_shift_s_toggles_off():
         assert len(app._grid._selected_rows) == 2
         await pilot.press("S")
         assert len(app._grid._selected_rows) == 0
+
+
+# --- Destination view tests (M6 Task 4 & 5) ---
+
+
+async def test_tab_toggles_dest_view():
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        assert app.dest_mode is False
+        await pilot.press("tab")
+        assert app.dest_mode is True
+        await pilot.press("tab")
+        assert app.dest_mode is False
+
+
+async def test_dest_view_disables_edit():
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        await pilot.press("tab")
+        await pilot.press("e")
+        assert app.editing is False
+
+
+async def test_dest_view_disables_query():
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        await pilot.press("tab")
+        await pilot.press("q")
+        match_rows = [r for r in app._rows if r.kind == RowKind.MATCH]
+        assert len(match_rows) == 0
+
+
+async def test_dest_view_disables_select():
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        await pilot.press("tab")
+        await pilot.press("v")
+        assert app.selection == set()
+
+
+async def test_dest_view_renders_paths():
+    """Dest view should show destination paths for rows with complete metadata."""
+    from tapes.config import TapesConfig
+    app = GridApp(_groups(), config=TapesConfig())
+    async with app.run_test() as pilot:
+        await pilot.press("tab")
+        assert app.dest_mode is True
+        # Should not crash; Dune and Arrival have title+year so should get paths

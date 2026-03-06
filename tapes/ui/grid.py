@@ -1,6 +1,7 @@
 """Grid TUI app for tapes."""
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from textual.app import App, ComposeResult
@@ -10,10 +11,19 @@ from textual.events import Key
 from textual.widgets import Static
 from rich.text import Text
 
+from tapes.config import TapesConfig
 from tapes.models import ImportGroup
 from tapes.ui.models import GridRow, RowKind, RowStatus, build_grid_rows
 from tapes.ui.query import mock_tmdb_lookup, CONFIDENCE_THRESHOLD
-from tapes.ui.render import render_row, FIELD_COLS, COL_WIDTHS, _pad
+from tapes.ui.render import render_row, render_dest_row, FIELD_COLS, COL_WIDTHS, DEST_COL_WIDTH, _pad
+
+
+def _get_template_field_names(template: str) -> list[str]:
+    """Extract unique field names referenced in a template string."""
+    return list(dict.fromkeys(
+        m.group(1).split(":")[0]
+        for m in re.finditer(r"\{(\w+[^}]*)\}", template)
+    ))
 
 # Fields that should be stored as int
 _INT_FIELDS = {"year", "season", "episode"}
@@ -154,7 +164,26 @@ class GridColumnHeader(Static):
     }
     """
 
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._dest_mode: bool = False
+
     def render(self) -> Text:  # type: ignore[override]
+        if self._dest_mode:
+            labels = ["", "filepath", "  destination"]
+            col_keys_widths = [
+                ("status", COL_WIDTHS["status"]),
+                ("filepath", COL_WIDTHS["filepath"]),
+                ("dest", DEST_COL_WIDTH),
+            ]
+            t = Text()
+            for label, (_, width) in zip(labels, col_keys_widths):
+                t.append(_pad(label, width), style="#333333")
+            t.append("\n")
+            total_width = sum(w for _, w in col_keys_widths)
+            t.append("\u2500" * total_width, style="#1e1e1e")
+            return t
+
         labels = ["", "filepath", "  title", "  year", "  S", "  E", "  episode title"]
         col_keys = ["status", "filepath", "title", "year", "season", "episode", "episode_title"]
         t = Text()
@@ -179,6 +208,9 @@ class GridWidget(Static):
         self._selecting: bool = False
         self._edit_col: int | None = None
         self._edit_value: str | None = None
+        self._dest_mode: bool = False
+        # Maps row index -> (operation, dest_path, missing_fields, skipped, unknown_fields)
+        self._dest_data: dict[int, tuple[str, str | None, list[str] | None, bool, list[str] | None]] = {}
 
     @property
     def selection(self) -> set[tuple[int, int]]:
@@ -194,6 +226,25 @@ class GridWidget(Static):
 
     def render_grid(self) -> Text:
         out = Text()
+
+        if self._dest_mode:
+            for i, row in enumerate(self.rows):
+                if i > 0:
+                    out.append("\n")
+                data = self._dest_data.get(i, ("", None, None, False, None))
+                op, dest, missing, skipped, unknown = data
+                line = render_dest_row(
+                    row,
+                    is_cursor_row=(i == self._cursor_row),
+                    operation=op,
+                    dest_path=dest,
+                    missing=missing,
+                    skipped=skipped,
+                    unknown_fields=unknown,
+                )
+                out.append_text(line)
+            return out
+
         for i, row in enumerate(self.rows):
             if i > 0:
                 out.append("\n")
@@ -251,9 +302,10 @@ class GridApp(App):
         Binding("A", "select_show", "Select show", show=False, key_display="shift+a"),
         Binding("f", "freeze", "Freeze cell", show=False),
         Binding("F", "freeze_row", "Freeze row", show=False, key_display="shift+f"),
+        Binding("tab", "toggle_dest", "Toggle view", show=False, priority=True),
     ]
 
-    def __init__(self, groups: list[ImportGroup], **kwargs) -> None:
+    def __init__(self, groups: list[ImportGroup], *, config: TapesConfig | None = None, **kwargs) -> None:
         super().__init__(**kwargs)
         self._groups = groups
         self._rows = build_grid_rows(groups)
@@ -267,10 +319,16 @@ class GridApp(App):
         self._undo: list[tuple[int, dict[str, Any], RowStatus, set[str]]] | None = None
         # Undo for operations that insert/remove rows (query, accept, reject)
         self._undo_rows: list[GridRow] | None = None
+        self._config = config or TapesConfig()
+        self._dest_mode: bool = False
 
     @property
     def editing(self) -> bool:
         return self._editing
+
+    @property
+    def dest_mode(self) -> bool:
+        return self._dest_mode
 
     @property
     def cursor_row(self) -> int:
@@ -333,7 +391,7 @@ class GridApp(App):
             self._grid._cursor_col = self._grid._sel_col
 
     def action_toggle_select(self) -> None:
-        if not self._grid or self._editing:
+        if not self._grid or self._editing or self._dest_mode:
             return
         if self._grid._selecting:
             # Pause selecting mode (selection stays)
@@ -350,7 +408,7 @@ class GridApp(App):
 
     def action_select_group(self) -> None:
         """Select all file rows in the cursor's group on the current column."""
-        if not self._grid or self._editing:
+        if not self._grid or self._editing or self._dest_mode:
             return
         col = self._grid._cursor_col
         cursor_row = self._rows[self._grid._cursor_row]
@@ -379,7 +437,7 @@ class GridApp(App):
 
     def action_select_season(self) -> None:
         """Select all file rows of the same show+season as cursor row."""
-        if not self._grid or self._editing:
+        if not self._grid or self._editing or self._dest_mode:
             return
         cursor_row = self._rows[self._grid._cursor_row]
         if cursor_row.kind != RowKind.FILE or cursor_row.group is None:
@@ -423,7 +481,7 @@ class GridApp(App):
 
     def action_select_show(self) -> None:
         """Select all file rows of the same show as cursor row."""
-        if not self._grid or self._editing:
+        if not self._grid or self._editing or self._dest_mode:
             return
         cursor_row = self._rows[self._grid._cursor_row]
         if cursor_row.kind != RowKind.FILE or cursor_row.group is None:
@@ -463,7 +521,7 @@ class GridApp(App):
         self._refresh_footer()
 
     def action_start_edit(self) -> None:
-        if not self._grid or self._editing:
+        if not self._grid or self._editing or self._dest_mode:
             return
         col = self._grid._cursor_col
         field_name = FIELD_COLS[col]
@@ -596,6 +654,81 @@ class GridApp(App):
         n_sel = len(self._grid._selected_rows) if self._grid and self._grid._sel_col is not None else 0
         footer.update_selection(n_sel)
 
+    def action_toggle_dest(self) -> None:
+        if self._editing:
+            return
+        self._dest_mode = not self._dest_mode
+        if self._grid:
+            self._grid._dest_mode = self._dest_mode
+            self._refresh_dest_data()
+            self._grid.refresh_grid()
+        header = self.query_one(GridColumnHeader)
+        header._dest_mode = self._dest_mode
+        header.refresh()
+        self._refresh_footer()
+
+    def _get_template(self, row: GridRow) -> str:
+        from tapes.models import FileMetadata
+        meta = row._meta() if row.kind == RowKind.FILE else (
+            row.group.metadata if row.group else FileMetadata()
+        )
+        if meta.media_type == "episode":
+            return self._config.library.tv_template
+        return self._config.library.movie_template
+
+    def _refresh_dest_data(self) -> None:
+        if not self._grid or not self._dest_mode:
+            return
+        from pathlib import PurePosixPath
+        from tapes.ui.dest import compute_dest_path, missing_template_fields, compute_dest_path_with_unknown
+
+        data: dict[int, tuple[str, str | None, list[str] | None, bool, list[str] | None]] = {}
+        op = self._config.library.operation
+        for i, row in enumerate(self._rows):
+            if row.kind == RowKind.BLANK:
+                continue
+            if row.kind == RowKind.NO_MATCH:
+                data[i] = ("", None, None, False, None)
+                continue
+            if row.kind == RowKind.MATCH:
+                template = self._get_template(row)
+                match_fields = dict(row.match_fields)
+                ext = ""
+                for idx in row.owned_row_indices:
+                    if idx < len(self._rows) and self._rows[idx].is_video:
+                        ext = PurePosixPath(self._rows[idx].filepath).suffix.lstrip(".")
+                        break
+                match_fields["ext"] = ext
+                needed = _get_template_field_names(template)
+                if all(f in match_fields for f in needed):
+                    try:
+                        dest = template.format_map(match_fields)
+                    except (KeyError, ValueError):
+                        dest = None
+                else:
+                    dest = None
+                data[i] = (op, dest, None, False, None)
+                continue
+            # FILE row
+            skipped = getattr(row, '_skipped', False)
+            if skipped:
+                data[i] = ("skip", None, None, True, None)
+                continue
+            filled_unknown = getattr(row, '_filled_unknown', False)
+            template = self._get_template(row)
+            if filled_unknown:
+                dest = compute_dest_path_with_unknown(row, template)
+                missing_fields = missing_template_fields(row, template)
+                data[i] = (op, dest, None, False, missing_fields if missing_fields else None)
+            else:
+                dest = compute_dest_path(row, template)
+                if dest is None:
+                    missing = missing_template_fields(row, template)
+                    data[i] = (op, None, missing, False, None)
+                else:
+                    data[i] = (op, dest, None, False, None)
+        self._grid._dest_data = data
+
     def _reindex_owned_rows(self) -> None:
         """Recompute owned_row_indices on MATCH/NO_MATCH rows after insertions."""
         for row in self._rows:
@@ -702,13 +835,13 @@ class GridApp(App):
 
     def action_query(self) -> None:
         """Query mock TMDB for cursor row or all selected rows."""
-        if not self._grid or self._editing:
+        if not self._grid or self._editing or self._dest_mode:
             return
         self._run_query(self._target_rows())
 
     def action_query_all(self) -> None:
         """Query mock TMDB for all file rows."""
-        if not self._grid or self._editing:
+        if not self._grid or self._editing or self._dest_mode:
             return
         self._run_query(self._file_rows())
 
@@ -767,7 +900,7 @@ class GridApp(App):
 
     def action_freeze(self) -> None:
         """Toggle freeze on the current field for target rows."""
-        if not self._grid or self._editing:
+        if not self._grid or self._editing or self._dest_mode:
             return
 
         col = self._grid._cursor_col
@@ -790,7 +923,7 @@ class GridApp(App):
 
     def action_freeze_row(self) -> None:
         """Toggle freeze on ALL fields for target rows."""
-        if not self._grid or self._editing:
+        if not self._grid or self._editing or self._dest_mode:
             return
 
         targets = self._target_rows()
