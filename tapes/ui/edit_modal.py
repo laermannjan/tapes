@@ -25,7 +25,7 @@ class EditModal(ModalScreen[dict[str, Any] | None]):
         Binding("enter", "confirm", "Confirm", priority=True),
         Binding("tab", "next_field", "Next", show=False, priority=True),
         Binding("shift+tab", "prev_field", "Prev", show=False, priority=True),
-        Binding("f", "toggle_freeze", "Freeze", show=False, priority=True),
+        Binding("ctrl+f", "toggle_freeze", "Freeze", show=False, priority=True),
     ]
 
     def __init__(self, rows: list[GridRow], **kwargs) -> None:
@@ -101,7 +101,7 @@ class EditModal(ModalScreen[dict[str, Any] | None]):
         t.append("/", style="#555555")
         t.append("shift-tab", style="#888888")
         t.append(": navigate  ", style="#555555")
-        t.append("f", style="#888888")
+        t.append("ctrl-f", style="#888888")
         t.append(": freeze  ", style="#555555")
         t.append("enter", style="#888888")
         t.append(": ok  ", style="#555555")

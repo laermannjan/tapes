@@ -254,7 +254,7 @@ async def test_toggle_freeze_in_modal():
 
     app = TestApp()
     async with app.run_test(size=(80, 24)) as pilot:
-        await pilot.press("f")
+        await pilot.press("ctrl+f")
         await pilot.press("x")
         await pilot.press("enter")
         await pilot.pause()
@@ -284,7 +284,7 @@ async def test_freeze_field_in_modal():
     app = TestApp()
     async with app.run_test(size=(80, 24)) as pilot:
         await pilot.press("x")
-        await pilot.press("f")
+        await pilot.press("ctrl+f")
         await pilot.press("y")
         await pilot.press("enter")
         await pilot.pause()
