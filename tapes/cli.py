@@ -131,19 +131,20 @@ def _mock_groups() -> list[ImportGroup]:
     arrival.add_file(FileEntry(path=Path("Arrival.2016.1080p.WEB-DL.mkv"), metadata=arrival_meta))
     arrival.add_file(FileEntry(path=Path("Arrival.2016.1080p.WEB-DL.en.srt")))
 
-    # -- Breaking Bad S01 --
-    bb_meta = FileMetadata(media_type="episode", title="Breaking Bad", season=1)
-    bb = ImportGroup(metadata=bb_meta)
+    # -- Breaking Bad S01 (3 per-episode groups) --
+    bb_episodes: list[ImportGroup] = []
     for ep in (1, 2, 3):
         ep_meta = FileMetadata(
             media_type="episode", title="Breaking Bad", season=1, episode=ep
         )
-        bb.add_file(
+        ep_group = ImportGroup(metadata=ep_meta)
+        ep_group.add_file(
             FileEntry(
                 path=Path(f"Breaking.Bad.S01E{ep:02d}.720p.mkv"), metadata=ep_meta
             )
         )
-        bb.add_file(FileEntry(path=Path(f"Breaking.Bad.S01E{ep:02d}.720p.en.srt")))
+        ep_group.add_file(FileEntry(path=Path(f"Breaking.Bad.S01E{ep:02d}.720p.en.srt")))
+        bb_episodes.append(ep_group)
 
     # -- random_clip --
     clip_meta = FileMetadata(media_type="movie", title="Interstellar")
@@ -155,7 +156,7 @@ def _mock_groups() -> list[ImportGroup]:
     bonus = ImportGroup(metadata=bonus_meta)
     bonus.add_file(FileEntry(path=Path("bonus_featurette.mkv")))
 
-    return [dune, arrival, bb, clip, bonus]
+    return [dune, arrival, *bb_episodes, clip, bonus]
 
 
 @app.command("grid")
