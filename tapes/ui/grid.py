@@ -12,7 +12,7 @@ from rich.text import Text
 
 from tapes.models import ImportGroup
 from tapes.ui.models import GridRow, RowKind, RowStatus, build_grid_rows
-from tapes.ui.query import mock_tmdb_lookup
+from tapes.ui.query import mock_tmdb_lookup, CONFIDENCE_THRESHOLD
 from tapes.ui.render import render_row, FIELD_COLS, COL_WIDTHS, _pad
 
 # Fields that should be stored as int
@@ -213,6 +213,8 @@ class GridApp(App):
         Binding("q", "query", "Query", show=False),
         Binding("Q", "query_all", "Query all", show=False, key_display="shift+q"),
         Binding("u", "undo", "Undo", show=False),
+        Binding("enter", "accept_match", "Accept", show=False),
+        Binding("backspace", "reject_match", "Reject", show=False),
         Binding("f", "freeze", "Freeze cell", show=False),
         Binding("F", "freeze_row", "Freeze row", show=False, key_display="shift+f"),
     ]
@@ -229,6 +231,8 @@ class GridApp(App):
         self._edit_original: str = ""
         # Undo: stores [(row_idx, old_overrides, old_status, old_edited_fields), ...]
         self._undo: list[tuple[int, dict[str, Any], RowStatus, set[str]]] | None = None
+        # Undo for operations that insert/remove rows (query, accept, reject)
+        self._undo_rows: list[GridRow] | None = None
 
     @property
     def editing(self) -> bool:
@@ -270,7 +274,8 @@ class GridApp(App):
             self._grid._cursor_row = row
 
     def _file_rows(self) -> list[int]:
-        return [i for i, r in enumerate(self._rows) if r.kind == RowKind.FILE]
+        """Return indices of all navigable rows (FILE and MATCH, not NO_MATCH or BLANK)."""
+        return [i for i, r in enumerate(self._rows) if r.kind in (RowKind.FILE, RowKind.MATCH)]
 
     def _target_rows(self) -> list[int]:
         """Return selected rows if any, otherwise just the cursor row."""
@@ -449,58 +454,181 @@ class GridApp(App):
 
     def action_undo(self) -> None:
         """Undo the last edit or query."""
-        if not self._grid or self._editing or self._undo is None:
+        if not self._grid or self._editing:
             return
-        for row_idx, old_overrides, old_status, old_edited in self._undo:
-            row = self._rows[row_idx]
-            row._overrides = old_overrides
-            row.status = old_status
-            row.edited_fields = old_edited
-        self._undo = None
-        self._grid.refresh_grid()
+        if self._undo_rows is not None:
+            self._rows = self._undo_rows
+            self._undo_rows = None
+            self._grid.rows = self._rows
+            self._grid.refresh_grid()
+            self._refresh_footer()
+            return
+        if self._undo is not None:
+            for row_idx, old_overrides, old_status, old_edited in self._undo:
+                row = self._rows[row_idx]
+                row._overrides = old_overrides
+                row.status = old_status
+                row.edited_fields = old_edited
+            self._undo = None
+            self._grid.refresh_grid()
 
     def _refresh_footer(self) -> None:
         footer = self.query_one(GridFooter)
         n_sel = len(self._grid._selected_rows) if self._grid and self._grid._sel_col is not None else 0
         footer.update_selection(n_sel)
 
-    def action_query(self) -> None:
-        """Query mock TMDB for cursor row or all selected rows."""
-        if not self._grid or self._editing:
+    def _reindex_owned_rows(self) -> None:
+        """Recompute owned_row_indices on MATCH/NO_MATCH rows after insertions."""
+        for row in self._rows:
+            if row.kind in (RowKind.MATCH, RowKind.NO_MATCH) and row.group is not None:
+                row.owned_row_indices = [
+                    i for i, r in enumerate(self._rows)
+                    if r.kind == RowKind.FILE and r.group is row.group
+                ]
+
+    def _run_query(self, targets: list[int]) -> None:
+        """Run query on target rows, producing match/no-match sub-rows."""
+        if not self._grid:
             return
 
-        targets = self._target_rows()
-        self._undo = self._snapshot_rows(targets)
+        import copy
+        self._undo_rows = copy.deepcopy(self._rows)
 
+        # Collect unique groups from targets
+        seen_groups: set[int] = set()
+        groups_to_query: list[tuple[ImportGroup, list[int]]] = []
         for row_idx in targets:
             row = self._rows[row_idx]
             if row.kind != RowKind.FILE:
                 continue
-            result = mock_tmdb_lookup(row.title or "")
-            if result is not None:
-                fields, _confidence = result
-                row.apply_match(fields)
+            group = row.group
+            if group is None or id(group) in seen_groups:
+                continue
+            seen_groups.add(id(group))
+            group_row_indices = [
+                i for i, r in enumerate(self._rows)
+                if r.kind == RowKind.FILE and r.group is group
+            ]
+            groups_to_query.append((group, group_row_indices))
+
+        # Process each group
+        insertions: list[tuple[int, GridRow]] = []
+        for group, group_row_indices in groups_to_query:
+            meta = group.metadata
+            episode = meta.episode if isinstance(meta.episode, int) else None
+            result = mock_tmdb_lookup(meta.title or "", episode=episode)
+
+            if result is None:
+                # No match
+                first_video_idx = next(
+                    (i for i in group_row_indices if self._rows[i].is_video),
+                    group_row_indices[0],
+                )
+                no_match_row = GridRow(
+                    kind=RowKind.NO_MATCH,
+                    group=group,
+                    owned_row_indices=list(group_row_indices),
+                )
+                insertions.append((first_video_idx + 1, no_match_row))
+            else:
+                fields, confidence = result
+                if confidence >= CONFIDENCE_THRESHOLD:
+                    # Confident: auto-accept
+                    for idx in group_row_indices:
+                        self._rows[idx].apply_match(fields)
+                else:
+                    # Uncertain: set status, insert MATCH sub-row
+                    for idx in group_row_indices:
+                        self._rows[idx].status = RowStatus.UNCERTAIN
+                    first_video_idx = next(
+                        (i for i in group_row_indices if self._rows[i].is_video),
+                        group_row_indices[0],
+                    )
+                    match_row = GridRow(
+                        kind=RowKind.MATCH,
+                        group=group,
+                        match_fields=fields,
+                        match_confidence=confidence,
+                        owned_row_indices=list(group_row_indices),
+                    )
+                    insertions.append((first_video_idx + 1, match_row))
+
+        # Insert in reverse order to preserve indices
+        for insert_idx, sub_row in sorted(insertions, key=lambda x: x[0], reverse=True):
+            self._rows.insert(insert_idx, sub_row)
+
+        # Recompute owned_row_indices after insertions
+        self._reindex_owned_rows()
 
         self._jump_to_top_target(targets)
+        self._grid.rows = self._rows
         self._grid.refresh_grid()
+        self._refresh_footer()
+
+    def action_query(self) -> None:
+        """Query mock TMDB for cursor row or all selected rows."""
+        if not self._grid or self._editing:
+            return
+        self._run_query(self._target_rows())
 
     def action_query_all(self) -> None:
         """Query mock TMDB for all file rows."""
         if not self._grid or self._editing:
             return
+        self._run_query(self._file_rows())
 
-        targets = self._file_rows()
-        self._undo = self._snapshot_rows(targets)
+    def action_accept_match(self) -> None:
+        """Accept the match sub-row at cursor."""
+        if not self._grid or self._editing:
+            return
+        row = self._rows[self._grid._cursor_row]
+        if row.kind != RowKind.MATCH:
+            return
 
-        for row_idx in targets:
-            row = self._rows[row_idx]
-            result = mock_tmdb_lookup(row.title or "")
-            if result is not None:
-                fields, _confidence = result
-                row.apply_match(fields)
+        import copy
+        self._undo_rows = copy.deepcopy(self._rows)
 
-        self._jump_to_top_target(targets)
+        # Apply match fields to all owned rows
+        for idx in row.owned_row_indices:
+            self._rows[idx].apply_match(row.match_fields)
+
+        # Remove the match sub-row
+        match_idx = self._grid._cursor_row
+        self._rows.pop(match_idx)
+        self._reindex_owned_rows()
+
+        # Move cursor up to the file row
+        if match_idx > 0:
+            self._grid._cursor_row = match_idx - 1
+        self._grid.rows = self._rows
         self._grid.refresh_grid()
+        self._refresh_footer()
+
+    def action_reject_match(self) -> None:
+        """Reject the match sub-row at cursor."""
+        if not self._grid or self._editing:
+            return
+        row = self._rows[self._grid._cursor_row]
+        if row.kind != RowKind.MATCH:
+            return
+
+        import copy
+        self._undo_rows = copy.deepcopy(self._rows)
+
+        # Revert owned rows to RAW
+        for idx in row.owned_row_indices:
+            self._rows[idx].status = RowStatus.RAW
+
+        # Remove the match sub-row
+        match_idx = self._grid._cursor_row
+        self._rows.pop(match_idx)
+        self._reindex_owned_rows()
+
+        if match_idx > 0:
+            self._grid._cursor_row = match_idx - 1
+        self._grid.rows = self._rows
+        self._grid.refresh_grid()
+        self._refresh_footer()
 
     def action_freeze(self) -> None:
         """Toggle freeze on the current field for target rows."""

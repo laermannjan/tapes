@@ -3,7 +3,8 @@ from pathlib import Path
 
 from tapes.models import FileEntry, FileMetadata, ImportGroup
 from tapes.ui.grid import GridApp
-from tapes.ui.models import RowStatus
+from tapes.ui.models import RowKind, RowStatus
+from tapes.ui.query import CONFIDENCE_THRESHOLD
 from tapes.ui.render import FIELD_COLS
 
 
@@ -488,3 +489,121 @@ async def test_shift_q_undoable():
         await pilot.press("u")
         assert app._rows[0].status == RowStatus.RAW
         assert app._rows[4].status == RowStatus.RAW
+
+
+# --- Match/No-match sub-row tests (M6) ---
+
+
+def _episode_groups():
+    """Per-episode Breaking Bad groups (uncertain match in mock)."""
+    groups = []
+    for ep in (1, 2, 3):
+        meta = FileMetadata(media_type="episode", title="Breaking Bad", season=1, episode=ep)
+        g = ImportGroup(metadata=meta)
+        g.add_file(FileEntry(path=Path(f"BB.S01E{ep:02d}.mkv"), metadata=meta))
+        g.add_file(FileEntry(path=Path(f"BB.S01E{ep:02d}.en.srt")))
+        groups.append(g)
+    return groups
+
+
+def _no_match_group():
+    """A group with a title not in mock TMDB."""
+    meta = FileMetadata(media_type="movie", title="Unknown Film")
+    g = ImportGroup(metadata=meta)
+    g.add_file(FileEntry(path=Path("unknown.mkv"), metadata=meta))
+    return g
+
+
+async def test_query_uncertain_creates_match_subrows():
+    app = GridApp(_episode_groups())
+    async with app.run_test() as pilot:
+        await pilot.press("Q")
+        match_rows = [r for r in app._rows if r.kind == RowKind.MATCH]
+        assert len(match_rows) == 3  # one per episode group
+
+
+async def test_query_uncertain_sets_status():
+    app = GridApp(_episode_groups())
+    async with app.run_test() as pilot:
+        await pilot.press("Q")
+        file_rows = [r for r in app._rows if r.kind == RowKind.FILE]
+        for r in file_rows:
+            assert r.status == RowStatus.UNCERTAIN
+
+
+async def test_query_no_match_creates_no_match_subrow():
+    app = GridApp([_no_match_group()])
+    async with app.run_test() as pilot:
+        await pilot.press("q")
+        no_match_rows = [r for r in app._rows if r.kind == RowKind.NO_MATCH]
+        assert len(no_match_rows) == 1
+
+
+async def test_cursor_can_land_on_match_rows():
+    app = GridApp(_episode_groups())
+    async with app.run_test() as pilot:
+        await pilot.press("Q")
+        # After query, row 0 = file (BB.S01E01.mkv), row 1 = MATCH sub-row
+        # Navigate down from row 0 should land on match row
+        await pilot.press("down")
+        cursor_row_kind = app._rows[app.cursor_row].kind
+        assert cursor_row_kind in (RowKind.MATCH, RowKind.FILE)
+
+
+async def test_accept_match_updates_group():
+    app = GridApp(_episode_groups())
+    async with app.run_test() as pilot:
+        await pilot.press("Q")
+        # Find first MATCH row
+        match_idx = next(i for i, r in enumerate(app._rows) if r.kind == RowKind.MATCH)
+        # Navigate cursor to that row
+        while app.cursor_row != match_idx:
+            await pilot.press("down")
+        assert app._rows[app.cursor_row].kind == RowKind.MATCH
+        await pilot.press("enter")
+        # First episode's file rows should now be AUTO
+        first_ep_files = [r for r in app._rows if r.kind == RowKind.FILE and r.group is not None
+                          and r.group.metadata.episode == 1]
+        for r in first_ep_files:
+            assert r.status == RowStatus.AUTO
+
+
+async def test_reject_match_reverts_group():
+    app = GridApp(_episode_groups())
+    async with app.run_test() as pilot:
+        await pilot.press("Q")
+        match_idx = next(i for i, r in enumerate(app._rows) if r.kind == RowKind.MATCH)
+        while app.cursor_row != match_idx:
+            await pilot.press("down")
+        await pilot.press("backspace")
+        # First episode's file rows should revert to RAW
+        first_ep_files = [r for r in app._rows if r.kind == RowKind.FILE and r.group is not None
+                          and r.group.metadata.episode == 1]
+        for r in first_ep_files:
+            assert r.status == RowStatus.RAW
+
+
+async def test_cursor_skips_no_match_rows():
+    app = GridApp([_no_match_group()])
+    async with app.run_test() as pilot:
+        await pilot.press("q")
+        # Row 0 = file, row 1 = NO_MATCH
+        assert app.cursor_row == 0
+        await pilot.press("down")
+        # Should not land on NO_MATCH (no more FILE rows after it)
+        assert app._rows[app.cursor_row].kind != RowKind.NO_MATCH
+
+
+async def test_undo_after_accept():
+    app = GridApp(_episode_groups())
+    async with app.run_test() as pilot:
+        await pilot.press("Q")
+        match_idx = next(i for i, r in enumerate(app._rows) if r.kind == RowKind.MATCH)
+        while app.cursor_row != match_idx:
+            await pilot.press("down")
+        await pilot.press("enter")
+        # Now undo
+        await pilot.press("u")
+        # MATCH row should be back
+        match_rows = [r for r in app._rows if r.kind == RowKind.MATCH]
+        assert len(match_rows) >= 1
