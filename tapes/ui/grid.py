@@ -146,7 +146,7 @@ class GridFooter(Static):
         n_uncertain = sum(1 for r in file_rows if r.status == RowStatus.UNCERTAIN)
         n_match = sum(1 for r in self._rows if r.kind == RowKind.MATCH)
         n_no_match = sum(1 for r in self._rows if r.kind == RowKind.NO_MATCH)
-        n_skipped = sum(1 for r in file_rows if getattr(r, '_skipped', False))
+        n_skipped = sum(1 for r in file_rows if r._skipped)
 
         # Status badges
         if n_uncertain:
@@ -186,7 +186,7 @@ class GridFooter(Static):
             # All resolved -- ready to process
             n_processable = sum(
                 1 for r in file_rows
-                if not getattr(r, '_skipped', False)
+                if not r._skipped
             )
             hints = [
                 ("=", f"process {n_processable} files"),
@@ -373,6 +373,7 @@ class GridApp(App):
         Binding("f", "freeze", "Freeze cell", show=False),
         Binding("F", "freeze_row", "Freeze row", show=False, key_display="shift+f"),
         Binding("R", "reject_all_uncertain", "Reject all", show=False, key_display="shift+r"),
+        Binding("I", "ignore_missing", "Ignore missing", show=False, key_display="shift+i"),
         Binding("tab", "toggle_dest", "Toggle view", show=False, priority=True),
     ]
 
@@ -728,7 +729,7 @@ class GridApp(App):
         for row in self._rows:
             if row.kind != RowKind.FILE:
                 continue
-            if getattr(row, '_skipped', False) or getattr(row, '_filled_unknown', False):
+            if row._skipped or row._filled_unknown:
                 continue
             template = self._get_template(row)
             if missing_template_fields(row, template):
@@ -800,11 +801,11 @@ class GridApp(App):
                 data[i] = (op, dest, None, False, None)
                 continue
             # FILE row
-            skipped = getattr(row, '_skipped', False)
+            skipped = row._skipped
             if skipped:
                 data[i] = ("skip", None, None, True, None)
                 continue
-            filled_unknown = getattr(row, '_filled_unknown', False)
+            filled_unknown = row._filled_unknown
             template = self._get_template(row)
             if filled_unknown:
                 dest = compute_dest_path_with_unknown(row, template)
@@ -1038,6 +1039,78 @@ class GridApp(App):
         self._grid.refresh_grid()
         self._refresh_footer()
 
+    def action_ignore_missing(self) -> None:
+        """Mark rows with missing template fields as skipped."""
+        if not self._dest_mode or not self._grid:
+            return
+        from tapes.ui.dest import missing_template_fields
+
+        has_changes = False
+        for row in self._rows:
+            if row.kind != RowKind.FILE:
+                continue
+            if row._skipped or row._filled_unknown:
+                continue
+            template = self._get_template(row)
+            if missing_template_fields(row, template):
+                has_changes = True
+                break
+
+        if not has_changes:
+            return
+
+        import copy
+        self._undo_rows = copy.deepcopy(self._rows)
+
+        for row in self._rows:
+            if row.kind != RowKind.FILE:
+                continue
+            if row._skipped or row._filled_unknown:
+                continue
+            template = self._get_template(row)
+            if missing_template_fields(row, template):
+                row._skipped = True
+
+        self._refresh_dest_data()
+        self._grid.refresh_grid()
+        self._refresh_footer()
+
+    def _fill_unknown(self) -> None:
+        """Fill missing template fields with 'unknown' for destination display."""
+        if not self._grid:
+            return
+        from tapes.ui.dest import missing_template_fields
+
+        has_changes = False
+        for row in self._rows:
+            if row.kind != RowKind.FILE:
+                continue
+            if row._skipped or row._filled_unknown:
+                continue
+            template = self._get_template(row)
+            if missing_template_fields(row, template):
+                has_changes = True
+                break
+
+        if not has_changes:
+            return
+
+        import copy
+        self._undo_rows = copy.deepcopy(self._rows)
+
+        for row in self._rows:
+            if row.kind != RowKind.FILE:
+                continue
+            if row._skipped or row._filled_unknown:
+                continue
+            template = self._get_template(row)
+            if missing_template_fields(row, template):
+                row._filled_unknown = True
+
+        self._refresh_dest_data()
+        self._grid.refresh_grid()
+        self._refresh_footer()
+
     def action_freeze(self) -> None:
         """Toggle freeze on the current field for target rows."""
         if not self._grid or self._editing or self._dest_mode:
@@ -1062,8 +1135,11 @@ class GridApp(App):
         self._grid.refresh_grid()
 
     def action_freeze_row(self) -> None:
-        """Toggle freeze on ALL fields for target rows."""
-        if not self._grid or self._editing or self._dest_mode:
+        """Toggle freeze on ALL fields for target rows. In dest mode, fill unknown."""
+        if not self._grid or self._editing:
+            return
+        if self._dest_mode:
+            self._fill_unknown()
             return
 
         targets = self._target_rows()

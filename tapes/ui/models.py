@@ -38,6 +38,9 @@ class GridRow:
     match_confidence: float = 0.0
     # Rows owned by this match sub-row (indices populated after build)
     owned_row_indices: list[int] = field(default_factory=list)
+    # Dest view flags
+    _skipped: bool = False
+    _filled_unknown: bool = False
 
     @property
     def is_video(self) -> bool:

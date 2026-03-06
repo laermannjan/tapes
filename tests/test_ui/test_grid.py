@@ -837,3 +837,67 @@ async def test_reject_all_noop_outside_dest():
         await pilot.press("R")
         # Should not have changed anything
         assert len([r for r in app._rows if r.kind == RowKind.MATCH]) == match_count
+
+
+# --- Ignore-missing / Fill-unknown tests (M6 Task 8) ---
+
+
+async def test_ignore_missing_marks_skipped():
+    """I in dest view marks rows with missing fields as skipped."""
+    meta = FileMetadata(title="Unknown Movie", media_type="movie")
+    g = ImportGroup(metadata=meta)
+    g.add_file(FileEntry(path=Path("movie.mkv"), metadata=meta))
+    app = GridApp([g])
+    async with app.run_test() as pilot:
+        await pilot.press("tab")
+        await pilot.press("I")
+        assert app._rows[0]._skipped is True
+
+
+async def test_fill_unknown_marks_filled():
+    """F in dest view fills missing fields with 'unknown'."""
+    meta = FileMetadata(title="Unknown Movie", media_type="movie")
+    g = ImportGroup(metadata=meta)
+    g.add_file(FileEntry(path=Path("movie.mkv"), metadata=meta))
+    app = GridApp([g])
+    async with app.run_test() as pilot:
+        await pilot.press("tab")
+        await pilot.press("F")
+        assert app._rows[0]._filled_unknown is True
+
+
+async def test_ignore_missing_undoable():
+    """I in dest view can be undone with u."""
+    meta = FileMetadata(title="Unknown Movie", media_type="movie")
+    g = ImportGroup(metadata=meta)
+    g.add_file(FileEntry(path=Path("movie.mkv"), metadata=meta))
+    app = GridApp([g])
+    async with app.run_test() as pilot:
+        await pilot.press("tab")
+        await pilot.press("I")
+        assert app._rows[0]._skipped is True
+        await pilot.press("u")
+        assert app._rows[0]._skipped is False
+
+
+async def test_fill_unknown_undoable():
+    """F in dest view can be undone with u."""
+    meta = FileMetadata(title="Unknown Movie", media_type="movie")
+    g = ImportGroup(metadata=meta)
+    g.add_file(FileEntry(path=Path("movie.mkv"), metadata=meta))
+    app = GridApp([g])
+    async with app.run_test() as pilot:
+        await pilot.press("tab")
+        await pilot.press("F")
+        assert app._rows[0]._filled_unknown is True
+        await pilot.press("u")
+        assert app._rows[0]._filled_unknown is False
+
+
+async def test_ignore_noop_outside_dest():
+    """I outside dest view does nothing."""
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        await pilot.press("I")
+        # Should not crash, no rows skipped
+        assert all(not r._skipped for r in app._rows)
