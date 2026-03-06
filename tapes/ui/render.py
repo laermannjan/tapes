@@ -29,14 +29,23 @@ _BADGE_STYLES: dict[RowStatus, tuple[str, str]] = {
 BG_ROW_CUR = "#1e1e1e"
 BG_COL_HI = "#1e1e1e"
 BG_CELL_CUR = "#2c2c2c"
-BG_CELL_SEL = "#363636"
-BG_ROW_SEL = "#1c1c1c"
-BG_CELL_SEL_CUR = "#3c3c3c"
+BG_CELL_SEL = "#3a5a3a"
+BG_ROW_SEL = "#1a241a"
+BG_CELL_SEL_CUR = "#4a6a4a"
+
+# When text sits on a selected (green) background, boost dim colors for readability.
+_SEL_TEXT: dict[str, str] = {
+    "#555555": "#999999",
+    "#888888": "#cccccc",
+    "#dddddd": "#eeeeee",
+    "#66bbcc": "#88ddee",
+    "#a78bfa": "#c4a8ff",
+}
 
 
 def _pad(text: str, width: int) -> str:
     """Pad or truncate text to exact column width."""
-    if len(text) >= width:
+    if len(text) > width:
         return text[: width - 1] + "\u2026"
     return text + " " * (width - len(text))
 
@@ -117,7 +126,7 @@ def render_row(
         t.append_text(fp_text)
     else:
         style = base_style if is_comp else bright_style
-        _col(t, _pad(fp, COL_WIDTHS["filepath"]), COL_WIDTHS["filepath"], style, bg=row_bg)
+        _col(t, fp, COL_WIDTHS["filepath"], style, bg=row_bg)
 
     # Metadata columns
     values = [
@@ -139,15 +148,14 @@ def render_row(
         bg = row_bg
         if is_cursor_row and i == cursor_col:
             bg = BG_CELL_CUR
-            style = "#ffffff"
         elif i == cursor_col:
             bg = BG_COL_HI
         if i in selected_cols:
             if is_sel_cursor_row and i == cursor_col:
                 bg = BG_CELL_SEL_CUR
-                style = "#ffffff"
             else:
                 bg = BG_CELL_SEL
+                style = _SEL_TEXT.get(style, style)
 
         _col(t, value, COL_WIDTHS[col_name], style, bg=bg)
 

@@ -97,14 +97,15 @@ async def test_v_toggle_deselects():
         assert app.selection == set()
 
 
-async def test_selection_extends_on_arrow():
+async def test_arrow_does_not_extend_selection():
     app = GridApp(_groups())
     async with app.run_test() as pilot:
-        # rows: 0=Dune.mkv 1=Dune.en.srt 2=Dune.de.srt 3=BLANK 4=Arrival.mkv 5=Arrival.en.srt
         await pilot.press("v")
         assert app.selection == {(0, 0)}
         await pilot.press("down")
-        assert app.selection == {(0, 0), (1, 0)}
+        # Arrow moves cursor but does not add to selection
+        assert app.selection == {(0, 0)}
+        assert app.cursor_row == 1
 
 
 async def test_esc_clears_selection():
@@ -120,21 +121,17 @@ async def test_non_adjacent_selection():
     app = GridApp(_groups())
     async with app.run_test() as pilot:
         # rows: 0=Dune.mkv 1=Dune.en.srt 2=Dune.de.srt 3=BLANK 4=Arrival.mkv 5=Arrival.en.srt
-        # Select row 0
         await pilot.press("v")
         assert app.selection == {(0, 0)}
-        # Move down two rows (selection extends)
+        # Move down two rows, then toggle row 2
         await pilot.press("down")
         await pilot.press("down")
         assert app.cursor_row == 2
-        # Both rows 0, 1, 2 are selected (extended via arrow)
-        assert app.selection == {(0, 0), (1, 0), (2, 0)}
-        # Press v to deselect row 2 (non-adjacent: rows 0 and 1 remain)
         await pilot.press("v")
-        assert app.selection == {(0, 0), (1, 0)}
-        # Press v again to re-add row 2
+        assert app.selection == {(0, 0), (2, 0)}
+        # Deselect row 2
         await pilot.press("v")
-        assert app.selection == {(0, 0), (1, 0), (2, 0)}
+        assert app.selection == {(0, 0)}
 
 
 async def test_selection_locks_column():
@@ -142,7 +139,7 @@ async def test_selection_locks_column():
     async with app.run_test() as pilot:
         await pilot.press("v")
         assert app.selection == {(0, 0)}
-        # Moving right should clear the selection
+        # Moving right is blocked while selection is active
         await pilot.press("right")
-        assert app.selection == set()
-        assert app.cursor_col == 1
+        assert app.selection == {(0, 0)}
+        assert app.cursor_col == 0

@@ -247,19 +247,13 @@ class GridApp(App):
             # Start new selection, lock column
             self._grid._sel_col = col
             self._grid._selected_rows.add(row)
-        elif self._grid._sel_col != col:
-            # Different column -- clear and start fresh
-            self._grid.clear_selection()
-            self._grid._sel_col = col
-            self._grid._selected_rows.add(row)
+        elif row in self._grid._selected_rows:
+            # Already selected -- deselect
+            self._grid._selected_rows.discard(row)
+            if not self._grid._selected_rows:
+                self._grid._sel_col = None
         else:
-            # Same column -- toggle this row
-            if row in self._grid._selected_rows:
-                self._grid._selected_rows.discard(row)
-                if not self._grid._selected_rows:
-                    self._grid._sel_col = None
-            else:
-                self._grid._selected_rows.add(row)
+            self._grid._selected_rows.add(row)
         self._grid.refresh_grid()
         self._refresh_footer()
 
@@ -280,13 +274,9 @@ class GridApp(App):
             return
         file_rows = self._file_rows()
         cur = self._grid._cursor_row
-        has_selection = self._grid._sel_col is not None
         for idx in file_rows:
             if idx > cur:
                 self._grid._cursor_row = idx
-                if has_selection:
-                    self._grid._selected_rows.add(idx)
-                    self._refresh_footer()
                 self._grid.refresh_grid()
                 return
 
@@ -295,32 +285,28 @@ class GridApp(App):
             return
         file_rows = self._file_rows()
         cur = self._grid._cursor_row
-        has_selection = self._grid._sel_col is not None
         for idx in reversed(file_rows):
             if idx < cur:
                 self._grid._cursor_row = idx
-                if has_selection:
-                    self._grid._selected_rows.add(idx)
-                    self._refresh_footer()
                 self._grid.refresh_grid()
                 return
 
     def action_cursor_right(self) -> None:
         if not self._grid:
             return
+        # Block column change while selection is active
+        if self._grid._sel_col is not None:
+            return
         if self._grid._cursor_col < len(FIELD_COLS) - 1:
             self._grid._cursor_col += 1
-            if self._grid._sel_col is not None:
-                self._grid.clear_selection()
-                self._refresh_footer()
             self._grid.refresh_grid()
 
     def action_cursor_left(self) -> None:
         if not self._grid:
             return
+        # Block column change while selection is active
+        if self._grid._sel_col is not None:
+            return
         if self._grid._cursor_col > 0:
             self._grid._cursor_col -= 1
-            if self._grid._sel_col is not None:
-                self._grid.clear_selection()
-                self._refresh_footer()
             self._grid.refresh_grid()
