@@ -745,3 +745,95 @@ async def test_dest_footer_shows_process_when_ready():
         # Dune and Arrival have title+year, so they're complete for movie template
         # Should show process hint
         assert "process" in text.plain or "=" in text.plain or "missing" in text.plain
+
+
+# --- Accept-all / Reject-all uncertain tests (M6 Task 7) ---
+
+
+async def test_accept_all_uncertain():
+    """A in dest view accepts all uncertain match sub-rows."""
+    app = GridApp(_episode_groups())
+    async with app.run_test() as pilot:
+        # Query all to get uncertain matches (Breaking Bad has confidence 0.75)
+        await pilot.press("Q")
+        match_rows = [r for r in app._rows if r.kind == RowKind.MATCH]
+        assert len(match_rows) > 0
+
+        # Switch to dest view and accept all
+        await pilot.press("tab")
+        await pilot.press("A")
+
+        # All match sub-rows should be removed
+        match_after = [r for r in app._rows if r.kind == RowKind.MATCH]
+        assert len(match_after) == 0
+        # All file rows should be AUTO
+        auto_rows = [r for r in app._rows if r.kind == RowKind.FILE and r.status == RowStatus.AUTO]
+        assert len(auto_rows) == 6  # 3 episodes x 2 files each
+
+
+async def test_reject_all_uncertain():
+    """R in dest view rejects all uncertain match sub-rows."""
+    app = GridApp(_episode_groups())
+    async with app.run_test() as pilot:
+        await pilot.press("Q")
+        match_rows_before = [r for r in app._rows if r.kind == RowKind.MATCH]
+        assert len(match_rows_before) > 0
+
+        await pilot.press("tab")
+        await pilot.press("R")
+
+        # All match sub-rows should be removed
+        match_after = [r for r in app._rows if r.kind == RowKind.MATCH]
+        assert len(match_after) == 0
+        # All file rows should revert to RAW
+        raw_rows = [r for r in app._rows if r.kind == RowKind.FILE and r.status == RowStatus.RAW]
+        assert len(raw_rows) == 6  # 3 episodes x 2 files each
+
+
+async def test_accept_all_undoable():
+    """Accept-all in dest view can be undone with u."""
+    app = GridApp(_episode_groups())
+    async with app.run_test() as pilot:
+        await pilot.press("Q")
+        await pilot.press("tab")
+        await pilot.press("A")
+        # Verify accept worked
+        assert len([r for r in app._rows if r.kind == RowKind.MATCH]) == 0
+        # Undo
+        await pilot.press("u")
+        match_rows = [r for r in app._rows if r.kind == RowKind.MATCH]
+        assert len(match_rows) > 0
+
+
+async def test_reject_all_undoable():
+    """Reject-all in dest view can be undone with u."""
+    app = GridApp(_episode_groups())
+    async with app.run_test() as pilot:
+        await pilot.press("Q")
+        await pilot.press("tab")
+        await pilot.press("R")
+        assert len([r for r in app._rows if r.kind == RowKind.MATCH]) == 0
+        await pilot.press("u")
+        match_rows = [r for r in app._rows if r.kind == RowKind.MATCH]
+        assert len(match_rows) > 0
+
+
+async def test_accept_all_noop_without_matches():
+    """A in dest view does nothing when there are no match sub-rows."""
+    app = GridApp(_groups())
+    async with app.run_test() as pilot:
+        await pilot.press("tab")
+        rows_before = len(app._rows)
+        await pilot.press("A")
+        assert len(app._rows) == rows_before
+
+
+async def test_reject_all_noop_outside_dest():
+    """R outside dest view does nothing."""
+    app = GridApp(_episode_groups())
+    async with app.run_test() as pilot:
+        await pilot.press("Q")
+        match_count = len([r for r in app._rows if r.kind == RowKind.MATCH])
+        await pilot.press("R")
+        # Should not have changed anything
+        assert len([r for r in app._rows if r.kind == RowKind.MATCH]) == match_count

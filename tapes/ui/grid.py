@@ -372,6 +372,7 @@ class GridApp(App):
         Binding("A", "select_show", "Select show", show=False, key_display="shift+a"),
         Binding("f", "freeze", "Freeze cell", show=False),
         Binding("F", "freeze_row", "Freeze row", show=False, key_display="shift+f"),
+        Binding("R", "reject_all_uncertain", "Reject all", show=False, key_display="shift+r"),
         Binding("tab", "toggle_dest", "Toggle view", show=False, priority=True),
     ]
 
@@ -550,8 +551,11 @@ class GridApp(App):
         self._refresh_footer()
 
     def action_select_show(self) -> None:
-        """Select all file rows of the same show as cursor row."""
-        if not self._grid or self._editing or self._dest_mode:
+        """Select all file rows of the same show as cursor row. In dest mode, accept all uncertain."""
+        if not self._grid or self._editing:
+            return
+        if self._dest_mode:
+            self._accept_all_uncertain()
             return
         cursor_row = self._rows[self._grid._cursor_row]
         if cursor_row.kind != RowKind.FILE or cursor_row.group is None:
@@ -981,6 +985,56 @@ class GridApp(App):
         if match_idx > 0:
             self._grid._cursor_row = match_idx - 1
         self._grid.rows = self._rows
+        self._grid.refresh_grid()
+        self._refresh_footer()
+
+    def _accept_all_uncertain(self) -> None:
+        """Accept all uncertain match sub-rows."""
+        if not self._grid:
+            return
+        match_rows = [(i, r) for i, r in enumerate(self._rows) if r.kind == RowKind.MATCH]
+        if not match_rows:
+            return
+
+        import copy
+        self._undo_rows = copy.deepcopy(self._rows)
+
+        # Apply match fields to all owned rows
+        for _, match_row in match_rows:
+            for idx in match_row.owned_row_indices:
+                if idx < len(self._rows):
+                    self._rows[idx].apply_match(match_row.match_fields)
+
+        # Remove all MATCH rows
+        self._rows = [r for r in self._rows if r.kind != RowKind.MATCH]
+        self._reindex_owned_rows()
+        self._grid.rows = self._rows
+        self._refresh_dest_data()
+        self._grid.refresh_grid()
+        self._refresh_footer()
+
+    def action_reject_all_uncertain(self) -> None:
+        """Reject all uncertain match sub-rows."""
+        if not self._dest_mode or not self._grid:
+            return
+        match_rows = [(i, r) for i, r in enumerate(self._rows) if r.kind == RowKind.MATCH]
+        if not match_rows:
+            return
+
+        import copy
+        self._undo_rows = copy.deepcopy(self._rows)
+
+        # Revert owned rows to RAW
+        for _, match_row in match_rows:
+            for idx in match_row.owned_row_indices:
+                if idx < len(self._rows):
+                    self._rows[idx].status = RowStatus.RAW
+
+        # Remove all MATCH rows
+        self._rows = [r for r in self._rows if r.kind != RowKind.MATCH]
+        self._reindex_owned_rows()
+        self._grid.rows = self._rows
+        self._refresh_dest_data()
         self._grid.refresh_grid()
         self._refresh_footer()
 
