@@ -956,3 +956,102 @@ async def test_process_not_in_metadata_view():
     async with app.run_test() as pilot:
         await pilot.press("=")
         assert app.confirming is False
+
+
+# --- Edit modal tests (Shift+E) ---
+
+
+def _movie_group():
+    """Single movie group for modal tests."""
+    meta = FileMetadata(title="Inception", year=2010, media_type="movie")
+    g = ImportGroup(metadata=meta)
+    g.add_file(FileEntry(path=Path("movies/Inception.2010.mkv"), metadata=meta))
+    return g
+
+
+async def test_shift_e_opens_edit_modal():
+    """Shift+E opens the edit modal and applies changes on enter."""
+    groups = [_movie_group()]
+    app = GridApp(groups)
+    async with app.run_test(size=(80, 30)) as pilot:
+        await pilot.press("E")
+        await pilot.pause()
+        await pilot.press("backspace", "backspace", "backspace")
+        await pilot.press("!", "!", "!")
+        await pilot.press("enter")
+        await pilot.pause()
+        row = app._rows[0]
+        assert row.title == "Incept!!!"
+
+
+async def test_shift_e_cancel_discards_changes():
+    """Shift+E then escape discards all edits."""
+    groups = [_movie_group()]
+    app = GridApp(groups)
+    async with app.run_test(size=(80, 30)) as pilot:
+        await pilot.press("E")
+        await pilot.pause()
+        await pilot.press("x", "y", "z")
+        await pilot.press("escape")
+        await pilot.pause()
+        row = app._rows[0]
+        assert row.title == "Inception"
+
+
+async def test_shift_e_undoable():
+    """Modal edits can be undone with u."""
+    groups = [_movie_group()]
+    app = GridApp(groups)
+    async with app.run_test(size=(80, 30)) as pilot:
+        await pilot.press("E")
+        await pilot.pause()
+        await pilot.press("x")
+        await pilot.press("enter")
+        await pilot.pause()
+        assert app._rows[0].title == "Inceptionx"
+        await pilot.press("u")
+        await pilot.pause()
+        assert app._rows[0].title == "Inception"
+
+
+async def test_shift_e_disabled_in_dest_mode():
+    """Shift+E does nothing in destination view."""
+    groups = [_movie_group()]
+    app = GridApp(groups)
+    async with app.run_test(size=(80, 30)) as pilot:
+        await pilot.press("tab")  # enter dest mode
+        await pilot.pause()
+        await pilot.press("E")
+        await pilot.pause()
+        assert app.dest_mode is True
+
+
+async def test_shift_e_with_selection_applies_to_all():
+    """Modal edits apply to all selected rows."""
+    groups = _episode_groups()
+    app = GridApp(groups)
+    async with app.run_test(size=(80, 30)) as pilot:
+        await pilot.press("A")
+        await pilot.pause()
+        await pilot.press("E")
+        await pilot.pause()
+        await pilot.press("backspace")
+        await pilot.press("!")
+        await pilot.press("enter")
+        await pilot.pause()
+        for r in app._rows:
+            if r.kind == RowKind.FILE:
+                assert r.title == "Breaking Ba!"
+
+
+async def test_shift_e_freeze_syncs_back():
+    """Toggling freeze in modal updates the row's frozen_fields."""
+    groups = [_movie_group()]
+    app = GridApp(groups)
+    async with app.run_test(size=(80, 30)) as pilot:
+        await pilot.press("E")
+        await pilot.pause()
+        await pilot.press("ctrl+f")
+        await pilot.press("enter")
+        await pilot.pause()
+        assert "title" in app._rows[0].frozen_fields

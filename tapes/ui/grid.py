@@ -13,6 +13,7 @@ from rich.text import Text
 
 from tapes.config import TapesConfig
 from tapes.models import ImportGroup
+from tapes.ui.edit_modal import EditModal
 from tapes.ui.models import GridRow, RowKind, RowStatus, build_grid_rows
 from tapes.ui.query import mock_tmdb_lookup, CONFIDENCE_THRESHOLD
 from tapes.ui.render import render_row, render_dest_row, FIELD_COLS, COL_WIDTHS, DEST_COL_WIDTH, _pad
@@ -387,6 +388,7 @@ class GridApp(App):
         Binding("I", "ignore_missing", "Ignore missing", show=False, key_display="shift+i"),
         Binding("tab", "toggle_dest", "Toggle view", show=False, priority=True),
         Binding("=", "process", "Process", show=False),
+        Binding("E", "open_edit_modal", "Edit all", show=False, key_display="shift+e"),
     ]
 
     def __init__(self, groups: list[ImportGroup], *, config: TapesConfig | None = None, **kwargs) -> None:
@@ -406,6 +408,7 @@ class GridApp(App):
         self._config = config or TapesConfig()
         self._dest_mode: bool = False
         self._confirming: bool = False
+        self._last_modal: EditModal | None = None
 
     @property
     def editing(self) -> bool:
@@ -611,6 +614,59 @@ class GridApp(App):
 
         self._grid.refresh_grid()
         self._refresh_footer()
+
+    def action_open_edit_modal(self) -> None:
+        """Open the full edit modal for cursor row or selection."""
+        if not self._grid or self._editing or self._dest_mode:
+            return
+        targets = self._target_rows()
+        target_rows = [self._rows[i] for i in targets if self._rows[i].kind == RowKind.FILE]
+        if not target_rows:
+            return
+
+        # Snapshot for undo
+        self._undo = self._snapshot_rows(targets)
+        self._undo_rows = None
+
+        def _on_modal_result(result: dict[str, Any] | None) -> None:
+            if result is None:
+                self._undo = None  # Cancelled
+                return
+            # Apply changes to all target rows
+            for row_idx in targets:
+                row = self._rows[row_idx]
+                if row.kind != RowKind.FILE:
+                    continue
+                for field_name, value in result.items():
+                    # Type conversion for int fields
+                    if field_name in _INT_FIELDS:
+                        try:
+                            row.set_field(field_name, int(value))
+                        except (ValueError, TypeError):
+                            pass  # Skip invalid int
+                    else:
+                        row.set_field(field_name, value)
+            # Sync freeze state from modal back to rows
+            modal = self._last_modal
+            if modal:
+                for row_idx in targets:
+                    row = self._rows[row_idx]
+                    if row.kind != RowKind.FILE:
+                        continue
+                    for f in FIELD_COLS:
+                        if modal._frozen[f]:
+                            row.frozen_fields.add(f)
+                        else:
+                            row.frozen_fields.discard(f)
+            # If no actual changes were made (no dirty fields, only freeze), clear undo
+            if not result:
+                self._undo = None
+            if self._grid:
+                self._grid.refresh_grid()
+
+        modal = EditModal(target_rows)
+        self._last_modal = modal
+        self.push_screen(modal, callback=_on_modal_result)
 
     def action_start_edit(self) -> None:
         if not self._grid or self._editing or self._dest_mode:
