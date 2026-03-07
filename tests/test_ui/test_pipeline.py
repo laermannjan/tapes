@@ -335,106 +335,102 @@ class TestAutoPipelineIntegration:
 @pytest.mark.skipif(not HAS_PILOT, reason="textual pilot not available")
 class TestRefreshQueryIntegration:
     @pytest.mark.asyncio()
-    async def test_r_in_tree_refreshes_per_file(self) -> None:
+    async def test_r_in_tree_refreshes_per_file(self, mock_tmdb) -> None:
         from tapes.ui.tree_app import TreeApp
 
-        with _patch_tmdb()[0], _patch_tmdb()[1], _patch_tmdb()[2]:
-            node = FileNode(
-                path=Path("/media/Dune.mkv"),
-                result={"title": "Dune"},
-                sources=[Source(name="from filename", fields={"title": "Dune"})],
-            )
-            root = FolderNode(name="root", children=[node])
-            model = TreeModel(root=root)
-            config_obj = _make_config(TOKEN)
-            app = TreeApp(model=model, template="{title} ({year}).{ext}", config=config_obj)
+        node = FileNode(
+            path=Path("/media/Dune.mkv"),
+            result={"title": "Dune"},
+            sources=[Source(name="from filename", fields={"title": "Dune"})],
+        )
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
+        config_obj = _make_config(TOKEN)
+        app = TreeApp(model=model, template="{title} ({year}).{ext}", config=config_obj)
 
-            async with app.run_test() as pilot:
-                await pilot.press("r")
-                tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
-                assert len(tmdb_sources) == 1
-                assert tmdb_sources[0].confidence == 1.0
+        async with app.run_test() as pilot:
+            await pilot.press("r")
+            tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
+            assert len(tmdb_sources) == 1
+            assert tmdb_sources[0].confidence == 1.0
 
     @pytest.mark.asyncio()
-    async def test_r_in_detail_refreshes_current_node(self) -> None:
+    async def test_r_in_detail_refreshes_current_node(self, mock_tmdb) -> None:
         from tapes.ui.tree_app import TreeApp
 
-        with _patch_tmdb()[0], _patch_tmdb()[1], _patch_tmdb()[2]:
-            node = FileNode(
-                path=Path("/media/Arrival.mkv"),
-                result={"title": "Arrival"},
-                sources=[Source(name="from filename", fields={"title": "Arrival"})],
-            )
-            root = FolderNode(name="root", children=[node])
-            model = TreeModel(root=root)
-            config_obj = _make_config(TOKEN)
-            app = TreeApp(model=model, template="{title} ({year}).{ext}", config=config_obj)
+        node = FileNode(
+            path=Path("/media/Arrival.mkv"),
+            result={"title": "Arrival"},
+            sources=[Source(name="from filename", fields={"title": "Arrival"})],
+        )
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
+        config_obj = _make_config(TOKEN)
+        app = TreeApp(model=model, template="{title} ({year}).{ext}", config=config_obj)
 
-            async with app.run_test() as pilot:
-                await pilot.press("enter")
-                assert app._in_detail is True
-                await pilot.press("r")
-                tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
-                assert len(tmdb_sources) == 1
-                assert node.result.get("year") == 2016
+        async with app.run_test() as pilot:
+            await pilot.press("enter")
+            assert app._in_detail is True
+            await pilot.press("r")
+            tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
+            assert len(tmdb_sources) == 1
+            assert node.result.get("year") == 2016
 
     @pytest.mark.asyncio()
-    async def test_r_in_tree_range_refreshes_all(self) -> None:
+    async def test_r_in_tree_range_refreshes_all(self, mock_tmdb) -> None:
         from tapes.ui.tree_app import TreeApp
 
-        with _patch_tmdb()[0], _patch_tmdb()[1], _patch_tmdb()[2]:
-            node1 = FileNode(
-                path=Path("/media/Dune.mkv"),
-                result={"title": "Dune"},
-                sources=[Source(name="from filename", fields={"title": "Dune"})],
-            )
-            node2 = FileNode(
-                path=Path("/media/Arrival.mkv"),
-                result={"title": "Arrival"},
-                sources=[Source(name="from filename", fields={"title": "Arrival"})],
-            )
-            root = FolderNode(name="root", children=[node1, node2])
-            model = TreeModel(root=root)
-            config_obj = _make_config(TOKEN)
-            app = TreeApp(model=model, template="{title} ({year}).{ext}", config=config_obj)
+        node1 = FileNode(
+            path=Path("/media/Dune.mkv"),
+            result={"title": "Dune"},
+            sources=[Source(name="from filename", fields={"title": "Dune"})],
+        )
+        node2 = FileNode(
+            path=Path("/media/Arrival.mkv"),
+            result={"title": "Arrival"},
+            sources=[Source(name="from filename", fields={"title": "Arrival"})],
+        )
+        root = FolderNode(name="root", children=[node1, node2])
+        model = TreeModel(root=root)
+        config_obj = _make_config(TOKEN)
+        app = TreeApp(model=model, template="{title} ({year}).{ext}", config=config_obj)
 
-            async with app.run_test() as pilot:
-                await pilot.press("v")
-                await pilot.press("j")
-                await pilot.press("r")
-                for n in [node1, node2]:
-                    tmdb = [s for s in n.sources if s.name.startswith("TMDB")]
-                    assert len(tmdb) == 1
+        async with app.run_test() as pilot:
+            await pilot.press("v")
+            await pilot.press("j")
+            await pilot.press("r")
+            for n in [node1, node2]:
+                tmdb = [s for s in n.sources if s.name.startswith("TMDB")]
+                assert len(tmdb) == 1
 
     @pytest.mark.asyncio()
-    async def test_r_in_multi_detail_refreshes_all_nodes(self) -> None:
+    async def test_r_in_multi_detail_refreshes_all_nodes(self, mock_tmdb) -> None:
         from tapes.ui.tree_app import TreeApp
 
-        with _patch_tmdb()[0], _patch_tmdb()[1], _patch_tmdb()[2]:
-            node1 = FileNode(
-                path=Path("/media/Dune.mkv"),
-                result={"title": "Dune"},
-                sources=[Source(name="from filename", fields={"title": "Dune"})],
-            )
-            node2 = FileNode(
-                path=Path("/media/Arrival.mkv"),
-                result={"title": "Arrival"},
-                sources=[Source(name="from filename", fields={"title": "Arrival"})],
-            )
-            root = FolderNode(name="root", children=[node1, node2])
-            model = TreeModel(root=root)
-            config_obj = _make_config(TOKEN)
-            app = TreeApp(model=model, template="{title} ({year}).{ext}", config=config_obj)
+        node1 = FileNode(
+            path=Path("/media/Dune.mkv"),
+            result={"title": "Dune"},
+            sources=[Source(name="from filename", fields={"title": "Dune"})],
+        )
+        node2 = FileNode(
+            path=Path("/media/Arrival.mkv"),
+            result={"title": "Arrival"},
+            sources=[Source(name="from filename", fields={"title": "Arrival"})],
+        )
+        root = FolderNode(name="root", children=[node1, node2])
+        model = TreeModel(root=root)
+        config_obj = _make_config(TOKEN)
+        app = TreeApp(model=model, template="{title} ({year}).{ext}", config=config_obj)
 
-            async with app.run_test() as pilot:
-                await pilot.press("v")
-                await pilot.press("j")
-                await pilot.press("enter")
-                assert app._in_detail is True
-                await pilot.press("r")
-                for n in [node1, node2]:
-                    tmdb = [s for s in n.sources if s.name.startswith("TMDB")]
-                    assert len(tmdb) == 1
+        async with app.run_test() as pilot:
+            await pilot.press("v")
+            await pilot.press("j")
+            await pilot.press("enter")
+            assert app._in_detail is True
+            await pilot.press("r")
+            for n in [node1, node2]:
+                tmdb = [s for s in n.sources if s.name.startswith("TMDB")]
+                assert len(tmdb) == 1
 
 
 class TestTmdbCache:
