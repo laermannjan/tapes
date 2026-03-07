@@ -8,6 +8,7 @@ import yaml
 
 from tapes.config import (
     LibraryConfig,
+    ScanConfig,
     TapesConfig,
     load_config,
 )
@@ -65,3 +66,26 @@ def test_library_config_custom():
     cfg = TapesConfig(library=LibraryConfig(operation="move", movie_template="{title}.{ext}"))
     assert cfg.library.operation == "move"
     assert cfg.library.movie_template == "{title}.{ext}"
+
+
+class TestScanConfig:
+    """Test ScanConfig defaults and customization."""
+
+    def test_ignore_patterns_defaults(self) -> None:
+        cfg = ScanConfig()
+        assert cfg.ignore_patterns == ["Thumbs.db", ".DS_Store", "desktop.ini"]
+
+    def test_ignore_patterns_custom(self) -> None:
+        cfg = ScanConfig(ignore_patterns=["*.nfo", "*.txt"])
+        assert cfg.ignore_patterns == ["*.nfo", "*.txt"]
+
+    def test_ignore_patterns_empty(self) -> None:
+        cfg = ScanConfig(ignore_patterns=[])
+        assert cfg.ignore_patterns == []
+
+    def test_ignore_patterns_from_yaml(self, tmp_path: Path) -> None:
+        data = {"scan": {"ignore_patterns": ["*.log", "*.tmp"]}}
+        p = tmp_path / "config.yaml"
+        p.write_text(yaml.dump(data))
+        cfg = load_config(p)
+        assert cfg.scan.ignore_patterns == ["*.log", "*.tmp"]
