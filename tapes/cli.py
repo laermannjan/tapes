@@ -181,6 +181,52 @@ def grid_cmd(
     tui.run()
 
 
+@app.command("tree")
+def tree_cmd(
+    path: Path = typer.Argument(..., help="Directory to scan"),
+    config_file: Optional[Path] = typer.Option(
+        None, "--config", "-c", help="Path to config file"
+    ),
+) -> None:
+    """Launch the tree TUI (dev command)."""
+    from tapes.metadata import extract_metadata
+    from tapes.scanner import scan
+    from tapes.ui.tree_app import TreeApp
+    from tapes.ui.tree_model import build_tree
+
+    cfg = load_config(config_file) if config_file else TapesConfig()
+    resolved = path.resolve()
+    files = scan(resolved)
+    if not files:
+        console.print("No video files found.")
+        return
+
+    model = build_tree(files, resolved)
+
+    # Populate result from guessit metadata
+    for file_node in model.all_files():
+        meta = extract_metadata(file_node.path.name)
+        result: dict[str, object] = {}
+        if meta.title:
+            result["title"] = meta.title
+        if meta.year is not None:
+            result["year"] = meta.year
+        if meta.season is not None:
+            result["season"] = meta.season
+        if meta.episode is not None:
+            result["episode"] = meta.episode
+        if meta.media_type:
+            result["media_type"] = meta.media_type
+        for k, v in meta.raw.items():
+            if v is not None:
+                result[k] = v
+        file_node.result = result
+
+    template = cfg.library.movie_template
+    tui = TreeApp(model=model, template=template, root_path=resolved)
+    tui.run()
+
+
 def _print_scan(root: Path, groups: list[ImportGroup]) -> None:
     """Print file-level scan results with metadata."""
     try:
