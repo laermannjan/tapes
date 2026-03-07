@@ -1,16 +1,22 @@
 """Textual App for the tree-based file browser."""
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from pathlib import Path
 
+from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.events import Key
-from textual.widgets import Footer
+from textual.reactive import reactive
+from textual.widgets import Static
 
 from tapes.config import TapesConfig
 from tapes.fields import MEDIA_TYPE, MEDIA_TYPE_EPISODE
+from tapes.ui.commit_modal import CommitModal
 from tapes.ui.detail_view import DetailView
+from tapes.ui.help_overlay import HelpOverlay
 from tapes.ui.tree_model import (
     FileNode,
     FolderNode,
@@ -19,6 +25,43 @@ from tapes.ui.tree_model import (
     accept_best_source,
 )
 from tapes.ui.tree_view import TreeView
+
+if TYPE_CHECKING:
+    from rich.console import RenderableType
+
+
+class StatusFooter(Static):
+    """Context-aware footer showing relevant keybinding hints."""
+
+    mode: reactive[str] = reactive("tree")
+
+    def render(self) -> RenderableType:
+        """Build styled keybinding hints based on current mode."""
+        cyan = "bold cyan"
+        if self.mode == "detail":
+            return Text.assemble(
+                " ",
+                ("enter", cyan), " apply  ",
+                ("\u21e7enter", cyan), " apply all  ",
+                ("h/l", cyan), " sources  ",
+                ("esc", cyan), " back  ",
+                ("?", cyan), " help",
+            )
+        if self.mode == "edit":
+            return Text.assemble(
+                " ",
+                ("enter", cyan), " confirm  ",
+                ("esc", cyan), " cancel",
+            )
+        # Default: tree mode
+        return Text.assemble(
+            " ",
+            ("space", cyan), " stage  ",
+            ("enter", cyan), " detail  ",
+            ("a", cyan), " accept  ",
+            ("c", cyan), " commit  ",
+            ("?", cyan), " help",
+        )
 
 
 class TreeApp(App):
@@ -44,6 +87,7 @@ class TreeApp(App):
         Binding("slash", "start_search", "Search"),
         Binding("minus", "collapse_all", "Collapse All"),
         Binding("equals_sign", "expand_all", "Expand All"),
+        Binding("question_mark", "toggle_help", "Help"),
     ]
 
     CSS = """
@@ -58,6 +102,30 @@ class TreeApp(App):
     }
     DetailView.expanded {
         height: 1fr;
+    }
+    StatusFooter {
+        dock: bottom;
+        height: 1;
+    }
+    HelpOverlay {
+        display: none;
+        layer: overlay;
+    }
+    HelpOverlay.visible {
+        display: block;
+    }
+    CommitModal {
+        display: none;
+        layer: overlay;
+    }
+    CommitModal.visible {
+        display: block;
+    }
+    .modal-open TreeView {
+        opacity: 0.5;
+    }
+    .modal-open DetailView {
+        opacity: 0.5;
     }
     """
 
@@ -85,8 +153,12 @@ class TreeApp(App):
         self._tmdb_progress = (0, 0)
         self._searching = False
         self._search_query = ""
+        self._help_visible = False
+        self._commit_visible = False
 
     def compose(self) -> ComposeResult:
+        yield CommitModal(id="commit-modal")
+        yield HelpOverlay(id="help")
         yield TreeView(
             self.model,
             self.movie_template,
@@ -98,7 +170,7 @@ class TreeApp(App):
             self.movie_template,
             self.tv_template,
         )
-        yield Footer()
+        yield StatusFooter(id="footer")
 
     def on_mount(self) -> None:
         if self._auto_pipeline:
@@ -147,12 +219,14 @@ class TreeApp(App):
         detail = self.query_one(DetailView)
         detail.set_node(node)
         detail.on_before_mutate = self._snapshot_before_mutate
+        detail.on_editing_changed = self._on_detail_editing_changed
         tv = self.query_one(TreeView)
         tv.add_class("compressed")
         tv.active = False
         detail.add_class("expanded")
         detail.active = True
         detail.focus()
+        self.query_one(StatusFooter).mode = "detail"
 
     def _show_detail_multi(self, nodes: list[FileNode]) -> None:
         """Switch from tree view to detail view for multiple file nodes."""
@@ -160,16 +234,23 @@ class TreeApp(App):
         detail = self.query_one(DetailView)
         detail.set_nodes(nodes)
         detail.on_before_mutate = self._snapshot_before_mutate
+        detail.on_editing_changed = self._on_detail_editing_changed
         tv = self.query_one(TreeView)
         tv.add_class("compressed")
         tv.active = False
         detail.add_class("expanded")
         detail.active = True
         detail.focus()
+        self.query_one(StatusFooter).mode = "detail"
 
     def _snapshot_before_mutate(self, nodes: list[FileNode]) -> None:
         """Save undo snapshot before a mutation."""
         self._undo.snapshot(nodes)
+
+    def _on_detail_editing_changed(self, editing: bool) -> None:
+        """Update footer mode when detail view enters/exits edit mode."""
+        footer = self.query_one(StatusFooter)
+        footer.mode = "edit" if editing else "detail"
 
     def _show_tree(self) -> None:
         """Switch from detail view back to tree view."""
@@ -182,6 +263,7 @@ class TreeApp(App):
         tv.active = True
         tv.focus()
         tv.refresh()
+        self.query_one(StatusFooter).mode = "tree"
         self._update_footer()
         self._update_preview()
 
@@ -190,6 +272,20 @@ class TreeApp(App):
         tv = self.query_one(TreeView)
         node = tv.cursor_node()
         self.query_one(DetailView).set_preview_node(node)
+
+    def action_toggle_help(self) -> None:
+        """Toggle the help overlay."""
+        self._help_visible = not self._help_visible
+        overlay = self.query_one(HelpOverlay)
+        if self._help_visible:
+            overlay.add_class("visible")
+            overlay.focus()
+        else:
+            overlay.remove_class("visible")
+            if self._in_detail:
+                self.query_one(DetailView).focus()
+            else:
+                self.query_one(TreeView).focus()
 
     def action_cursor_down(self) -> None:
         if self._in_detail:
@@ -246,19 +342,6 @@ class TreeApp(App):
         return pairs
 
     def action_toggle_or_enter(self) -> None:
-        if self._confirming_commit:
-            self._confirming_commit = False
-            staged = [f for f in self.model.all_files() if f.staged]
-            pairs = self._compute_file_pairs(staged)
-            from tapes.file_ops import process_staged
-
-            results = process_staged(
-                pairs,
-                self.config.library.operation,
-                dry_run=self.config.dry_run,
-            )
-            self.exit(result=results)
-            return
         if self._in_detail:
             dv = self.query_one(DetailView)
             dv.apply_source_field()
@@ -287,11 +370,14 @@ class TreeApp(App):
         self.query_one(TreeView).start_range_select()
 
     def action_cancel(self) -> None:
+        if self._help_visible:
+            self.action_toggle_help()
+            return
         if self._searching:
             self._finish_search(keep_filter=False)
             return
-        if self._confirming_commit:
-            self._confirming_commit = False
+        if self._commit_visible:
+            self._hide_commit_modal()
             self._update_footer()
             return
         if self._in_detail:
@@ -319,12 +405,54 @@ class TreeApp(App):
         if tv.staged_count == 0:
             tv.set_status("No staged files to commit")
             return
+        # Build staged file list with destinations
+        from tapes.ui.tree_render import compute_dest, select_template
+
+        staged = [f for f in self.model.all_files() if f.staged]
+        staged_files: list[tuple[str, str | None]] = []
+        for node in staged:
+            tmpl = select_template(node, self.movie_template, self.tv_template)
+            dest = compute_dest(node, tmpl)
+            staged_files.append((node.path.name, dest))
+
+        modal = self.query_one(CommitModal)
+        modal.update_content(staged_files, self.config.library.operation)
+        self._show_commit_modal()
+
+    def _show_commit_modal(self) -> None:
+        """Show the commit confirmation modal and dim background."""
         self._confirming_commit = True
-        count = tv.staged_count
-        tv.set_status(
-            f"{count} file{'s' if count != 1 else ''} staged. "
-            "Press enter to confirm, esc to cancel."
+        self._commit_visible = True
+        modal = self.query_one(CommitModal)
+        modal.add_class("visible")
+        modal.focus()
+        self.add_class("modal-open")
+
+    def _hide_commit_modal(self) -> None:
+        """Hide the commit confirmation modal and restore background."""
+        self._confirming_commit = False
+        self._commit_visible = False
+        modal = self.query_one(CommitModal)
+        modal.remove_class("visible")
+        self.remove_class("modal-open")
+        if self._in_detail:
+            self.query_one(DetailView).focus()
+        else:
+            self.query_one(TreeView).focus()
+
+    def _do_commit(self) -> None:
+        """Execute the commit: process staged files and exit."""
+        self._hide_commit_modal()
+        staged = [f for f in self.model.all_files() if f.staged]
+        pairs = self._compute_file_pairs(staged)
+        from tapes.file_ops import process_staged
+
+        results = process_staged(
+            pairs,
+            self.config.library.operation,
+            dry_run=self.config.dry_run,
         )
+        self.exit(result=results)
 
     def action_refresh_query(self) -> None:
         from tapes.ui.pipeline import refresh_tmdb_source
@@ -396,7 +524,24 @@ class TreeApp(App):
         self._update_footer()
 
     def on_key(self, event: Key) -> None:
-        """Intercept key events during search mode."""
+        """Intercept key events during search, help, and commit modal modes."""
+        if self._help_visible:
+            # Only allow ? and esc through (handled by bindings)
+            if event.key not in ("question_mark", "escape"):
+                event.prevent_default()
+                event.stop()
+            return
+
+        if self._commit_visible:
+            event.prevent_default()
+            event.stop()
+            if event.character == "y":
+                self._do_commit()
+            elif event.character == "n" or event.key == "escape":
+                self._hide_commit_modal()
+                self._update_footer()
+            return
+
         if not self._searching:
             return
 

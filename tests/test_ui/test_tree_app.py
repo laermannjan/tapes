@@ -823,6 +823,7 @@ class TestCommitAction:
 
     @pytest.mark.asyncio()
     async def test_commit_shows_confirmation(self) -> None:
+        from tapes.ui.commit_modal import CommitModal
         from tapes.ui.tree_app import TreeApp
 
         model = _expanded_model()
@@ -833,12 +834,12 @@ class TestCommitAction:
         async with app.run_test() as pilot:
             await pilot.press("c")
             assert app._confirming_commit is True
-            tv = app.query_one(TreeView)
-            assert "1 file staged" in tv._status_text
-            assert "enter to confirm" in tv._status_text
+            assert app._commit_visible is True
+            modal = app.query_one(CommitModal)
+            assert "visible" in modal.classes
 
     @pytest.mark.asyncio()
-    async def test_commit_enter_confirms_and_exits(self) -> None:
+    async def test_commit_y_confirms_and_exits(self) -> None:
         from tapes.ui.tree_app import TreeApp
 
         model = _expanded_model()
@@ -848,7 +849,7 @@ class TestCommitAction:
         async with app.run_test() as pilot:
             await pilot.press("c")
             assert app._confirming_commit is True
-            await pilot.press("enter")
+            await pilot.press("y")
             # App should exit with staged files as result
             assert app.return_code is not None or app._exit
 
@@ -1318,3 +1319,99 @@ class TestSearchModeAsync:
             assert app._in_detail is True
             await pilot.press("slash")
             assert app._searching is False
+
+
+# ---------------------------------------------------------------------------
+# StatusFooter tests
+# ---------------------------------------------------------------------------
+
+
+class TestStatusFooter:
+    """Tests for the context-aware StatusFooter widget."""
+
+    def test_render_tree_mode(self) -> None:
+        from tapes.ui.tree_app import StatusFooter
+
+        footer = StatusFooter()
+        footer.mode = "tree"
+        rendered = footer.render()
+        plain = rendered.plain
+        assert "stage" in plain
+        assert "detail" in plain
+        assert "accept" in plain
+        assert "commit" in plain
+
+    def test_render_detail_mode(self) -> None:
+        from tapes.ui.tree_app import StatusFooter
+
+        footer = StatusFooter()
+        footer.mode = "detail"
+        rendered = footer.render()
+        plain = rendered.plain
+        assert "apply" in plain
+        assert "sources" in plain
+        assert "back" in plain
+
+    def test_render_edit_mode(self) -> None:
+        from tapes.ui.tree_app import StatusFooter
+
+        footer = StatusFooter()
+        footer.mode = "edit"
+        rendered = footer.render()
+        plain = rendered.plain
+        assert "confirm" in plain
+        assert "cancel" in plain
+        # Should not contain tree-mode hints
+        assert "stage" not in plain
+        assert "commit" not in plain
+
+    @pytest.mark.asyncio()
+    async def test_footer_mode_changes_on_detail_entry(self) -> None:
+        from tapes.ui.tree_app import StatusFooter, TreeApp
+
+        node = FileNode(
+            path=Path("/media/test.mkv"),
+            result={"title": "Test"},
+        )
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
+
+        async with app.run_test() as pilot:
+            footer = app.query_one(StatusFooter)
+            assert footer.mode == "tree"
+
+            # Enter detail view
+            await pilot.press("enter")
+            assert footer.mode == "detail"
+
+            # Back to tree
+            await pilot.press("escape")
+            assert footer.mode == "tree"
+
+    @pytest.mark.asyncio()
+    async def test_footer_mode_changes_on_edit(self) -> None:
+        from tapes.ui.tree_app import StatusFooter, TreeApp
+
+        node = FileNode(
+            path=Path("/media/test.mkv"),
+            result={"title": "Test"},
+            sources=[],  # No sources means enter triggers edit
+        )
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
+
+        async with app.run_test() as pilot:
+            footer = app.query_one(StatusFooter)
+            # Enter detail view
+            await pilot.press("enter")
+            assert footer.mode == "detail"
+
+            # Enter edit mode (no sources, so enter starts edit)
+            await pilot.press("enter")
+            assert footer.mode == "edit"
+
+            # Cancel edit
+            await pilot.press("escape")
+            assert footer.mode == "detail"
