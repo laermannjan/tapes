@@ -43,9 +43,9 @@ def import_cmd(
     from tapes.ui.tree_model import build_tree
 
     resolved = path.resolve()
-    files = scan(resolved)
+    files = scan(resolved, ignore_patterns=cfg.scan.ignore_patterns)
     if not files:
-        console.print("No video files found.")
+        console.print("No files found.")
         return
 
     model = build_tree(files, resolved)
@@ -77,9 +77,9 @@ def tree_cmd(
 
     cfg = load_config(config_file) if config_file else TapesConfig()
     resolved = path.resolve()
-    files = scan(resolved)
+    files = scan(resolved, ignore_patterns=cfg.scan.ignore_patterns)
     if not files:
-        console.print("No video files found.")
+        console.print("No files found.")
         return
 
     model = build_tree(files, resolved)

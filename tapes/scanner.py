@@ -1,7 +1,8 @@
-"""Video file scanner -- recursively find video files under a root path."""
+"""File scanner -- recursively find files under a root path."""
 
 from __future__ import annotations
 
+import fnmatch
 import re
 from pathlib import Path
 
@@ -33,29 +34,47 @@ def _is_video(path: Path) -> bool:
     return path.suffix.lower() in VIDEO_EXTENSIONS
 
 
-def scan(root: Path) -> list[Path]:
-    """Find video files recursively under *root*.
+def _matches_ignore(path: Path, ignore_patterns: list[str]) -> bool:
+    """Return True if the filename matches any of the ignore patterns."""
+    name = path.name
+    for pattern in ignore_patterns:
+        if fnmatch.fnmatch(name, pattern):
+            return True
+    return False
 
-    - Includes only files with extensions in VIDEO_EXTENSIONS.
-    - Excludes sample files (matched by SAMPLE_RE against the stem).
+
+def scan(
+    root: Path,
+    ignore_patterns: list[str] | None = None,
+) -> list[Path]:
+    """Find files recursively under *root*.
+
+    - Finds all files, not just video files.
+    - Excludes files matching *ignore_patterns* (fnmatch against filename).
+    - Excludes sample files, but only if they are video files.
     - Excludes files inside hidden directories (starting with '.').
     - If *root* is a single file, checks it directly.
     - Returns a sorted list of Path objects.
     """
+    if ignore_patterns is None:
+        ignore_patterns = []
+
     if root.is_file():
-        if _is_video(root) and not _is_sample(root):
-            return [root]
-        return []
+        if _matches_ignore(root, ignore_patterns):
+            return []
+        if _is_video(root) and _is_sample(root):
+            return []
+        return [root]
 
     results: list[Path] = []
     for path in root.rglob("*"):
         if not path.is_file():
             continue
-        if not _is_video(path):
-            continue
         if _is_hidden_path(path, root):
             continue
-        if _is_sample(path):
+        if _matches_ignore(path, ignore_patterns):
+            continue
+        if _is_video(path) and _is_sample(path):
             continue
         results.append(path)
 

@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 
 class ScanConfig(BaseModel):
-    pass
+    ignore_patterns: list[str] = ["Thumbs.db", ".DS_Store", "desktop.ini"]
 
 
 class MetadataConfig(BaseModel):
