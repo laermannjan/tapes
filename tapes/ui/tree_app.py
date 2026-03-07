@@ -49,6 +49,7 @@ class TreeApp(App):
         model: TreeModel,
         template: str,
         root_path: Path | None = None,
+        auto_pipeline: bool = False,
     ) -> None:
         super().__init__()
         self.model = model
@@ -57,6 +58,7 @@ class TreeApp(App):
         self._in_detail = False
         self._undo = UndoManager()
         self._confirming_commit = False
+        self._auto_pipeline = auto_pipeline
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -74,6 +76,11 @@ class TreeApp(App):
         yield Footer()
 
     def on_mount(self) -> None:
+        if self._auto_pipeline:
+            from tapes.ui.pipeline import run_auto_pipeline
+
+            run_auto_pipeline(self.model)
+            self.query_one(TreeView).refresh_tree()
         self._update_footer()
 
     def _show_detail(self, node: FileNode) -> None:
