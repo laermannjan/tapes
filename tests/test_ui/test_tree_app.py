@@ -860,3 +860,104 @@ class TestCommitAction:
             await pilot.press("x")
             status = app.query_one("#status", Static)
             assert "1 ignored" in status.renderable  # type: ignore[operator]
+
+
+# ---------------------------------------------------------------------------
+# Flat/Tree toggle tests
+# ---------------------------------------------------------------------------
+
+
+class TestFlatTreeToggle:
+    def test_toggle_flat_mode(self) -> None:
+        model = _expanded_model()
+        view = _make_view(model)
+        assert not view.flat_mode
+        view.toggle_flat_mode()
+        assert view.flat_mode
+        view.toggle_flat_mode()
+        assert not view.flat_mode
+
+    def test_flat_mode_shows_only_files(self) -> None:
+        model = _expanded_model()
+        view = _make_view(model)
+        # Tree mode: folderA, file_a, folderB, file_b, top = 5 items
+        assert view.item_count == 5
+        view.toggle_flat_mode()
+        # Flat mode: file_a, file_b, top = 3 items (no folders)
+        assert view.item_count == 3
+        for node, _depth in view._items:
+            assert isinstance(node, FileNode)
+
+    def test_cursor_stays_on_same_file_after_toggle(self) -> None:
+        model = _expanded_model()
+        view = _make_view(model)
+        # Move to file_b.mkv (index 3 in tree mode)
+        view.move_cursor(3)
+        node_before = view.cursor_node()
+        assert isinstance(node_before, FileNode)
+        assert node_before.path.name == "file_b.mkv"
+        # Toggle to flat
+        view.toggle_flat_mode()
+        node_after = view.cursor_node()
+        assert node_after is node_before
+
+    def test_flat_mode_renders_relative_paths(self) -> None:
+        model = _expanded_model()
+        view = TreeView(
+            model=model,
+            template="{title} ({year}).{ext}",
+            root_path=Path("/root"),
+        )
+        view.toggle_flat_mode()
+        output = view.render_tree()
+        # In flat mode with root_path, files show relative paths
+        assert "folderA/file_a.mkv" in output
+        assert "folderB/file_b.mkv" in output
+
+    def test_tree_mode_renders_with_indentation(self) -> None:
+        model = _expanded_model()
+        view = _make_view(model)
+        output = view.render_tree()
+        lines = output.split("\n")
+        # file_a.mkv should be indented (child of folderA)
+        file_a_line = lines[1]
+        assert file_a_line.startswith("  ")  # indented
+
+    def test_flat_mode_no_indentation(self) -> None:
+        model = _expanded_model()
+        view = _make_view(model)
+        view.toggle_flat_mode()
+        output = view.render_tree()
+        lines = output.split("\n")
+        # No indentation in flat mode
+        for line in lines:
+            assert not line.startswith("  ")
+
+    def test_cursor_clamps_when_toggling_from_folder(self) -> None:
+        model = _simple_model()  # all collapsed
+        view = _make_view(model)
+        # Cursor on folderA (index 0), which won't exist in flat mode
+        assert isinstance(view.cursor_node(), FolderNode)
+        view.toggle_flat_mode()
+        # Cursor should be clamped to valid range
+        assert view.cursor_index >= 0
+        assert view.cursor_index < view.item_count
+        assert isinstance(view.cursor_node(), FileNode)
+
+
+@pytest.mark.skipif(not HAS_PILOT, reason="textual pilot not available")
+class TestFlatTreeToggleAsync:
+    @pytest.mark.asyncio()
+    async def test_backtick_toggles_flat_mode(self) -> None:
+        from tapes.ui.tree_app import TreeApp
+
+        model = _expanded_model()
+        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+
+        async with app.run_test() as pilot:
+            tv = app.query_one(TreeView)
+            assert not tv.flat_mode
+            await pilot.press("grave_accent")
+            assert tv.flat_mode
+            await pilot.press("grave_accent")
+            assert not tv.flat_mode

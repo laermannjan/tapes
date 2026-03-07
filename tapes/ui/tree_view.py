@@ -136,7 +136,11 @@ class TreeView(Widget):
 
     def _refresh_items(self) -> None:
         """Rebuild the flattened item list from the model."""
-        self._items = flatten_with_depth(self.model)
+        if self.flat_mode:
+            # In flat mode, show only files (no folders), all at depth 0
+            self._items = [(f, 0) for f in self.model.all_files()]
+        else:
+            self._items = flatten_with_depth(self.model)
 
     def render(self) -> RenderableType:
         """Render the tree with cursor highlighting."""
@@ -228,6 +232,30 @@ class TreeView(Widget):
     def total_count(self) -> int:
         """Total number of files."""
         return len(self.model.all_files())
+
+    def toggle_flat_mode(self) -> None:
+        """Toggle between flat and tree display modes.
+
+        Tries to keep the cursor on the same node after toggling.
+        """
+        current_node = self.cursor_node()
+        self.flat_mode = not self.flat_mode
+        self._refresh_items()
+        # Try to find the same node in the new item list
+        if current_node is not None:
+            for i, (node, _depth) in enumerate(self._items):
+                if node is current_node:
+                    self.cursor_index = i
+                    break
+            else:
+                # Node not found (e.g. folder hidden in flat mode)
+                if self._items:
+                    self.cursor_index = min(
+                        self.cursor_index, len(self._items) - 1
+                    )
+                else:
+                    self.cursor_index = 0
+        self.refresh()
 
     @property
     def ignored_count(self) -> int:

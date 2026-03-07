@@ -29,6 +29,7 @@ class TreeApp(App):
         Binding("u", "undo", "Undo"),
         Binding("x", "toggle_ignored", "Ignore"),
         Binding("c", "commit", "Commit"),
+        Binding("grave_accent", "toggle_flat", "Flat/Tree"),
     ]
 
     CSS = """
@@ -192,6 +193,11 @@ class TreeApp(App):
             f"{count} file{'s' if count != 1 else ''} staged. "
             "Press enter to confirm, esc to cancel."
         )
+
+    def action_toggle_flat(self) -> None:
+        if self._in_detail:
+            return
+        self.query_one(TreeView).toggle_flat_mode()
 
     def action_undo(self) -> None:
         if self._undo.undo():
