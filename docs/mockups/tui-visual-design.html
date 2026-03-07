@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Tapes TUI — Visual Design Mockups v2</title>
+  <style>
+    :root {
+      --bg: #0c0c0c;
+      --fg: #cccccc;
+      --bright: #ffffff;
+      --dim: #555555;
+      --sel: #264f78;
+      --sel-dim: #1a3a52;
+      --green: #6aab73;
+      --yellow: #d4a94b;
+      --red: #c75050;
+      --cyan: #5fb3b3;
+      --blue: #6699cc;
+      --magenta: #c594c5;
+      --border: #333333;
+      --border-active: #5fb3b3;
+      --page-bg: #1a1a1a;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--page-bg);
+      color: var(--fg);
+      font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', 'Consolas', monospace;
+      padding: 2rem;
+      line-height: 1.6;
+      font-size: 14px;
+    }
+
+    h1 { color: var(--bright); font-size: 1.5rem; margin-bottom: 0.3rem; }
+    h2 {
+      color: var(--bright); font-size: 1.15rem;
+      margin-top: 3rem; margin-bottom: 0.3rem;
+      border-bottom: 1px solid var(--border); padding-bottom: 0.3rem;
+    }
+    h3 { color: var(--fg); font-size: 0.95rem; margin-top: 2rem; margin-bottom: 0.3rem; }
+    p { color: var(--dim); max-width: 90ch; margin: 0.3rem 0; font-size: 0.9rem; }
+    ul { padding-left: 1.5rem; margin: 0.3rem 0; }
+    li { color: var(--dim); font-size: 0.9rem; margin: 0.2rem 0; }
+    strong { color: var(--fg); }
+    em { color: var(--cyan); font-style: normal; }
+    hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+
+    .term {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      margin: 1rem 0 1.5rem;
+      overflow-x: auto;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .term-inner {
+      display: flex;
+      flex-direction: column;
+      min-height: 360px;
+    }
+    .pnl { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+    .pnl.sm { flex: 0 0 auto; }
+    .pnl.grow { flex: 1; }
+
+    .pnl-top, .pnl-bot { white-space: pre; color: var(--border); }
+    .pnl.on .pnl-top, .pnl.on .pnl-bot { color: var(--border-active); }
+    .pnl-top .t, .pnl-bot .t { color: var(--dim); }
+    .pnl.on .pnl-top .t { color: var(--border-active); }
+
+    .r { white-space: pre; height: 1.45em; overflow: hidden; }
+    .r.sel { background: var(--sel); }
+    .r.sdim { background: var(--sel-dim); }
+
+    .foot { white-space: pre; padding: 2px 0; color: var(--dim); border-top: 1px solid var(--border); background: #111; }
+
+    /* inline colors */
+    .g  { color: var(--green); }
+    .y  { color: var(--yellow); }
+    .re { color: var(--red); }
+    .c  { color: var(--cyan); }
+    .b  { color: var(--blue); }
+    .m  { color: var(--magenta); }
+    .d  { color: var(--dim); }
+    .w  { color: var(--bright); font-weight: bold; }
+    .n  { color: var(--fg); }
+    .k  { color: var(--cyan); }
+    .br { color: var(--border); }
+    .ba { color: var(--border-active); }
+    .cell { background: var(--sel); padding: 0 1px; }
+
+    /* modal */
+    .term-modal { position: relative; }
+    .term-modal .term-inner { opacity: 0.35; }
+    .modal {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: var(--bg); border: 1px solid var(--border-active);
+      z-index: 10; min-width: 52ch;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+    }
+    .modal .pnl-top { color: var(--border-active); }
+    .modal .pnl-top .t { color: var(--border-active); }
+
+    .note {
+      border-left: 2px solid var(--cyan);
+      padding: 0.3rem 0.8rem; margin: 0.5rem 0;
+      color: var(--dim); font-size: 0.85rem; max-width: 90ch;
+    }
+    .note strong { color: var(--cyan); }
+  </style>
+</head>
+<body>
+
+<h1>Tapes TUI — Visual Design v2</h1>
+<p>Building on Idea 1 (stacked panels). Focused on making the detail view more intuitive and the footer less noisy.</p>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<hr>
+<h2>Tree View (cleaned up)</h2>
+<p>Single footer row. Only non-obvious shortcuts. <em>?</em> for full help.</p>
+
+<h3>Browsing — tree focused, compact detail preview</h3>
+
+<div class="term">
+  <div class="term-inner">
+    <div class="pnl on grow">
+      <div class="pnl-top ba">┌─<span class="t"> Files </span>───────────────────────────────────────────────────────────────────────────────────┐</div>
+      <div class="pnl-body">
+<div class="r"><span class="ba">│</span> <span class="g">✓</span> Breaking.Bad.S01E01.720p.BluRay.x264.mkv    <span class="d">→ Breaking Bad (2008)/S01E01.mkv</span>                <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span> <span class="g">✓</span> Breaking.Bad.S01E02.720p.BluRay.x264.mkv    <span class="d">→ Breaking Bad (2008)/S01E02.mkv</span>                <span class="ba">│</span></div>
+<div class="r sel"><span class="ba">│</span> <span class="y">○</span> Inception.2010.1080p.BluRay.x264-GROUP.mkv  <span class="d">→ Inception (2010)/Inception (2010).mkv</span>         <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span> <span class="y">○</span> The.Matrix.1999.720p.mkv                    <span class="d">→ The Matrix (1999)/The Matrix (1999).mkv</span>       <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span> ▼ extras/                                                                                    <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>   <span class="y">○</span> behind_the_scenes.mkv                     <span class="d">→ ?</span>                                              <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>   <span class="d">· featurette.mkv</span>                                                                          <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>                                                                                                <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>                                                                                                <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>                                                                                                <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>                                                                                                <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>                                                                                                <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>                                                                                                <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>                                                                                                <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>                                                                                                <span class="ba">│</span></div>
+      </div>
+      <div class="pnl-bot ba">├──────────────────────────────────────────── <span class="t">2 staged / 1 ignored / 7 total</span> ─────────────────┤</div>
+    </div>
+    <div class="pnl sm">
+      <div class="pnl-top br">├─<span class="t"> Detail </span>──────────────────────────────────────────────────────────────────────────────────┤</div>
+      <div class="pnl-body">
+<div class="r"><span class="br">│</span> <span class="w">Inception.2010.1080p.BluRay.x264-GROUP.mkv</span>  <span class="d">→</span> <span class="d">Inception (2010)/Inception (2010).mkv</span>     <span class="br">│</span></div>
+<div class="r"><span class="br">│</span> <span class="d">title:</span> Inception  <span class="d">year:</span> 2010  <span class="d">type:</span> movie  <span class="d">S:</span> ·  <span class="d">E:</span> ·                     <span class="b">TMDB</span> <span class="g">92%</span>  <span class="br">│</span></div>
+      </div>
+      <div class="pnl-bot br">└──────────────────────────────────────────────────────────────────────────────────────────────────┘</div>
+    </div>
+  </div>
+  <div class="foot"> <span class="k">space</span> stage  <span class="k">enter</span> detail  <span class="k">a</span> accept  <span class="k">c</span> commit  <span class="k">?</span> help</div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<hr>
+<h2>Detail View — Option A: Grid with Diff Highlighting</h2>
+<p>
+  The current multi-column grid, but with a key improvement: <strong>source values
+  that match the result are dimmed</strong>. Values that differ from the result stay
+  bright. This makes differences jump out instantly — you scan for color, not content.
+  The grid becomes a diff view.
+</p>
+<ul>
+  <li>Result column values: always <strong>bold/bright</strong> (this is your current state)</li>
+  <li>Source values matching result: <strong>dim</strong> (nothing to do here)</li>
+  <li>Source values differing from result: <strong>normal/yellow</strong> (this would change if applied)</li>
+  <li>Missing values: <strong>dim ·</strong></li>
+</ul>
+
+<h3>A1. Detail focused — diff highlighting visible</h3>
+
+<div class="term">
+  <div class="term-inner">
+    <div class="pnl sm">
+      <div class="pnl-top br">┌─<span class="t"> Files </span>───────────────────────────────────────────────────────────────────────────────────┐</div>
+      <div class="pnl-body">
+<div class="r"><span class="br">│</span> <span class="g">✓</span> Breaking.Bad.S01E01.720p.BluRay.x264.mkv    <span class="d">→ Breaking Bad (2008)/S01E01.mkv</span>                <span class="br">│</span></div>
+<div class="r"><span class="br">│</span> <span class="g">✓</span> Breaking.Bad.S01E02.720p.BluRay.x264.mkv    <span class="d">→ Breaking Bad (2008)/S01E02.mkv</span>                <span class="br">│</span></div>
+<div class="r sdim"><span class="br">│</span> <span class="y">○</span> Inception.2010.1080p.BluRay.x264-GROUP.mkv  <span class="d">→ Inception (2010)/Inception (2010).mkv</span>         <span class="br">│</span></div>
+<div class="r"><span class="br">│</span> <span class="y">○</span> The.Matrix.1999.720p.mkv                    <span class="d">→ The Matrix (1999)/The Matrix (1999).mkv</span>       <span class="br">│</span></div>
+<div class="r"><span class="br">│</span> ▼ extras/                                                                                    <span class="br">│</span></div>
+      </div>
+      <div class="pnl-bot br">├──────────────────────────────────────────── <span class="t">2 staged / 1 ignored / 7 total</span> ─────────────────┤</div>
+    </div>
+    <div class="pnl on grow">
+      <div class="pnl-top ba">├─<span class="t"> Detail </span>──────────────────────────────────────────────────────────────────────────────────┤</div>
+      <div class="pnl-body">
+<div class="r"><span class="ba">│</span> <span class="w">Inception.2010.1080p.BluRay.x264-GROUP.mkv</span>                                                   <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span> <span class="d">→ Inception (2010)/Inception (2010).mkv</span>                                                      <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span> <span class="d">──────────────────────────────────────────────────────────────────────────────────────────</span>   <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>              <span class="w">result</span>          <span class="d">│</span> <span class="d">filename</span>         <span class="b">TMDB #1</span> <span class="g">(92%)</span>    <span class="b">TMDB #2</span> <span class="re">(38%)</span>       <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">title</span>       <span class="w">Inception</span>       <span class="d">│</span> <span class="d">Inception</span>        <span class="d">Inception</span>        <span class="y">Inception Man</span>       <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">year</span>        <span class="w">2010</span>            <span class="d">│</span> <span class="d">2010</span>             <span class="d">2010</span>             <span class="y">2018</span>                <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">media_type</span>  <span class="cell">movie</span>           <span class="d">│</span> <span class="d">·</span>                <span class="d">movie</span>            <span class="d">movie</span>               <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">codec</span>       <span class="w">x264</span>            <span class="d">│</span> <span class="d">x264</span>             <span class="d">·</span>                <span class="d">·</span>                   <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">source</span>      <span class="w">BluRay</span>          <span class="d">│</span> <span class="d">BluRay</span>           <span class="d">·</span>                <span class="d">·</span>                   <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>                                                                                                <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>                                                                                                <span class="ba">│</span></div>
+      </div>
+      <div class="pnl-bot ba">└──────────────────────────────────────────────────────────────────────────────────────────────────┘</div>
+    </div>
+  </div>
+  <div class="foot"> <span class="k">enter</span> apply  <span class="k">⇧enter</span> apply all  <span class="k">esc</span> back  <span class="k">?</span> help</div>
+</div>
+
+<div class="note">
+  <strong>Diff highlighting in action:</strong> In TMDB #2's column, "Inception Man" and
+  "2018" are yellow because they differ from the result. Everything else that matches is
+  dimmed. You can instantly see: TMDB #2 is a bad match — different title and year. TMDB #1
+  is a perfect match — all values dim (matching). No reading required, just color scanning.
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<hr>
+<h2>Detail View — Option B: One Source at a Time</h2>
+<p>
+  Instead of showing all sources as cramped columns, show <strong>result vs. one source</strong>
+  side by side. Use <em>h/l</em> to cycle through sources. This gives each value generous
+  horizontal space and reduces the comparison to a simple left-right diff.
+</p>
+<p>
+  Navigation becomes 1D (just rows) instead of 2D (rows and columns).
+  <em>enter</em> on a row applies that field. <em>⇧enter</em> applies all fields from
+  the current source. <em>h/l</em> switches which source you're comparing against.
+</p>
+
+
+<!-- ── B1: Good match ── -->
+<h3>B1. Comparing against TMDB #1 (good match)</h3>
+<p>Everything matches — all source values are dimmed. Nothing to do. Press <em>l</em> to check the next source or <em>esc</em> to go back.</p>
+
+<div class="term">
+  <div class="term-inner">
+    <div class="pnl sm">
+      <div class="pnl-top br">┌─<span class="t"> Files </span>───────────────────────────────────────────────────────────────────────────────────┐</div>
+      <div class="pnl-body">
+<div class="r"><span class="br">│</span> <span class="g">✓</span> Breaking.Bad.S01E01.720p.BluRay.x264.mkv    <span class="d">→ Breaking Bad (2008)/S01E01.mkv</span>                <span class="br">│</span></div>
+<div class="r"><span class="br">│</span> <span class="g">✓</span> Breaking.Bad.S01E02.720p.BluRay.x264.mkv    <span class="d">→ Breaking Bad (2008)/S01E02.mkv</span>                <span class="br">│</span></div>
+<div class="r sdim"><span class="br">│</span> <span class="y">○</span> Inception.2010.1080p.BluRay.x264-GROUP.mkv  <span class="d">→ Inception (2010)/Inception (2010).mkv</span>         <span class="br">│</span></div>
+<div class="r"><span class="br">│</span> <span class="y">○</span> The.Matrix.1999.720p.mkv                    <span class="d">→ The Matrix (1999)/The Matrix (1999).mkv</span>       <span class="br">│</span></div>
+<div class="r"><span class="br">│</span> ▼ extras/                                                                                    <span class="br">│</span></div>
+      </div>
+      <div class="pnl-bot br">├──────────────────────────────────────────── <span class="t">2 staged / 1 ignored / 7 total</span> ─────────────────┤</div>
+    </div>
+    <div class="pnl on grow">
+      <div class="pnl-top ba">├─<span class="t"> Detail </span>──────────────────────────────────────────────────────────────────────────────────┤</div>
+      <div class="pnl-body">
+<div class="r"><span class="ba">│</span> <span class="w">Inception.2010.1080p.BluRay.x264-GROUP.mkv</span>                                                   <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span> <span class="d">→ Inception (2010)/Inception (2010).mkv</span>                                                      <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span> <span class="d">──────────────────────────────────────────────────────────────────────────────────────────</span>   <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>              <span class="w">result</span>                       <span class="b">TMDB #1</span> <span class="g">(92%)</span>                             <span class="d">[1/3]</span>   <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span> <span class="d">──────────────────────────────────────────────────────────────────────────────────────────</span>   <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">title</span>       <span class="w">Inception</span>                    <span class="d">Inception</span>                                         <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">year</span>        <span class="w">2010</span>                         <span class="d">2010</span>                                              <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">media_type</span>  <span class="w">movie</span>                        <span class="d">movie</span>                                             <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">codec</span>       <span class="w">x264</span>                         <span class="d">·</span>                                                 <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">source</span>      <span class="w">BluRay</span>                       <span class="d">·</span>                                                 <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>                                                                                                <span class="ba">│</span></div>
+      </div>
+      <div class="pnl-bot ba">└──────────────────────────────────────────────────────────────────────────────────────────────────┘</div>
+    </div>
+  </div>
+  <div class="foot"> <span class="k">enter</span> apply field  <span class="k">⇧enter</span> apply all  <span class="k">h/l</span> prev/next source  <span class="k">esc</span> back  <span class="k">?</span> help</div>
+</div>
+
+<div class="note">
+  <strong>All dim = all matching.</strong> At a glance you see: this source agrees with
+  your result on everything. The [1/3] indicator shows you're looking at source 1 of 3.
+  Press <em>l</em> to compare against the next source.
+</div>
+
+
+<!-- ── B2: Bad match, differences highlighted ── -->
+<h3>B2. Comparing against TMDB #2 (bad match — differences jump out)</h3>
+<p>Pressed <em>l</em> to move to the next source. Now the differences are immediately visible in yellow.</p>
+
+<div class="term">
+  <div class="term-inner">
+    <div class="pnl sm">
+      <div class="pnl-top br">┌─<span class="t"> Files </span>───────────────────────────────────────────────────────────────────────────────────┐</div>
+      <div class="pnl-body">
+<div class="r"><span class="br">│</span> <span class="g">✓</span> Breaking.Bad.S01E01.720p.BluRay.x264.mkv    <span class="d">→ Breaking Bad (2008)/S01E01.mkv</span>                <span class="br">│</span></div>
+<div class="r"><span class="br">│</span> <span class="g">✓</span> Breaking.Bad.S01E02.720p.BluRay.x264.mkv    <span class="d">→ Breaking Bad (2008)/S01E02.mkv</span>                <span class="br">│</span></div>
+<div class="r sdim"><span class="br">│</span> <span class="y">○</span> Inception.2010.1080p.BluRay.x264-GROUP.mkv  <span class="d">→ Inception (2010)/Inception (2010).mkv</span>         <span class="br">│</span></div>
+<div class="r"><span class="br">│</span> <span class="y">○</span> The.Matrix.1999.720p.mkv                    <span class="d">→ The Matrix (1999)/The Matrix (1999).mkv</span>       <span class="br">│</span></div>
+<div class="r"><span class="br">│</span> ▼ extras/                                                                                    <span class="br">│</span></div>
+      </div>
+      <div class="pnl-bot br">├──────────────────────────────────────────── <span class="t">2 staged / 1 ignored / 7 total</span> ─────────────────┤</div>
+    </div>
+    <div class="pnl on grow">
+      <div class="pnl-top ba">├─<span class="t"> Detail </span>──────────────────────────────────────────────────────────────────────────────────┤</div>
+      <div class="pnl-body">
+<div class="r"><span class="ba">│</span> <span class="w">Inception.2010.1080p.BluRay.x264-GROUP.mkv</span>                                                   <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span> <span class="d">→ Inception (2010)/Inception (2010).mkv</span>                                                      <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span> <span class="d">──────────────────────────────────────────────────────────────────────────────────────────</span>   <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>              <span class="w">result</span>                       <span class="b">TMDB #2</span> <span class="re">(38%)</span>                             <span class="d">[2/3]</span>   <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span> <span class="d">──────────────────────────────────────────────────────────────────────────────────────────</span>   <span class="ba">│</span></div>
+<div class="r sel"><span class="ba">│</span>  <span class="d">title</span>       <span class="w">Inception</span>                    <span class="y">Inception Man</span>                                     <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">year</span>        <span class="w">2010</span>                         <span class="y">2018</span>                                              <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">media_type</span>  <span class="w">movie</span>                        <span class="d">movie</span>                                             <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">codec</span>       <span class="w">x264</span>                         <span class="d">·</span>                                                 <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">source</span>      <span class="w">BluRay</span>                       <span class="d">·</span>                                                 <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>                                                                                                <span class="ba">│</span></div>
+      </div>
+      <div class="pnl-bot ba">└──────────────────────────────────────────────────────────────────────────────────────────────────┘</div>
+    </div>
+  </div>
+  <div class="foot"> <span class="k">enter</span> apply field  <span class="k">⇧enter</span> apply all  <span class="k">h/l</span> prev/next source  <span class="k">esc</span> back  <span class="k">?</span> help</div>
+</div>
+
+<div class="note">
+  <strong>Yellow = would change your result.</strong> "Inception Man" and "2018" stand out
+  immediately. The cursor is on the title row — pressing <em>enter</em> here would
+  replace "Inception" with "Inception Man" in the result (you wouldn't want that).
+  The low confidence <span class="re">(38%)</span> in the header already signals this is
+  a poor match. Press <em>l</em> to check the next source, or <em>esc</em> to go back.
+</div>
+
+
+<!-- ── B3: Cherry-picking from filename source ── -->
+<h3>B3. Cherry-picking a field from the filename source</h3>
+<p>Comparing against the filename source. Most fields match, but the source has codec info the result is missing. Cursor is on the codec row — <em>enter</em> would apply just that field.</p>
+
+<div class="term">
+  <div class="term-inner">
+    <div class="pnl sm">
+      <div class="pnl-top br">┌─<span class="t"> Files </span>───────────────────────────────────────────────────────────────────────────────────┐</div>
+      <div class="pnl-body">
+<div class="r"><span class="br">│</span> <span class="g">✓</span> Breaking.Bad.S01E01.720p.BluRay.x264.mkv    <span class="d">→ Breaking Bad (2008)/S01E01.mkv</span>                <span class="br">│</span></div>
+<div class="r"><span class="br">│</span> <span class="g">✓</span> Breaking.Bad.S01E02.720p.BluRay.x264.mkv    <span class="d">→ Breaking Bad (2008)/S01E02.mkv</span>                <span class="br">│</span></div>
+<div class="r sdim"><span class="br">│</span> <span class="y">○</span> Inception.2010.1080p.BluRay.x264-GROUP.mkv  <span class="d">→ Inception (2010)/Inception (2010).mkv</span>         <span class="br">│</span></div>
+<div class="r"><span class="br">│</span> <span class="y">○</span> The.Matrix.1999.720p.mkv                    <span class="d">→ The Matrix (1999)/The Matrix (1999).mkv</span>       <span class="br">│</span></div>
+<div class="r"><span class="br">│</span> ▼ extras/                                                                                    <span class="br">│</span></div>
+      </div>
+      <div class="pnl-bot br">├──────────────────────────────────────────── <span class="t">2 staged / 1 ignored / 7 total</span> ─────────────────┤</div>
+    </div>
+    <div class="pnl on grow">
+      <div class="pnl-top ba">├─<span class="t"> Detail </span>──────────────────────────────────────────────────────────────────────────────────┤</div>
+      <div class="pnl-body">
+<div class="r"><span class="ba">│</span> <span class="w">Inception.2010.1080p.BluRay.x264-GROUP.mkv</span>                                                   <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span> <span class="d">→ Inception (2010)/Inception (2010).mkv</span>                                                      <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span> <span class="d">──────────────────────────────────────────────────────────────────────────────────────────</span>   <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>              <span class="w">result</span>                       <span class="d">filename</span>                                  <span class="d">[3/3]</span>   <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span> <span class="d">──────────────────────────────────────────────────────────────────────────────────────────</span>   <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">title</span>       <span class="w">Inception</span>                    <span class="d">Inception</span>                                         <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">year</span>        <span class="w">2010</span>                         <span class="d">2010</span>                                              <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">media_type</span>  <span class="w">movie</span>                        <span class="d">·</span>                                                 <span class="ba">│</span></div>
+<div class="r sel"><span class="ba">│</span>  <span class="d">codec</span>       <span class="w">·</span>                            <span class="g">x264</span>                                              <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">source</span>      <span class="w">·</span>                            <span class="g">BluRay</span>                                            <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>                                                                                                <span class="ba">│</span></div>
+      </div>
+      <div class="pnl-bot ba">└──────────────────────────────────────────────────────────────────────────────────────────────────┘</div>
+    </div>
+  </div>
+  <div class="foot"> <span class="k">enter</span> apply field  <span class="k">⇧enter</span> apply all  <span class="k">h/l</span> prev/next source  <span class="k">esc</span> back  <span class="k">?</span> help</div>
+</div>
+
+<div class="note">
+  <strong>Green = source has something you're missing.</strong> The result has <span class="w">·</span>
+  for codec and source, but the filename source has "x264" and "BluRay" in green — they're
+  new values that would fill gaps. The cursor is on codec — <em>enter</em> applies just
+  "x264" to the result. Yellow means "different," green means "filling an empty slot."
+</div>
+
+
+<!-- ── B4: After applying — destination updates live ── -->
+<h3>B4. After applying a field — destination updates live</h3>
+<p>Applied "x264" from the filename source. The result column updated, and so did the destination path at the top (if codec is in the template).</p>
+
+<div class="term">
+  <div class="term-inner">
+    <div class="pnl sm">
+      <div class="pnl-top br">┌─<span class="t"> Files </span>───────────────────────────────────────────────────────────────────────────────────┐</div>
+      <div class="pnl-body">
+<div class="r"><span class="br">│</span> <span class="g">✓</span> Breaking.Bad.S01E01.720p.BluRay.x264.mkv    <span class="d">→ Breaking Bad (2008)/S01E01.mkv</span>                <span class="br">│</span></div>
+<div class="r"><span class="br">│</span> <span class="g">✓</span> Breaking.Bad.S01E02.720p.BluRay.x264.mkv    <span class="d">→ Breaking Bad (2008)/S01E02.mkv</span>                <span class="br">│</span></div>
+<div class="r sdim"><span class="br">│</span> <span class="y">○</span> Inception.2010.1080p.BluRay.x264-GROUP.mkv  <span class="d">→ Inception (2010)/Inception (2010).mkv</span>         <span class="br">│</span></div>
+<div class="r"><span class="br">│</span> <span class="y">○</span> The.Matrix.1999.720p.mkv                    <span class="d">→ The Matrix (1999)/The Matrix (1999).mkv</span>       <span class="br">│</span></div>
+<div class="r"><span class="br">│</span> ▼ extras/                                                                                    <span class="br">│</span></div>
+      </div>
+      <div class="pnl-bot br">├──────────────────────────────────────────── <span class="t">2 staged / 1 ignored / 7 total</span> ─────────────────┤</div>
+    </div>
+    <div class="pnl on grow">
+      <div class="pnl-top ba">├─<span class="t"> Detail </span>──────────────────────────────────────────────────────────────────────────────────┤</div>
+      <div class="pnl-body">
+<div class="r"><span class="ba">│</span> <span class="w">Inception.2010.1080p.BluRay.x264-GROUP.mkv</span>                                                   <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span> <span class="d">→ Inception (2010)/Inception (2010).mkv</span>                                                      <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span> <span class="d">──────────────────────────────────────────────────────────────────────────────────────────</span>   <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>              <span class="w">result</span>                       <span class="d">filename</span>                                  <span class="d">[3/3]</span>   <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span> <span class="d">──────────────────────────────────────────────────────────────────────────────────────────</span>   <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">title</span>       <span class="w">Inception</span>                    <span class="d">Inception</span>                                         <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">year</span>        <span class="w">2010</span>                         <span class="d">2010</span>                                              <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">media_type</span>  <span class="w">movie</span>                        <span class="d">·</span>                                                 <span class="ba">│</span></div>
+<div class="r sel"><span class="ba">│</span>  <span class="d">codec</span>       <span class="w">x264</span>                         <span class="d">x264</span>                                              <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">source</span>      <span class="w">·</span>                            <span class="g">BluRay</span>                                            <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>                                                                                                <span class="ba">│</span></div>
+      </div>
+      <div class="pnl-bot ba">└──────────────────────────────────────────────────────────────────────────────────────────────────┘</div>
+    </div>
+  </div>
+  <div class="foot"> <span class="k">enter</span> apply field  <span class="k">⇧enter</span> apply all  <span class="k">h/l</span> prev/next source  <span class="k">esc</span> back  <span class="k">?</span> help</div>
+</div>
+
+<div class="note">
+  <strong>Applied:</strong> The result now shows "x264" for codec. The source value went from
+  green (new) to dim (matching). "BluRay" on source is still green — one more field to apply
+  if you want it. The destination path updates in real-time as result fields change.
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<hr>
+<h2>Editing and Clearing Fields</h2>
+
+<h3>B5. Editing a result field inline</h3>
+<p>Press <em>e</em> on any row to edit the result value directly. An inline text input
+appears on the result side. The source value stays visible as reference. <em>enter</em>
+confirms, <em>esc</em> cancels.</p>
+
+<div class="term">
+  <div class="term-inner">
+    <div class="pnl sm">
+      <div class="pnl-top br">┌─<span class="t"> Files </span>───────────────────────────────────────────────────────────────────────────────────┐</div>
+      <div class="pnl-body">
+<div class="r"><span class="br">│</span> <span class="g">✓</span> Breaking.Bad.S01E01.720p.BluRay.x264.mkv    <span class="d">→ Breaking Bad (2008)/S01E01.mkv</span>                <span class="br">│</span></div>
+<div class="r"><span class="br">│</span> <span class="g">✓</span> Breaking.Bad.S01E02.720p.BluRay.x264.mkv    <span class="d">→ Breaking Bad (2008)/S01E02.mkv</span>                <span class="br">│</span></div>
+<div class="r sdim"><span class="br">│</span> <span class="y">○</span> Inception.2010.1080p.BluRay.x264-GROUP.mkv  <span class="d">→ Inception (2010)/Inception (2010).mkv</span>         <span class="br">│</span></div>
+<div class="r"><span class="br">│</span> <span class="y">○</span> The.Matrix.1999.720p.mkv                    <span class="d">→ The Matrix (1999)/The Matrix (1999).mkv</span>       <span class="br">│</span></div>
+<div class="r"><span class="br">│</span> ▼ extras/                                                                                    <span class="br">│</span></div>
+      </div>
+      <div class="pnl-bot br">├──────────────────────────────────────────── <span class="t">2 staged / 1 ignored / 7 total</span> ─────────────────┤</div>
+    </div>
+    <div class="pnl on grow">
+      <div class="pnl-top ba">├─<span class="t"> Detail </span>──────────────────────────────────────────────────────────────────────────────────┤</div>
+      <div class="pnl-body">
+<div class="r"><span class="ba">│</span> <span class="w">Inception.2010.1080p.BluRay.x264-GROUP.mkv</span>                                                   <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span> <span class="d">→ Inception (2010)/Inception (2010).mkv</span>                                                      <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span> <span class="d">──────────────────────────────────────────────────────────────────────────────────────────</span>   <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>              <span class="w">result</span>                       <span class="b">TMDB #1</span> <span class="g">(92%)</span>                             <span class="d">[1/2]</span>   <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span> <span class="d">──────────────────────────────────────────────────────────────────────────────────────────</span>   <span class="ba">│</span></div>
+<div class="r sel"><span class="ba">│</span>  <span class="d">title</span>       <span class="c">Inception: Director's Cut█</span>   <span class="d">Inception</span>                                         <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">year</span>        <span class="w">2010</span>                         <span class="d">2010</span>                                              <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">media_type</span>  <span class="w">movie</span>                        <span class="d">movie</span>                                             <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">codec</span>       <span class="w">x264</span>                         <span class="d">·</span>                                                 <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">source</span>      <span class="w">BluRay</span>                       <span class="d">·</span>                                                 <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>                                                                                                <span class="ba">│</span></div>
+      </div>
+      <div class="pnl-bot ba">└──────────────────────────────────────────────────────────────────────────────────────────────────┘</div>
+    </div>
+  </div>
+  <div class="foot"> <span class="k">enter</span> confirm edit  <span class="k">esc</span> cancel edit</div>
+</div>
+
+<div class="note">
+  <strong>Inline edit:</strong> The title field shows the text input in cyan with a block
+  cursor <span class="c">█</span>. The TMDB source value is still visible to the right as reference.
+  The destination path at the top will update after you confirm. The footer switches to
+  edit-mode shortcuts.
+</div>
+
+
+<h3>B6. Clearing a field</h3>
+<p>Press <em>d</em> on a row to clear the result field (set it to <span class="d">·</span>).
+The field goes empty and the destination path updates accordingly.</p>
+
+<div class="term">
+  <div class="term-inner">
+    <div class="pnl sm">
+      <div class="pnl-top br">┌─<span class="t"> Files </span>───────────────────────────────────────────────────────────────────────────────────┐</div>
+      <div class="pnl-body">
+<div class="r"><span class="br">│</span> <span class="g">✓</span> Breaking.Bad.S01E01.720p.BluRay.x264.mkv    <span class="d">→ Breaking Bad (2008)/S01E01.mkv</span>                <span class="br">│</span></div>
+<div class="r"><span class="br">│</span> <span class="g">✓</span> Breaking.Bad.S01E02.720p.BluRay.x264.mkv    <span class="d">→ Breaking Bad (2008)/S01E02.mkv</span>                <span class="br">│</span></div>
+<div class="r sdim"><span class="br">│</span> <span class="y">○</span> Inception.2010.1080p.BluRay.x264-GROUP.mkv  <span class="d">→ ? (2010)/?.mkv</span>                               <span class="br">│</span></div>
+<div class="r"><span class="br">│</span> <span class="y">○</span> The.Matrix.1999.720p.mkv                    <span class="d">→ The Matrix (1999)/The Matrix (1999).mkv</span>       <span class="br">│</span></div>
+<div class="r"><span class="br">│</span> ▼ extras/                                                                                    <span class="br">│</span></div>
+      </div>
+      <div class="pnl-bot br">├──────────────────────────────────────────── <span class="t">2 staged / 1 ignored / 7 total</span> ─────────────────┤</div>
+    </div>
+    <div class="pnl on grow">
+      <div class="pnl-top ba">├─<span class="t"> Detail </span>──────────────────────────────────────────────────────────────────────────────────┤</div>
+      <div class="pnl-body">
+<div class="r"><span class="ba">│</span> <span class="w">Inception.2010.1080p.BluRay.x264-GROUP.mkv</span>                                                   <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span> <span class="d">→ ? (2010)/?.mkv</span>                                                                             <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span> <span class="d">──────────────────────────────────────────────────────────────────────────────────────────</span>   <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>              <span class="w">result</span>                       <span class="b">TMDB #1</span> <span class="g">(92%)</span>                             <span class="d">[1/2]</span>   <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span> <span class="d">──────────────────────────────────────────────────────────────────────────────────────────</span>   <span class="ba">│</span></div>
+<div class="r sel"><span class="ba">│</span>  <span class="d">title</span>       <span class="w">·</span>                            <span class="g">Inception</span>                                         <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">year</span>        <span class="w">2010</span>                         <span class="d">2010</span>                                              <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">media_type</span>  <span class="w">movie</span>                        <span class="d">movie</span>                                             <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">codec</span>       <span class="w">x264</span>                         <span class="d">·</span>                                                 <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">source</span>      <span class="w">BluRay</span>                       <span class="d">·</span>                                                 <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>                                                                                                <span class="ba">│</span></div>
+      </div>
+      <div class="pnl-bot ba">└──────────────────────────────────────────────────────────────────────────────────────────────────┘</div>
+    </div>
+  </div>
+  <div class="foot"> <span class="k">enter</span> apply field  <span class="k">⇧enter</span> apply all  <span class="k">h/l</span> prev/next source  <span class="k">esc</span> back  <span class="k">?</span> help</div>
+</div>
+
+<div class="note">
+  <strong>Cleared title:</strong> The result title is now <span class="w">·</span> (empty).
+  The destination updated to show <span class="d">?</span> where the title would go. The TMDB source
+  shows "Inception" in green — it can fill the gap if you press <em>enter</em>.
+  Press <em>u</em> to undo the clear.
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<hr>
+<h2>Filename Source: a Design Question</h2>
+<p>Currently, filename (guessit extraction) is just another source you cycle through with
+<em>h/l</em>. But it's fundamentally different from TMDB results — it's the starting point,
+not an alternative match. Three ways to handle this:</p>
+
+<h3>Option 1: Filename is source [1/N] (current)</h3>
+<p>Simple, consistent. To "reset" a field, cycle to the filename source and apply.
+Downside: filename feels like it's on the same level as TMDB matches, which is conceptually wrong.</p>
+
+<h3>Option 2: Filename not a source — reset with <em>D</em></h3>
+<p>Only TMDB results are sources. <em>d</em> clears to empty, <em>D</em> (shift-d)
+resets to the filename-extracted value. The filename extraction is the "ground truth"
+you can always fall back to.</p>
+
+<div class="term">
+  <div class="term-inner">
+    <div class="pnl on">
+      <div class="pnl-top ba">├─<span class="t"> Detail </span>──────────────────────────────────────────────────────────────────────────────────┤</div>
+      <div class="pnl-body">
+<div class="r"><span class="ba">│</span> <span class="w">Inception.2010.1080p.BluRay.x264-GROUP.mkv</span>                                                   <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span> <span class="d">→ Inception (2010)/Inception (2010).mkv</span>                                                      <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span> <span class="d">──────────────────────────────────────────────────────────────────────────────────────────</span>   <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>              <span class="w">result</span>                       <span class="b">TMDB #1</span> <span class="g">(92%)</span>                             <span class="d">[1/2]</span>   <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span> <span class="d">──────────────────────────────────────────────────────────────────────────────────────────</span>   <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">title</span>       <span class="w">Inception</span>                    <span class="d">Inception</span>                                         <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">year</span>        <span class="w">2010</span>                         <span class="d">2010</span>                                              <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">media_type</span>  <span class="w">movie</span>                        <span class="d">movie</span>                                             <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">codec</span>       <span class="w">x264</span>                         <span class="d">·</span>                    <span class="d">← from filename (x264)</span>     <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">source</span>      <span class="w">BluRay</span>                       <span class="d">·</span>                    <span class="d">← from filename (BluRay)</span>   <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>                                                                                                <span class="ba">│</span></div>
+      </div>
+      <div class="pnl-bot ba">└──────────────────────────────────────────────────────────────────────────────────────────────────┘</div>
+    </div>
+  </div>
+  <div class="foot"> <span class="k">enter</span> apply  <span class="k">e</span> edit  <span class="k">d</span> clear  <span class="k">D</span> reset to filename  <span class="k">h/l</span> sources  <span class="k">esc</span> back  <span class="k">?</span> help</div>
+</div>
+
+<div class="note">
+  <strong>Where did "x264" come from?</strong> In this model, the result starts with filename-extracted
+  values, then TMDB values are layered on top (auto-accept). Fields like codec and source that
+  TMDB doesn't provide keep their filename values. A dim annotation could show the origin
+  when it's not obvious. <em>D</em> on any field resets it to the filename extraction.
+  <em>d</em> clears to empty.
+</div>
+
+
+<h3>Option 3: Filename as "base layer" with origin markers</h3>
+<p>The result always shows where each value came from. Small dim markers after the value
+indicate origin. This makes the data lineage visible without needing a separate source.</p>
+
+<div class="term">
+  <div class="term-inner">
+    <div class="pnl on">
+      <div class="pnl-top ba">├─<span class="t"> Detail </span>──────────────────────────────────────────────────────────────────────────────────┤</div>
+      <div class="pnl-body">
+<div class="r"><span class="ba">│</span> <span class="w">Inception.2010.1080p.BluRay.x264-GROUP.mkv</span>                                                   <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span> <span class="d">→ Inception (2010)/Inception (2010).mkv</span>                                                      <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span> <span class="d">──────────────────────────────────────────────────────────────────────────────────────────</span>   <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>              <span class="w">result</span>                       <span class="b">TMDB #1</span> <span class="g">(92%)</span>                             <span class="d">[1/2]</span>   <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span> <span class="d">──────────────────────────────────────────────────────────────────────────────────────────</span>   <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">title</span>       <span class="w">Inception</span> <span class="d">tmdb</span>                <span class="d">Inception</span>                                         <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">year</span>        <span class="w">2010</span> <span class="d">tmdb</span>                     <span class="d">2010</span>                                              <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">media_type</span>  <span class="w">movie</span> <span class="d">tmdb</span>                    <span class="d">movie</span>                                             <span class="ba">│</span></div>
+<div class="r sel"><span class="ba">│</span>  <span class="d">codec</span>       <span class="w">x264</span> <span class="d">file</span>                     <span class="d">·</span>                                                 <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">source</span>      <span class="w">BluRay</span> <span class="d">file</span>                   <span class="d">·</span>                                                 <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>                                                                                                <span class="ba">│</span></div>
+      </div>
+      <div class="pnl-bot ba">└──────────────────────────────────────────────────────────────────────────────────────────────────┘</div>
+    </div>
+  </div>
+  <div class="foot"> <span class="k">enter</span> apply  <span class="k">e</span> edit  <span class="k">d</span> clear  <span class="k">D</span> reset to filename  <span class="k">h/l</span> sources  <span class="k">esc</span> back  <span class="k">?</span> help</div>
+</div>
+
+<div class="note">
+  <strong>Origin markers:</strong> Each result value has a small dim label showing where it
+  came from — <span class="d">tmdb</span>, <span class="d">file</span>, or <span class="d">edit</span>
+  (for manually edited values). This answers "why does my result say this?" at a glance.
+  <em>D</em> resets a field back to the filename value. <em>d</em> clears to empty.
+  Could also be shown as icons instead of text to save space.
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<hr>
+<h2>Updated Help Overlay</h2>
+<p>Press <em>?</em> from any view to see all shortcuts and a brief explanation of concepts.</p>
+
+<div class="term">
+  <div class="term-modal">
+    <div class="term-inner">
+      <div class="pnl">
+        <div class="pnl-top br">┌─<span class="t"> Files </span>───────────────────────────────────────────────────────────────────────────────────┐</div>
+        <div class="pnl-body">
+<div class="r"><span class="br">│</span> <span class="g">✓</span> Breaking.Bad.S01E01.720p.BluRay.x264.mkv    <span class="d">→ Breaking Bad (2008)/S01E01.mkv</span>                <span class="br">│</span></div>
+<div class="r"><span class="br">│</span> <span class="g">✓</span> Breaking.Bad.S01E02.720p.BluRay.x264.mkv    <span class="d">→ Breaking Bad (2008)/S01E02.mkv</span>                <span class="br">│</span></div>
+<div class="r"><span class="br">│</span> <span class="y">○</span> Inception.2010.1080p.BluRay.x264-GROUP.mkv  <span class="d">→ Inception (2010)/Inception (2010).mkv</span>         <span class="br">│</span></div>
+<div class="r"><span class="br">│</span> <span class="y">○</span> The.Matrix.1999.720p.mkv                    <span class="d">→ The Matrix (1999)/The Matrix (1999).mkv</span>       <span class="br">│</span></div>
+<div class="r"><span class="br">│</span> ▼ extras/                                                                                    <span class="br">│</span></div>
+<div class="r"><span class="br">│</span>   <span class="y">○</span> behind_the_scenes.mkv                     <span class="d">→ ?</span>                                              <span class="br">│</span></div>
+<div class="r"><span class="br">│</span>   <span class="d">· featurette.mkv</span>                                                                          <span class="br">│</span></div>
+<div class="r"><span class="br">│</span>                                                                                                <span class="br">│</span></div>
+<div class="r"><span class="br">│</span>                                                                                                <span class="br">│</span></div>
+<div class="r"><span class="br">│</span>                                                                                                <span class="br">│</span></div>
+<div class="r"><span class="br">│</span>                                                                                                <span class="br">│</span></div>
+<div class="r"><span class="br">│</span>                                                                                                <span class="br">│</span></div>
+<div class="r"><span class="br">│</span>                                                                                                <span class="br">│</span></div>
+<div class="r"><span class="br">│</span>                                                                                                <span class="br">│</span></div>
+<div class="r"><span class="br">│</span>                                                                                                <span class="br">│</span></div>
+<div class="r"><span class="br">│</span>                                                                                                <span class="br">│</span></div>
+<div class="r"><span class="br">│</span>                                                                                                <span class="br">│</span></div>
+        </div>
+        <div class="pnl-bot br">└──────────────────────────────────────────────────────────────────────────────────────────────────┘</div>
+      </div>
+    </div>
+    <div class="modal" style="min-width: 68ch;">
+      <div class="pnl-top ba">┌─<span class="t"> Help </span>────────────────────────────────────────────────────────────────┐</div>
+<div class="r"><span class="ba">│</span>                                                                      <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="w">Files</span>                                                               <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="k">j/k</span>       move cursor              <span class="k">space</span>     toggle staged           <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="k">enter</span>     open detail view          <span class="k">x</span>         toggle ignored          <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="k">a</span>         accept best source        <span class="k">v</span>         range select            <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="k">c</span>         commit staged files       <span class="k">u</span>         undo                    <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="k">/</span>         search / filter           <span class="k">r</span>         refresh TMDB query      <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="k">`</span>         toggle flat/tree          <span class="k">-/=</span>       collapse/expand all     <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="k">q</span>         quit                                                       <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>                                                                      <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="w">Detail</span>                                                              <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="k">j/k</span>       move between fields       <span class="k">h/l</span>       prev/next source        <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="k">enter</span>     apply field from source    <span class="k">e</span>         edit result field        <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="k">⇧enter</span>    apply all from source      <span class="k">d</span>         clear result field       <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="k">D</span>         reset field to filename    <span class="k">r</span>         re-query TMDB            <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="k">esc</span>       back to files              <span class="k">u</span>         undo                    <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>                                                                      <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">──────────────────────────────────────────────────────────────────</span>  <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>                                                                      <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="g">✓</span> <span class="d">staged</span>     file will be processed when you commit                  <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="y">○</span> <span class="d">unstaged</span>   file needs review — check its destination               <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">· ignored</span>   <span class="d">file will be skipped entirely</span>                             <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>                                                                      <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">Sources provide metadata from filename parsing and TMDB.</span>            <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>  <span class="d">Apply source values to the result to build the destination path.</span>   <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>                                                                      <span class="ba">│</span></div>
+      <div class="pnl-bot ba">└──────────────────────────────────── <span class="t">press <span class="k">?</span> or <span class="k">esc</span> to close</span> ──────┘</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<hr>
+<h2>Comparison: Grid vs. One-at-a-Time</h2>
+
+<p><strong>Option A (Grid with diff highlighting)</strong> keeps the multi-column layout. You see all
+sources at once. Good for quickly identifying which source is best. Risk: with 3+ sources,
+columns get tight and the screen gets dense. The diff highlighting helps, but you're still
+parsing a 2D grid.</p>
+
+<p><strong>Option B (One source at a time)</strong> shows just result vs. one source. Navigation
+is 1D (rows only). Each value gets generous space. The comparison is focused and calm.
+Switching sources with <em>h/l</em> is fast. Risk: you can't see all sources simultaneously,
+so comparing across sources requires memorizing or cycling. But the confidence % in the
+header tells you which source is likely best, and the color system (dim=match, yellow=differ,
+green=fills gap) gives instant feedback.</p>
+
+<p><strong>My recommendation: Option B.</strong> The one-at-a-time layout is more intuitive, easier to
+parse, and works perfectly at any terminal width. The grid is powerful but cognitively
+expensive — most users will auto-accept the best source anyway. The detail view is for the
+edge cases where you need to cherry-pick, and focused comparison makes that easier.</p>
+
+<p>The diff color system works for both options — it's an independent improvement.</p>
+
+</body>
+</html>
