@@ -86,6 +86,18 @@ class TreeModel:
         for f in files:
             f.staged = not all_staged
 
+    def toggle_ignored_recursive(self, node: FolderNode) -> None:
+        """Toggle ignored on all file descendants.
+
+        If ALL are ignored, un-ignore all. Otherwise ignore all.
+        """
+        files = _collect_files(node)
+        if not files:
+            return
+        all_ignored = all(f.ignored for f in files)
+        for f in files:
+            f.ignored = not all_ignored
+
     def all_files(self) -> list[FileNode]:
         """Return all FileNodes depth-first."""
         return _collect_files(self.root)

@@ -120,19 +120,8 @@ class TreeView(Widget):
                 self.model.toggle_ignored(node)
                 self.refresh()
             elif isinstance(node, FolderNode):
-                self._toggle_ignored_recursive(node)
+                self.model.toggle_ignored_recursive(node)
                 self.refresh()
-
-    def _toggle_ignored_recursive(self, folder: FolderNode) -> None:
-        """Toggle ignored on all file descendants of a folder."""
-        from tapes.ui.tree_model import _collect_files
-
-        files = _collect_files(folder)
-        if not files:
-            return
-        all_ignored = all(f.ignored for f in files)
-        for f in files:
-            f.ignored = not all_ignored
 
     def _refresh_items(self) -> None:
         """Rebuild the flattened item list from the model."""
@@ -159,6 +148,8 @@ class TreeView(Widget):
                 root_path=self.root_path,
             )
             line = Text(row_str)
+            if isinstance(node, FileNode) and node.ignored:
+                line.stylize("dim")
             if i == self.cursor_index:
                 line.stylize("reverse")
             elif rng and rng[0] <= i <= rng[1]:

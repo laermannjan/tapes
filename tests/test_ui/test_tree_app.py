@@ -811,6 +811,21 @@ class TestCommitAction:
             assert "enter to confirm" in rendered
 
     @pytest.mark.asyncio()
+    async def test_commit_enter_confirms_and_exits(self) -> None:
+        from tapes.ui.tree_app import TreeApp
+
+        model = _expanded_model()
+        model.all_files()[0].staged = True
+        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+
+        async with app.run_test() as pilot:
+            await pilot.press("c")
+            assert app._confirming_commit is True
+            await pilot.press("enter")
+            # App should exit with staged files as result
+            assert app.return_code is not None or app._exit
+
+    @pytest.mark.asyncio()
     async def test_commit_escape_cancels(self) -> None:
         from textual.widgets import Static
 
