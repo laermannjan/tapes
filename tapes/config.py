@@ -19,6 +19,12 @@ class MetadataConfig(BaseModel):
     tmdb_token: str = ""
     auto_accept_threshold: float = DEFAULT_AUTO_ACCEPT_THRESHOLD
 
+    def model_post_init(self, __context: object) -> None:
+        import os
+
+        if not self.tmdb_token:
+            self.tmdb_token = os.environ.get("TMDB_TOKEN", "")
+
 
 class LibraryConfig(BaseModel):
     movies: str = ""
