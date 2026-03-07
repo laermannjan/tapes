@@ -194,6 +194,22 @@ class UndoManager:
         return self._snapshot is not None
 
 
+def accept_best_source(node: FileNode) -> bool:
+    """Apply the highest-confidence source's non-empty fields to result.
+
+    Returns True if a source was applied.
+    """
+    if not node.sources:
+        return False
+    best = max(node.sources, key=lambda s: s.confidence)
+    if best.confidence == 0:
+        return False
+    for field, val in best.fields.items():
+        if val is not None:
+            node.result[field] = val
+    return True
+
+
 def compute_shared_fields(nodes: list[FileNode]) -> dict[str, Any]:
     """Compute shared result fields across multiple file nodes.
 

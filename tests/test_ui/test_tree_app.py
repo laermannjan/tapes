@@ -5,7 +5,14 @@ from pathlib import Path
 
 import pytest
 
-from tapes.ui.tree_model import FileNode, FolderNode, Source, TreeModel, UndoManager
+from tapes.ui.tree_model import (
+    FileNode,
+    FolderNode,
+    Source,
+    TreeModel,
+    UndoManager,
+    accept_best_source,
+)
 from tapes.ui.tree_view import TreeView
 
 
@@ -976,3 +983,131 @@ class TestFlatTreeToggleAsync:
             assert tv.flat_mode
             await pilot.press("grave_accent")
             assert not tv.flat_mode
+
+
+# ---------------------------------------------------------------------------
+# Accept best source (M9) unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestAcceptBestSource:
+    def test_applies_highest_confidence_source(self) -> None:
+        node = FileNode(
+            path=Path("/test.mkv"),
+            result={"title": "Old"},
+            sources=[
+                Source(name="src1", fields={"title": "Low", "year": 2000}, confidence=0.5),
+                Source(name="src2", fields={"title": "High", "year": 2020}, confidence=0.9),
+            ],
+        )
+        assert accept_best_source(node) is True
+        assert node.result["title"] == "High"
+        assert node.result["year"] == 2020
+
+    def test_noop_when_no_sources(self) -> None:
+        node = FileNode(path=Path("/test.mkv"), result={"title": "Original"})
+        assert accept_best_source(node) is False
+        assert node.result["title"] == "Original"
+
+    def test_noop_when_all_zero_confidence(self) -> None:
+        node = FileNode(
+            path=Path("/test.mkv"),
+            result={"title": "Original"},
+            sources=[
+                Source(name="src1", fields={"title": "Other"}, confidence=0.0),
+            ],
+        )
+        assert accept_best_source(node) is False
+        assert node.result["title"] == "Original"
+
+    def test_skips_none_values(self) -> None:
+        node = FileNode(
+            path=Path("/test.mkv"),
+            result={"title": "Keep", "year": 2000},
+            sources=[
+                Source(
+                    name="src1",
+                    fields={"title": "New", "year": None},
+                    confidence=0.8,
+                ),
+            ],
+        )
+        accept_best_source(node)
+        assert node.result["title"] == "New"
+        assert node.result["year"] == 2000  # Not overwritten by None
+
+
+@pytest.mark.skipif(not HAS_PILOT, reason="textual pilot not available")
+class TestAcceptBestAsync:
+    @pytest.mark.asyncio()
+    async def test_a_key_applies_best_source_on_cursor(self) -> None:
+        from tapes.ui.tree_app import TreeApp
+
+        node = FileNode(
+            path=Path("/media/test.mkv"),
+            result={"title": "Old"},
+            sources=[
+                Source(name="TMDB", fields={"title": "New", "year": 2021}, confidence=0.9),
+            ],
+        )
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
+        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+
+        async with app.run_test() as pilot:
+            await pilot.press("a")
+            assert node.result["title"] == "New"
+            assert node.result["year"] == 2021
+
+    @pytest.mark.asyncio()
+    async def test_a_key_applies_per_file_in_range(self) -> None:
+        from tapes.ui.tree_app import TreeApp
+
+        node1 = FileNode(
+            path=Path("/media/a.mkv"),
+            result={"title": "A"},
+            sources=[
+                Source(name="TMDB", fields={"title": "A2"}, confidence=0.8),
+            ],
+        )
+        node2 = FileNode(
+            path=Path("/media/b.mkv"),
+            result={"title": "B"},
+            sources=[
+                Source(name="TMDB", fields={"title": "B2"}, confidence=0.7),
+            ],
+        )
+        root = FolderNode(name="root", children=[node1, node2])
+        model = TreeModel(root=root)
+        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+
+        async with app.run_test() as pilot:
+            # Select range over both files
+            await pilot.press("v")
+            await pilot.press("j")
+            await pilot.press("a")
+            assert node1.result["title"] == "A2"
+            assert node2.result["title"] == "B2"
+
+    @pytest.mark.asyncio()
+    async def test_a_key_noop_in_detail(self) -> None:
+        from tapes.ui.tree_app import TreeApp
+
+        node = FileNode(
+            path=Path("/media/test.mkv"),
+            result={"title": "Old"},
+            sources=[
+                Source(name="TMDB", fields={"title": "New"}, confidence=0.9),
+            ],
+        )
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
+        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+
+        async with app.run_test() as pilot:
+            # Enter detail view
+            await pilot.press("enter")
+            assert app._in_detail is True
+            await pilot.press("a")
+            # Should be no-op in detail view
+            assert node.result["title"] == "Old"

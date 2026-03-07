@@ -8,7 +8,13 @@ from textual.binding import Binding
 from textual.widgets import Footer, Header, Static
 
 from tapes.ui.detail_view import DetailView
-from tapes.ui.tree_model import FileNode, FolderNode, TreeModel, UndoManager
+from tapes.ui.tree_model import (
+    FileNode,
+    FolderNode,
+    TreeModel,
+    UndoManager,
+    accept_best_source,
+)
 from tapes.ui.tree_view import TreeView
 
 
@@ -29,6 +35,7 @@ class TreeApp(App):
         Binding("u", "undo", "Undo"),
         Binding("x", "toggle_ignored", "Ignore"),
         Binding("c", "commit", "Commit"),
+        Binding("a", "accept_best", "Accept"),
         Binding("grave_accent", "toggle_flat", "Flat/Tree"),
     ]
 
@@ -200,6 +207,26 @@ class TreeApp(App):
             f"{count} file{'s' if count != 1 else ''} staged. "
             "Press enter to confirm, esc to cancel."
         )
+
+    def action_accept_best(self) -> None:
+        if self._in_detail:
+            return
+        tv = self.query_one(TreeView)
+        if tv.in_range_mode:
+            nodes = tv.selected_nodes()
+            file_nodes = [n for n in nodes if isinstance(n, FileNode)]
+            if file_nodes:
+                self._undo.snapshot(file_nodes)
+                for fn in file_nodes:
+                    accept_best_source(fn)
+            tv.clear_range_select()
+        else:
+            node = tv.cursor_node()
+            if isinstance(node, FileNode):
+                self._undo.snapshot([node])
+                accept_best_source(node)
+        tv.refresh()
+        self._update_footer()
 
     def action_toggle_flat(self) -> None:
         if self._in_detail:
