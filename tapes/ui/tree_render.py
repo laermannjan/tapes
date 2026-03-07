@@ -8,7 +8,7 @@ from typing import Any
 from tapes.ui.tree_model import FileNode, FolderNode, TreeModel
 
 
-def _template_field_names(template: str) -> list[str]:
+def template_field_names(template: str) -> list[str]:
     """Extract unique field names referenced in a template string."""
     return list(
         dict.fromkeys(
@@ -27,7 +27,7 @@ def compute_dest(node: FileNode, template: str) -> str | None:
     fields: dict[str, Any] = dict(node.result)
     fields["ext"] = node.path.suffix.lstrip(".")
 
-    needed = _template_field_names(template)
+    needed = template_field_names(template)
     if any(f not in fields for f in needed):
         return None
 

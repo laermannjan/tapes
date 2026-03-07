@@ -11,6 +11,7 @@ from textual.widget import Widget
 from tapes.ui.detail_render import (
     COL_WIDTH,
     LABEL_WIDTH,
+    col,
     display_val,
     get_display_fields,
     render_detail_header,
@@ -41,6 +42,15 @@ class DetailView(Widget):
     def on_mount(self) -> None:
         self._fields = get_display_fields(self.template)
 
+    def set_node(self, node: FileNode) -> None:
+        """Switch to a new file node, resetting cursor and edit state."""
+        self.node = node
+        self.cursor_row = 0
+        self.cursor_col = 0
+        self._fields = get_display_fields(self.template)
+        self.editing = False
+        self.refresh()
+
     def render(self) -> RenderableType:
         """Build Rich Text with cursor highlighting."""
         lines: list[Text] = []
@@ -64,7 +74,7 @@ class DetailView(Widget):
         lines.append(Text("\u2576" + "\u2500" * 78 + "\u2574"))
 
         # Help line
-        lines.append(Text(" enter: apply/edit   esc: back"))
+        lines.append(Text(" enter: apply/edit   shift-enter: apply all   esc: back"))
 
         return Text("\n").join(lines)
 
@@ -76,7 +86,7 @@ class DetailView(Widget):
         parts.append((" " * LABEL_WIDTH, ""))
 
         # Result column header
-        result_text = _col("result")
+        result_text = col("result")
         style = "reverse" if self.cursor_row == -1 and self.cursor_col == 0 else ""
         parts.append((result_text, style))
 
@@ -86,7 +96,7 @@ class DetailView(Widget):
         # Source headers
         for i, src in enumerate(self.node.sources):
             conf = f" ({src.confidence:.0%})" if src.confidence else ""
-            col_text = _col(f"  {src.name}{conf}")
+            col_text = col(f"  {src.name}{conf}")
             style = (
                 "reverse"
                 if self.cursor_row == -1 and self.cursor_col == i + 1
@@ -111,11 +121,11 @@ class DetailView(Widget):
         if self.editing and self.cursor_row == row_idx and self.cursor_col == 0:
             # Show edit input
             edit_display = self._edit_value + "\u2588"  # block cursor
-            result_text = _col(edit_display)
+            result_text = col(edit_display)
             parts.append((result_text, "underline"))
         else:
             result_val = display_val(self.node.result.get(field_name))
-            result_text = _col(result_val)
+            result_text = col(result_val)
             style = (
                 "reverse"
                 if self.cursor_row == row_idx and self.cursor_col == 0
@@ -129,7 +139,7 @@ class DetailView(Widget):
         # Source values
         for i, src in enumerate(self.node.sources):
             src_val = display_val(src.fields.get(field_name))
-            col_text = _col(f"  {src_val}")
+            col_text = col(f"  {src_val}")
             style = (
                 "reverse"
                 if self.cursor_row == row_idx and self.cursor_col == i + 1
@@ -175,6 +185,22 @@ class DetailView(Widget):
             val = self.node.sources[src_idx].fields.get(field_name)
             if val is not None:
                 self.node.result[field_name] = val
+        self.refresh()
+
+    def apply_source_all_clear(self) -> None:
+        """Handle shift-enter: apply all fields from source including empties."""
+        if self.cursor_col == 0 or self.cursor_row != -1:
+            return
+        src_idx = self.cursor_col - 1
+        if src_idx >= len(self.node.sources):
+            return
+        src = self.node.sources[src_idx]
+        for field_name in self._fields:
+            val = src.fields.get(field_name)
+            if val is not None:
+                self.node.result[field_name] = val
+            else:
+                self.node.result.pop(field_name, None)
         self.refresh()
 
     def _apply_source_all(self, src_idx: int) -> None:
@@ -244,10 +270,3 @@ class DetailView(Widget):
     def watch_cursor_col(self) -> None:
         """React to cursor col changes."""
         self.refresh()
-
-
-def _col(text: str) -> str:
-    """Pad or truncate text to COL_WIDTH."""
-    if len(text) > COL_WIDTH:
-        return text[: COL_WIDTH - 1] + "\u2026"
-    return text.ljust(COL_WIDTH)

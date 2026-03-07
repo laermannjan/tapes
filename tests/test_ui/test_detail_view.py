@@ -348,3 +348,130 @@ class TestDetailViewEditing:
         view._cancel_edit()
         assert view.editing is False
         assert view.node.result["title"] == "Breaking Bad"
+
+
+# --- DetailView.set_node ---
+
+
+class TestDetailViewSetNode:
+    def test_set_node_resets_cursor(self) -> None:
+        node = _make_node()
+        view = DetailView(node, TEMPLATE)
+        view._fields = get_display_fields(TEMPLATE)
+        view.cursor_row = 2
+        view.cursor_col = 1
+        view.editing = True
+
+        new_node = FileNode(
+            path=Path("/media/other.mkv"),
+            result={"title": "Other"},
+        )
+        view.set_node(new_node)
+        assert view.node is new_node
+        assert view.cursor_row == 0
+        assert view.cursor_col == 0
+        assert view.editing is False
+
+    def test_set_node_updates_fields(self) -> None:
+        node = _make_node()
+        view = DetailView(node, TEMPLATE)
+        view._fields = []
+        view.set_node(node)
+        assert len(view._fields) == 4  # title, year, season, episode
+
+
+# --- DetailView.apply_source_all_clear ---
+
+
+class TestDetailViewApplyAllClear:
+    def _make_view(self) -> DetailView:
+        node = _make_node()
+        view = DetailView(node, TEMPLATE)
+        view._fields = get_display_fields(TEMPLATE)
+        return view
+
+    def test_applies_all_and_clears_empties(self) -> None:
+        view = self._make_view()
+        # filename source has title, season, episode but NOT year
+        view.node.result = {
+            "title": "Old",
+            "year": 9999,
+            "season": 99,
+            "episode": 99,
+        }
+        view.cursor_row = -1
+        view.cursor_col = 1  # filename source
+        view.apply_source_all_clear()
+        assert view.node.result["title"] == "Breaking Bad"
+        assert view.node.result["season"] == 1
+        assert view.node.result["episode"] == 1
+        # year was cleared because filename source has no year
+        assert "year" not in view.node.result
+
+    def test_noop_on_result_column(self) -> None:
+        view = self._make_view()
+        view.cursor_row = -1
+        view.cursor_col = 0  # result column
+        original = dict(view.node.result)
+        view.apply_source_all_clear()
+        assert view.node.result == original
+
+    def test_noop_on_field_row(self) -> None:
+        view = self._make_view()
+        view.cursor_row = 0  # not header
+        view.cursor_col = 1
+        original = dict(view.node.result)
+        view.apply_source_all_clear()
+        assert view.node.result == original
+
+
+# --- Async integration: tree -> detail -> back ---
+
+
+try:
+    from textual.pilot import Pilot  # noqa: F401
+
+    HAS_PILOT = True
+except ImportError:
+    HAS_PILOT = False
+
+
+@pytest.mark.skipif(not HAS_PILOT, reason="textual pilot not available")
+class TestTreeDetailIntegration:
+    @pytest.mark.asyncio()
+    async def test_enter_on_file_shows_detail_esc_returns(self) -> None:
+        from tapes.ui.tree_app import TreeApp
+        from tapes.ui.tree_model import FolderNode, TreeModel
+        from tapes.ui.tree_view import TreeView
+
+        node = _make_node()
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
+        app = TreeApp(model=model, template=TEMPLATE)
+
+        async with app.run_test() as pilot:
+            tv = app.query_one(TreeView)
+            dv = app.query_one(DetailView)
+
+            # Initially tree is visible, detail is hidden
+            assert tv.display is True
+            assert dv.display is False
+
+            # Enter on the file node opens detail
+            await pilot.press("enter")
+            assert app._in_detail is True
+            assert tv.display is False
+            assert dv.display is True
+            assert dv.node is node
+
+            # Navigate in detail view
+            await pilot.press("j")
+            assert dv.cursor_row == 1
+            await pilot.press("l")
+            assert dv.cursor_col == 1
+
+            # Escape returns to tree
+            await pilot.press("escape")
+            assert app._in_detail is False
+            assert tv.display is True
+            assert dv.display is False

@@ -7,7 +7,6 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.widgets import Footer, Header, Static
 
-from tapes.ui.detail_render import get_display_fields
 from tapes.ui.detail_view import DetailView
 from tapes.ui.tree_model import FileNode, FolderNode, TreeModel
 from tapes.ui.tree_view import TreeView
@@ -23,6 +22,7 @@ class TreeApp(App):
         Binding("h,left", "cursor_left", "Left"),
         Binding("l,right", "cursor_right", "Right"),
         Binding("enter", "toggle_or_enter", "Toggle"),
+        Binding("shift+enter", "apply_all_clear", "Apply All", show=False),
         Binding("space", "toggle_staged", "Stage"),
         Binding("v", "range_select", "Range Select"),
         Binding("escape", "cancel", "Cancel"),
@@ -59,6 +59,7 @@ class TreeApp(App):
             self.template,
             root_path=self.root_path,
         )
+        # Hidden until a file is selected; set_node() replaces the placeholder
         yield DetailView(
             FileNode(path=Path("placeholder")),
             self.template,
@@ -73,15 +74,10 @@ class TreeApp(App):
         """Switch from tree view to detail view for a file node."""
         self._in_detail = True
         detail = self.query_one(DetailView)
-        detail.node = node
-        detail.cursor_row = 0
-        detail.cursor_col = 0
-        detail._fields = get_display_fields(self.template)
-        detail.editing = False
+        detail.set_node(node)
         self.query_one(TreeView).display = False
         detail.display = True
         detail.focus()
-        detail.refresh()
 
     def _show_tree(self) -> None:
         """Switch from detail view back to tree view."""
@@ -132,6 +128,10 @@ class TreeApp(App):
             tv.toggle_folder_at_cursor()
         elif isinstance(node, FileNode):
             self._show_detail(node)
+
+    def action_apply_all_clear(self) -> None:
+        if self._in_detail:
+            self.query_one(DetailView).apply_source_all_clear()
 
     def action_range_select(self) -> None:
         if self._in_detail:

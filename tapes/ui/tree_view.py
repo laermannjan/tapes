@@ -170,6 +170,7 @@ class TreeView(Widget):
                 self.cursor_index = len(self._items) - 1
             elif not self._items:
                 self.cursor_index = 0
+            self.refresh()
 
     def refresh_tree(self) -> None:
         """Re-flatten and refresh the display."""
