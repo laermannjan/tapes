@@ -1,7 +1,7 @@
 """Interactive Textual widget for the detail view with cursor and editing."""
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from rich.text import Text
 from textual import events
@@ -38,6 +38,7 @@ class DetailView(Widget):
         self.template = template
         self._fields: list[str] = []
         self._edit_value: str = ""
+        self.on_before_mutate: Callable[[list[FileNode]], None] | None = None
 
     def on_mount(self) -> None:
         self._fields = get_display_fields(self.template)
@@ -165,6 +166,11 @@ class DetailView(Widget):
         self.cursor_row = max(-1, min(max_row, new_row))
         self.cursor_col = max(0, min(max_col, new_col))
 
+    def _notify_before_mutate(self) -> None:
+        """Notify the on_before_mutate callback before a mutation."""
+        if self.on_before_mutate is not None:
+            self.on_before_mutate([self.node])
+
     def apply_source_field(self) -> None:
         """Handle enter on the current cursor cell."""
         if self.cursor_col == 0:
@@ -176,6 +182,7 @@ class DetailView(Widget):
         if src_idx >= len(self.node.sources):
             return
 
+        self._notify_before_mutate()
         if self.cursor_row == -1:
             # Header row: apply all non-empty from this source
             self._apply_source_all(src_idx)
@@ -194,6 +201,7 @@ class DetailView(Widget):
         src_idx = self.cursor_col - 1
         if src_idx >= len(self.node.sources):
             return
+        self._notify_before_mutate()
         src = self.node.sources[src_idx]
         for field_name in self._fields:
             val = src.fields.get(field_name)
@@ -223,6 +231,7 @@ class DetailView(Widget):
 
     def _commit_edit(self) -> None:
         """Save the edited value to the result."""
+        self._notify_before_mutate()
         field_name = self._fields[self.cursor_row]
         val: str | int = self._edit_value
         if field_name in ("year", "season", "episode"):

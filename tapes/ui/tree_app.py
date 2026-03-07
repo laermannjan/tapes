@@ -8,7 +8,7 @@ from textual.binding import Binding
 from textual.widgets import Footer, Header, Static
 
 from tapes.ui.detail_view import DetailView
-from tapes.ui.tree_model import FileNode, FolderNode, TreeModel
+from tapes.ui.tree_model import FileNode, FolderNode, TreeModel, UndoManager
 from tapes.ui.tree_view import TreeView
 
 
@@ -26,6 +26,7 @@ class TreeApp(App):
         Binding("space", "toggle_staged", "Stage"),
         Binding("v", "range_select", "Range Select"),
         Binding("escape", "cancel", "Cancel"),
+        Binding("u", "undo", "Undo"),
     ]
 
     CSS = """
@@ -51,6 +52,7 @@ class TreeApp(App):
         self.template = template
         self.root_path = root_path
         self._in_detail = False
+        self._undo = UndoManager()
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -75,9 +77,14 @@ class TreeApp(App):
         self._in_detail = True
         detail = self.query_one(DetailView)
         detail.set_node(node)
+        detail.on_before_mutate = self._snapshot_before_mutate
         self.query_one(TreeView).display = False
         detail.display = True
         detail.focus()
+
+    def _snapshot_before_mutate(self, nodes: list[FileNode]) -> None:
+        """Save undo snapshot before a mutation."""
+        self._undo.snapshot(nodes)
 
     def _show_tree(self) -> None:
         """Switch from detail view back to tree view."""
@@ -149,6 +156,14 @@ class TreeApp(App):
         tv = self.query_one(TreeView)
         if tv.in_range_mode:
             tv.clear_range_select()
+
+    def action_undo(self) -> None:
+        if self._undo.undo():
+            if self._in_detail:
+                self.query_one(DetailView).refresh()
+            else:
+                self.query_one(TreeView).refresh()
+            self._update_footer()
 
     def _update_footer(self) -> None:
         tv = self.query_one(TreeView)

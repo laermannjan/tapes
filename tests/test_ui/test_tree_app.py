@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from tapes.ui.tree_model import FileNode, FolderNode, TreeModel
+from tapes.ui.tree_model import FileNode, FolderNode, Source, TreeModel, UndoManager
 from tapes.ui.tree_view import TreeView
 
 
@@ -581,3 +581,121 @@ class TestTreeAppKeys:
         async with app.run_test() as pilot:
             await pilot.press("q")
             # app should exit; if we get here without hanging, it worked
+
+
+# ---------------------------------------------------------------------------
+# UndoManager unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestUndoManager:
+    def test_snapshot_and_undo_restores_result(self) -> None:
+        node = FileNode(path=Path("/test.mkv"), result={"title": "Original"})
+        undo = UndoManager()
+        undo.snapshot([node])
+        node.result["title"] = "Changed"
+        assert undo.undo() is True
+        assert node.result["title"] == "Original"
+
+    def test_undo_noop_when_no_snapshot(self) -> None:
+        undo = UndoManager()
+        assert undo.undo() is False
+
+    def test_undo_clears_snapshot(self) -> None:
+        node = FileNode(path=Path("/test.mkv"), result={"title": "Original"})
+        undo = UndoManager()
+        undo.snapshot([node])
+        assert undo.has_snapshot is True
+        undo.undo()
+        assert undo.has_snapshot is False
+        # Second undo is a noop
+        assert undo.undo() is False
+
+    def test_snapshot_is_deep_copy(self) -> None:
+        node = FileNode(path=Path("/test.mkv"), result={"title": "Original"})
+        undo = UndoManager()
+        undo.snapshot([node])
+        # Mutate deeply
+        node.result["title"] = "Changed"
+        node.result["year"] = 2020
+        undo.undo()
+        assert node.result == {"title": "Original"}
+
+    def test_multiple_nodes(self) -> None:
+        n1 = FileNode(path=Path("/a.mkv"), result={"title": "A"})
+        n2 = FileNode(path=Path("/b.mkv"), result={"title": "B"})
+        undo = UndoManager()
+        undo.snapshot([n1, n2])
+        n1.result["title"] = "A2"
+        n2.result["title"] = "B2"
+        undo.undo()
+        assert n1.result["title"] == "A"
+        assert n2.result["title"] == "B"
+
+    def test_single_level_only(self) -> None:
+        node = FileNode(path=Path("/test.mkv"), result={"title": "V1"})
+        undo = UndoManager()
+        undo.snapshot([node])
+        node.result["title"] = "V2"
+        undo.snapshot([node])
+        node.result["title"] = "V3"
+        # Only the latest snapshot (V2) is restored
+        undo.undo()
+        assert node.result["title"] == "V2"
+
+
+# ---------------------------------------------------------------------------
+# Undo integration tests (async)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(not HAS_PILOT, reason="textual pilot not available")
+class TestUndoIntegration:
+    @pytest.mark.asyncio()
+    async def test_undo_after_edit_in_detail(self) -> None:
+        from tapes.ui.detail_view import DetailView
+        from tapes.ui.tree_app import TreeApp
+
+        node = FileNode(
+            path=Path("/media/test.mkv"),
+            result={"title": "Original", "year": 2020},
+            sources=[
+                Source(name="src1", fields={"title": "Alt", "year": 2021}),
+            ],
+        )
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
+        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+
+        async with app.run_test() as pilot:
+            # Enter detail view
+            await pilot.press("enter")
+            dv = app.query_one(DetailView)
+            assert dv.node is node
+
+            # Apply source field (title from src1)
+            dv.cursor_row = 0
+            dv.cursor_col = 1
+            await pilot.press("enter")
+            assert node.result["title"] == "Alt"
+
+            # Undo
+            await pilot.press("u")
+            assert node.result["title"] == "Original"
+
+    @pytest.mark.asyncio()
+    async def test_undo_noop_when_no_changes(self) -> None:
+        from tapes.ui.tree_app import TreeApp
+
+        node = FileNode(
+            path=Path("/media/test.mkv"),
+            result={"title": "Original"},
+        )
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
+        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+
+        async with app.run_test() as pilot:
+            # Press u without any changes - should not crash
+            await pilot.press("u")
+            assert node.result["title"] == "Original"

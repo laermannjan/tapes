@@ -1,6 +1,7 @@
 """Tree data model for the TUI redesign."""
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -150,6 +151,35 @@ def _build_folder(
 
     for name in file_names:
         folder.children.append(FileNode(path=current_path / name))
+
+
+class UndoManager:
+    """Single-level undo for metadata changes on FileNodes.
+
+    Call ``snapshot()`` before a mutation to save node results.
+    Call ``undo()`` to restore the most recent snapshot.
+    """
+
+    def __init__(self) -> None:
+        self._snapshot: list[tuple[FileNode, dict[str, Any]]] | None = None
+
+    def snapshot(self, nodes: list[FileNode]) -> None:
+        """Save a deep copy of each node's result dict."""
+        self._snapshot = [(node, copy.deepcopy(node.result)) for node in nodes]
+
+    def undo(self) -> bool:
+        """Restore the most recent snapshot. Returns True if restored."""
+        if self._snapshot is None:
+            return False
+        for node, saved_result in self._snapshot:
+            node.result = saved_result
+        self._snapshot = None
+        return True
+
+    @property
+    def has_snapshot(self) -> bool:
+        """Whether there is a snapshot to undo."""
+        return self._snapshot is not None
 
 
 def compute_shared_fields(nodes: list[FileNode]) -> dict[str, Any]:
