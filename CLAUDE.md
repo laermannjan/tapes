@@ -115,11 +115,14 @@ Core
 
 ## Current status
 
-**Pre-alpha. TUI + core pipeline complete (470 tests passing).**
+**Pre-alpha. TUI + core pipeline complete (465 tests passing).**
 
 Implemented: TUI (M1-M16), real TMDB integration (two-stage search),
 similarity/confidence scoring, template selection, broadened scanner,
 file processing on commit, config wiring, visual design overhaul.
+Upgraded to textual 8, rich 14, pytest-asyncio 1.x. Modals use
+ModalScreen. Focus styling uses CSS pseudo-classes.
 
 Active work: visual polish iteration (see `docs/plans/2026-03-08-visual-fixes-remaining.md`).
-Remaining: revisit similarity scoring, end-to-end manual testing, error handling.
+Next up: revisit similarity scoring, end-to-end manual testing,
+error handling.
