@@ -104,7 +104,10 @@ class TreeApp(App):
             from tapes.ui.pipeline import run_auto_pipeline
 
             threshold = self.config.metadata.auto_accept_threshold
-            run_auto_pipeline(self.model, confidence_threshold=threshold)
+            token = self.config.metadata.tmdb_token
+            run_auto_pipeline(
+                self.model, token=token, confidence_threshold=threshold
+            )
             self.query_one(TreeView).refresh_tree()
         self._update_footer()
 
@@ -285,11 +288,14 @@ class TreeApp(App):
     def action_refresh_query(self) -> None:
         from tapes.ui.pipeline import refresh_tmdb_source
 
+        token = self.config.metadata.tmdb_token
+        threshold = self.config.metadata.auto_accept_threshold
+
         if self._in_detail:
             dv = self.query_one(DetailView)
             self._undo.snapshot(dv._file_nodes)
             for fn in dv._file_nodes:
-                refresh_tmdb_source(fn)
+                refresh_tmdb_source(fn, token=token, confidence_threshold=threshold)
             dv.refresh()
         else:
             tv = self.query_one(TreeView)
@@ -299,13 +305,13 @@ class TreeApp(App):
                 if file_nodes:
                     self._undo.snapshot(file_nodes)
                     for fn in file_nodes:
-                        refresh_tmdb_source(fn)
+                        refresh_tmdb_source(fn, token=token, confidence_threshold=threshold)
                 tv.clear_range_select()
             else:
                 node = tv.cursor_node()
                 if isinstance(node, FileNode):
                     self._undo.snapshot([node])
-                    refresh_tmdb_source(node)
+                    refresh_tmdb_source(node, token=token, confidence_threshold=threshold)
             tv.refresh()
         self._update_footer()
 

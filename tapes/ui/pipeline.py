@@ -1,75 +1,62 @@
 """Auto-pipeline: populate sources and auto-accept confident matches."""
 from __future__ import annotations
 
+import logging
 from typing import Any
 
-from tapes.similarity import compute_confidence
+from tapes.similarity import compute_confidence, compute_episode_confidence
 from tapes.ui.tree_model import FileNode, Source, TreeModel
+
+logger = logging.getLogger(__name__)
 
 
 def run_auto_pipeline(
-    model: TreeModel, confidence_threshold: float | None = None
+    model: TreeModel,
+    token: str = "",
+    confidence_threshold: float | None = None,
 ) -> None:
     """Populate sources and auto-accept confident matches.
 
     For each file node:
     1. Extract metadata from filename via guessit -> result + "from filename" source
-    2. Query mock TMDB -> add "TMDB #1" source
+    2. Query TMDB (two-stage: show/movie, then episodes) -> add TMDB sources
     3. If TMDB confidence >= threshold, apply TMDB fields to result and auto-stage
     """
     from tapes.config import DEFAULT_AUTO_ACCEPT_THRESHOLD
     from tapes.metadata import extract_metadata
-    from tapes.ui.query import mock_tmdb_lookup
 
     if confidence_threshold is None:
         confidence_threshold = DEFAULT_AUTO_ACCEPT_THRESHOLD
 
     for node in model.all_files():
-        _populate_node(node, confidence_threshold, extract_metadata, mock_tmdb_lookup)
+        _populate_node_guessit(node, extract_metadata)
+        _query_tmdb_for_node(node, token, confidence_threshold)
 
 
 def refresh_tmdb_source(
-    node: FileNode, confidence_threshold: float | None = None
+    node: FileNode,
+    token: str = "",
+    confidence_threshold: float | None = None,
 ) -> None:
-    """Re-query mock TMDB for a file and update its sources.
+    """Re-query TMDB for a file and update its sources.
 
-    Uses the node's current result title/episode for the query.
-    Removes existing TMDB sources, adds new one if found.
+    Uses the node's current result title/year for the query.
+    Removes existing TMDB sources, adds new ones if found.
     Auto-accepts if confidence >= threshold.
     """
     from tapes.config import DEFAULT_AUTO_ACCEPT_THRESHOLD
-    from tapes.ui.query import mock_tmdb_lookup
 
     if confidence_threshold is None:
         confidence_threshold = DEFAULT_AUTO_ACCEPT_THRESHOLD
 
-    title = str(node.result.get("title", ""))
-    episode = node.result.get("episode")
-    tmdb_result = mock_tmdb_lookup(title, episode=episode)
-
     # Remove existing TMDB sources
     node.sources = [s for s in node.sources if not s.name.startswith("TMDB")]
 
-    if tmdb_result is not None:
-        fields, _mock_confidence = tmdb_result
-        confidence = compute_confidence(node.result, fields)
-        tmdb_source = Source(name="TMDB #1", fields=fields, confidence=confidence)
-        node.sources.append(tmdb_source)
-
-        if confidence >= confidence_threshold:
-            for field, val in fields.items():
-                if val is not None:
-                    node.result[field] = val
+    _query_tmdb_for_node(node, token, confidence_threshold)
 
 
-def _populate_node(
-    node: FileNode,
-    confidence_threshold: float,
-    extract_metadata_fn: object,
-    mock_tmdb_lookup_fn: object,
-) -> None:
-    """Populate a single node with sources and auto-accept if confident."""
-    # 1. Guessit: extract metadata from filename
+def _populate_node_guessit(node: FileNode, extract_metadata_fn: object) -> None:
+    """Extract metadata from filename via guessit and set as result + source."""
     meta = extract_metadata_fn(node.path.name)  # type: ignore[operator]
     filename_fields: dict = {}
     if meta.title:
@@ -87,30 +74,140 @@ def _populate_node(
         if v is not None:
             filename_fields[k] = v
 
-    # Set result from guessit
     node.result = dict(filename_fields)
-
-    # Create "from filename" source
     filename_source = Source(name="from filename", fields=filename_fields)
     node.sources = [filename_source]
 
-    # 2. TMDB lookup
-    title = node.result.get("title", "")
-    episode = node.result.get("episode")
-    tmdb_result = mock_tmdb_lookup_fn(str(title), episode=episode)  # type: ignore[operator]
-    if tmdb_result is not None:
-        tmdb_fields, _mock_confidence = tmdb_result
-        confidence = compute_confidence(node.result, tmdb_fields)
-        tmdb_source = Source(
-            name="TMDB #1",
-            fields=tmdb_fields,
+
+def _query_tmdb_for_node(
+    node: FileNode, token: str, threshold: float
+) -> None:
+    """Two-stage TMDB query for a single node.
+
+    Stage 1: Find movie/show
+    - search_multi with title (+year if available) -> up to 3 Sources
+    - Auto-accept: if best Source confidence >= threshold, apply to result
+    - If accepted media_type == "movie": done
+
+    Stage 2: Find episode (only if stage 1 accepted a TV show)
+    - If season in result: fetch that season's episodes
+    - Score episodes against result, create Sources with full fields
+    - If no auto-accept from that season: try all other seasons
+    - If still no auto-accept: keep top 3 episode Sources
+    - Auto-accept best episode if confident
+    """
+    from tapes import tmdb
+
+    if not token:
+        return
+
+    title = str(node.result.get("title", ""))
+    if not title:
+        return
+
+    year = node.result.get("year")
+
+    # Stage 1: search for movie/show
+    search_results = tmdb.search_multi(title, token, year=year)
+
+    if not search_results:
+        return
+
+    # Create sources for each search result
+    tmdb_sources: list[Source] = []
+    for i, sr in enumerate(search_results[:3]):
+        confidence = compute_confidence(node.result, sr)
+        source = Source(
+            name=f"TMDB #{i + 1}",
+            fields=dict(sr),
             confidence=confidence,
         )
-        node.sources.append(tmdb_source)
+        tmdb_sources.append(source)
 
-        # 3. Auto-accept if confident
-        if confidence >= confidence_threshold:
-            for field, val in tmdb_fields.items():
-                if val is not None:
-                    node.result[field] = val
-            node.staged = True
+    # Find best source
+    best = max(tmdb_sources, key=lambda s: s.confidence)
+
+    if best.confidence >= threshold:
+        # Auto-accept: apply non-empty fields to result
+        for field, val in best.fields.items():
+            if val is not None:
+                node.result[field] = val
+        node.staged = True
+
+        # Stage 2: if TV show, fetch episodes
+        if best.fields.get("media_type") == "episode":
+            _query_episodes(node, token, threshold, best.fields)
+            return
+
+    # Add show-level TMDB sources (not episode sources yet)
+    node.sources.extend(tmdb_sources)
+
+
+def _query_episodes(
+    node: FileNode, token: str, threshold: float, show_fields: dict
+) -> None:
+    """Stage 2: fetch episode data for a TV show match."""
+    from tapes import tmdb
+
+    show_id = show_fields.get("tmdb_id")
+    show_title = show_fields.get("title", "")
+    show_year = show_fields.get("year")
+
+    if show_id is None:
+        return
+
+    # Get show info to know available seasons
+    show_info = tmdb.get_show(show_id, token)
+    if not show_info:
+        return
+
+    available_seasons = show_info.get("seasons", [])
+    query_season = node.result.get("season")
+
+    # Try the query season first, then others
+    seasons_to_try: list[int] = []
+    if query_season is not None and query_season in available_seasons:
+        seasons_to_try.append(query_season)
+    # Add remaining seasons
+    for s in available_seasons:
+        if s not in seasons_to_try:
+            seasons_to_try.append(s)
+
+    all_episode_sources: list[Source] = []
+    accepted = False
+
+    for season_num in seasons_to_try:
+        episodes = tmdb.get_season_episodes(
+            show_id, season_num, token,
+            show_title=show_title, show_year=show_year,
+        )
+
+        for ep in episodes:
+            confidence = compute_episode_confidence(node.result, ep)
+            source = Source(
+                name=f"TMDB #{len(all_episode_sources) + 1}",
+                fields=dict(ep),
+                confidence=confidence,
+            )
+            all_episode_sources.append(source)
+
+            if not accepted and confidence >= threshold:
+                # Auto-accept this episode
+                for field, val in ep.items():
+                    if val is not None:
+                        node.result[field] = val
+                accepted = True
+
+        # If we found a match in the preferred season, stop
+        if accepted and season_num == query_season:
+            break
+
+    # Keep top 3 episode sources by confidence
+    all_episode_sources.sort(key=lambda s: s.confidence, reverse=True)
+    top_sources = all_episode_sources[:3]
+
+    # Re-number them
+    for i, src in enumerate(top_sources):
+        src.name = f"TMDB #{i + 1}"
+
+    node.sources.extend(top_sources)
