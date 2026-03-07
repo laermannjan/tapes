@@ -83,16 +83,6 @@ class TestTreeViewRendering:
         view.set_status("2 staged")
         assert view.border_subtitle == "2 staged"
 
-    def test_tree_active_toggles_css_classes(self) -> None:
-        """Toggling active should add/remove CSS classes."""
-        view = _make_tree_view()
-        view.active = True
-        assert view.has_class("-active")
-        assert not view.has_class("-inactive")
-        view.active = False
-        assert view.has_class("-inactive")
-        assert not view.has_class("-active")
-
 
 # --- DetailView rendering tests ---
 
@@ -110,16 +100,6 @@ class TestDetailViewRendering:
         view = _make_detail_view()
         assert view.BORDER_TITLE == "Detail"
 
-    def test_detail_active_toggles_css_classes(self) -> None:
-        """Toggling active should add/remove CSS classes."""
-        view = _make_detail_view()
-        view.active = True
-        assert view.has_class("-active")
-        assert not view.has_class("-inactive")
-        view.active = False
-        assert view.has_class("-inactive")
-        assert not view.has_class("-active")
-
     def test_detail_no_help_line_in_expanded(self) -> None:
         """Expanded detail should not contain the help shortcut line."""
         view = _make_detail_view()
@@ -127,3 +107,20 @@ class TestDetailViewRendering:
         plain = _render_plain(view, height=30)
         assert "enter: apply/edit" not in plain
         assert "shift-enter: apply all" not in plain
+
+
+# --- Focus styling tests ---
+
+
+class TestFocusStyling:
+    def test_css_has_focus_rules_for_tree_view(self) -> None:
+        """App CSS uses :focus pseudo-class for TreeView border."""
+        from tapes.ui.tree_app import TreeApp
+        css = TreeApp.CSS
+        assert "TreeView:focus" in css
+
+    def test_css_has_focus_rules_for_detail_view(self) -> None:
+        """App CSS uses :focus pseudo-class for DetailView border."""
+        from tapes.ui.tree_app import TreeApp
+        css = TreeApp.CSS
+        assert "DetailView:focus" in css

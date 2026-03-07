@@ -1447,8 +1447,6 @@ class TestVisualIntegration:
             assert tv is not None
             assert dv is not None
             assert footer is not None
-            # TreeView is active by default
-            assert tv.active is True
 
     @pytest.mark.asyncio()
     async def test_cursor_move_updates_compact_preview(self) -> None:

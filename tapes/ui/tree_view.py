@@ -21,7 +21,6 @@ class TreeView(Widget):
     can_focus = True
 
     cursor_index: reactive[int] = reactive(0)
-    active: reactive[bool] = reactive(True)
 
     def __init__(
         self,
@@ -290,16 +289,6 @@ class TreeView(Widget):
     def on_resize(self) -> None:
         """Recompute arrow column when widget is resized."""
         self._arrow_col = self._compute_arrow_col()
-
-    def watch_active(self, value: bool) -> None:
-        """React to active state changes by toggling CSS classes."""
-        if value:
-            self.add_class("-active")
-            self.remove_class("-inactive")
-        else:
-            self.add_class("-inactive")
-            self.remove_class("-active")
-        self.refresh()
 
     def watch_cursor_index(self) -> None:
         """React to cursor changes by scrolling and refreshing."""

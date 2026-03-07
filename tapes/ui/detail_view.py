@@ -39,7 +39,6 @@ class DetailView(Widget):
     cursor_row: reactive[int] = reactive(0)   # -1 = header, 0+ = fields
     source_index: reactive[int] = reactive(0)  # which TMDB source to display
     editing: reactive[bool] = reactive(False)
-    active: reactive[bool] = reactive(False)
 
     def __init__(
         self,
@@ -118,16 +117,6 @@ class DetailView(Widget):
         return compute_shared_fields(self._file_nodes)
 
     BORDER_TITLE = "Detail"
-
-    def watch_active(self, value: bool) -> None:
-        """React to active state changes by toggling CSS classes."""
-        if value:
-            self.add_class("-active")
-            self.remove_class("-inactive")
-        else:
-            self.add_class("-inactive")
-            self.remove_class("-active")
-        self.refresh()
 
     def render(self) -> RenderableType:
         """Build Rich Text content (borders handled by Textual CSS)."""
