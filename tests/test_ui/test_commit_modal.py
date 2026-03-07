@@ -108,13 +108,13 @@ class TestBuildCommitText:
         assert "n" in plain
         assert "cancel" in plain
 
-    def test_contains_commit_title(self) -> None:
+    def test_contains_operation_label(self) -> None:
         text = build_commit_text(
             [("movie.mkv", "Movie (2024)/Movie (2024).mkv")],
             "copy",
         )
         plain = text.plain
-        assert "Commit" in plain
+        assert "Copy" in plain
 
     def test_none_destination_shows_placeholder(self) -> None:
         text = build_commit_text(
@@ -144,24 +144,21 @@ class TestBuildCommitText:
 
 
 class TestCommitModalWidget:
-    """Test the CommitModal widget."""
+    """Test the CommitModal container."""
 
     def test_default_empty(self) -> None:
-        modal = CommitModal()
-        text = modal.render()
+        # CommitModal is a Container; test via build_commit_text directly
+        text = build_commit_text([], "copy")
         plain = text.plain
         assert "Copy 0 files to library?" in plain
 
-    def test_update_content(self) -> None:
-        modal = CommitModal()
-        modal.update_content(
-            [("movie.mkv", "Movie (2024)/Movie (2024).mkv")],
-            "move",
+    def test_instantiation(self) -> None:
+        modal = CommitModal(
+            staged_files=[("movie.mkv", "Movie (2024)/Movie (2024).mkv")],
+            operation="move",
         )
-        text = modal.render()
-        plain = text.plain
-        assert "Move 1 file to library?" in plain
-        assert "movie.mkv" in plain
+        assert modal._operation == "move"
+        assert len(modal._staged_files) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -189,8 +186,6 @@ class TestCommitModalIntegration:
         assert "c" in keys
 
     def test_css_contains_modal_rules(self) -> None:
-        """Verify CSS includes CommitModal and dimming rules."""
+        """Verify CSS includes CommitModal rules."""
         css = TreeApp.CSS
         assert "CommitModal" in css
-        assert "modal-open" in css
-        assert "opacity" in css

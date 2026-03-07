@@ -117,6 +117,9 @@ class TreeApp(App):
     HelpOverlay {
         display: none;
         layer: overlay;
+        dock: top;
+        width: 100%;
+        height: 100%;
     }
     HelpOverlay.visible {
         display: block;
@@ -124,15 +127,16 @@ class TreeApp(App):
     CommitModal {
         display: none;
         layer: overlay;
+        dock: top;
+        width: 100%;
+        height: 100%;
     }
     CommitModal.visible {
         display: block;
     }
-    .modal-open TreeView {
-        opacity: 0.5;
-    }
+    .modal-open TreeView,
     .modal-open DetailView {
-        opacity: 0.5;
+        opacity: 0.3;
     }
     """
 
@@ -295,9 +299,11 @@ class TreeApp(App):
         overlay = self.query_one(HelpOverlay)
         if self._help_visible:
             overlay.add_class("visible")
+            self.add_class("modal-open")
             overlay.focus()
         else:
             overlay.remove_class("visible")
+            self.remove_class("modal-open")
             if self._in_detail:
                 self.query_one(DetailView).focus()
             else:
