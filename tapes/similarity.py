@@ -64,3 +64,44 @@ def compute_confidence(query: dict, result: dict) -> float:
         year_score = 0.0
 
     return 0.7 * title_score + 0.3 * year_score
+
+
+def compute_episode_confidence(query: dict, episode: dict) -> float:
+    """Score an episode match against a query.
+
+    Considers:
+    - Episode number match (exact = 0.6 boost)
+    - Episode title similarity (weight 0.2, if available in query)
+    - Season number match (exact = 0.2 boost)
+
+    Returns 0.0-1.0.
+    """
+    score = 0.0
+
+    # Episode number match (most important)
+    q_ep = query.get("episode")
+    e_ep = episode.get("episode")
+    if q_ep is not None and e_ep is not None:
+        try:
+            if int(q_ep) == int(e_ep):
+                score += 0.6
+        except (ValueError, TypeError):
+            pass
+
+    # Season number match
+    q_season = query.get("season")
+    e_season = episode.get("season")
+    if q_season is not None and e_season is not None:
+        try:
+            if int(q_season) == int(e_season):
+                score += 0.2
+        except (ValueError, TypeError):
+            pass
+
+    # Episode title similarity (if query has episode_title)
+    q_title = query.get("episode_title", "")
+    e_title = episode.get("episode_title", "")
+    if q_title and e_title:
+        score += 0.2 * title_similarity(str(q_title), str(e_title))
+
+    return min(score, 1.0)

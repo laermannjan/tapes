@@ -6,6 +6,7 @@ import pytest
 from tapes.similarity import (
     DEFAULT_AUTO_ACCEPT_THRESHOLD,
     compute_confidence,
+    compute_episode_confidence,
     title_similarity,
 )
 
@@ -133,6 +134,75 @@ class TestComputeConfidence:
         )
         # title: 0.0, year: 1.0 -> 0.7 * 0 + 0.3 * 1.0 = 0.3
         assert score == pytest.approx(0.3)
+
+
+class TestComputeEpisodeConfidence:
+    def test_exact_episode_and_season(self) -> None:
+        score = compute_episode_confidence(
+            {"season": 1, "episode": 1},
+            {"season": 1, "episode": 1},
+        )
+        assert score == pytest.approx(0.8)
+
+    def test_episode_match_only(self) -> None:
+        score = compute_episode_confidence(
+            {"episode": 3},
+            {"season": 1, "episode": 3},
+        )
+        assert score == pytest.approx(0.6)
+
+    def test_season_match_only(self) -> None:
+        score = compute_episode_confidence(
+            {"season": 2},
+            {"season": 2, "episode": 5},
+        )
+        assert score == pytest.approx(0.2)
+
+    def test_no_match(self) -> None:
+        score = compute_episode_confidence(
+            {"season": 1, "episode": 1},
+            {"season": 2, "episode": 5},
+        )
+        assert score == pytest.approx(0.0)
+
+    def test_episode_title_similarity(self) -> None:
+        score = compute_episode_confidence(
+            {"season": 1, "episode": 1, "episode_title": "Pilot"},
+            {"season": 1, "episode": 1, "episode_title": "Pilot"},
+        )
+        # 0.6 (ep) + 0.2 (season) + 0.2 * 1.0 (title) = 1.0
+        assert score == pytest.approx(1.0)
+
+    def test_episode_title_partial(self) -> None:
+        score = compute_episode_confidence(
+            {"season": 1, "episode": 1, "episode_title": "The Pilot Episode"},
+            {"season": 1, "episode": 1, "episode_title": "Pilot"},
+        )
+        # 0.6 + 0.2 + 0.2 * (1/3) = 0.8 + 0.0667 = 0.8667
+        expected = 0.6 + 0.2 + 0.2 * (1.0 / 3.0)
+        assert score == pytest.approx(expected)
+
+    def test_empty_query(self) -> None:
+        score = compute_episode_confidence(
+            {},
+            {"season": 1, "episode": 1},
+        )
+        assert score == pytest.approx(0.0)
+
+    def test_wrong_episode_right_season(self) -> None:
+        score = compute_episode_confidence(
+            {"season": 1, "episode": 1},
+            {"season": 1, "episode": 5},
+        )
+        assert score == pytest.approx(0.2)
+
+    def test_capped_at_1(self) -> None:
+        # Even with all fields matching, should not exceed 1.0
+        score = compute_episode_confidence(
+            {"season": 1, "episode": 1, "episode_title": "Pilot"},
+            {"season": 1, "episode": 1, "episode_title": "Pilot"},
+        )
+        assert score <= 1.0
 
 
 class TestDefaultThreshold:
