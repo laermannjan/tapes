@@ -101,14 +101,14 @@ class TestRenderDest:
         assert isinstance(result, Text)
         assert result.plain == "? (?)/? (?).mkv"
         # Verify ? chars have yellow style
-        has_yellow = any("yellow" in str(span.style) for span in result._spans)
+        has_yellow = any("#E8734A" in str(span.style) or "#e8734a" in str(span.style) for span in result._spans)
         assert has_yellow
 
     def test_partial_with_question_marks(self) -> None:
         result = render_dest("Inception (?)/Inception (?).mkv")
         assert isinstance(result, Text)
         assert "?" in result.plain
-        has_yellow = any("yellow" in str(span.style) for span in result._spans)
+        has_yellow = any("#E8734A" in str(span.style) or "#e8734a" in str(span.style) for span in result._spans)
         assert has_yellow
 
     def test_no_directory(self) -> None:
@@ -147,7 +147,7 @@ class TestRenderFileRow:
         )
         row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
         # The checkmark should have green style
-        has_green = any("green" in str(span.style) for span in row._spans)
+        has_green = any("#7daea3" in str(span.style) for span in row._spans)
         assert has_green
 
     def test_unstaged_file(self) -> None:
@@ -166,7 +166,7 @@ class TestRenderFileRow:
             result={"title": "Inception", "year": 2010},
         )
         row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
-        has_yellow = any("yellow" in str(span.style) for span in row._spans)
+        has_yellow = any("#E8734A" in str(span.style) or "#e8734a" in str(span.style) for span in row._spans)
         assert has_yellow
 
     def test_ignored_file_dot_marker(self) -> None:

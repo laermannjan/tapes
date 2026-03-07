@@ -75,7 +75,7 @@ def render_dest(dest: str | None) -> Text:
     - Directory portion (everything before the last ``/``) is dim.
     - Filename stem (after last ``/``, before last ``.``) is normal foreground.
     - Extension (last ``.`` onward) is dim.
-    - Any ``?`` placeholder characters are highlighted yellow.
+    - Any ``?`` placeholder characters are highlighted ember.
     """
     if dest is None:
         return Text("???", style="dim")
@@ -123,7 +123,7 @@ def _append_with_yellow_placeholders(text: Text, s: str, base_style: str) -> Non
             # Collect consecutive ?
             while j < len(s) and s[j] == "?":
                 j += 1
-            text.append(s[i:j], style="yellow")
+            text.append(s[i:j], style="#E8734A")
         else:
             # Collect non-? characters
             while j < len(s) and s[j] != "?":
@@ -149,7 +149,7 @@ def render_file_row(
 
     Markers (with color):
     - ``"\\u2713"`` (checkmark, green) if staged
-    - ``"\\u25cb"`` (circle, yellow) if not staged and not ignored
+    - ``"\\u25cb"`` (circle, ember) if not staged and not ignored
     - ``"\\u00b7"`` (middle dot, dim) if ignored
     """
     effective_template = select_template(node, movie_template, tv_template)
@@ -162,11 +162,11 @@ def render_file_row(
         row.append(indent)
 
     if node.staged:
-        row.append("\u2713", style="green")
+        row.append("\u2713", style="#7daea3")
     elif node.ignored:
         row.append("\u00b7", style="dim")
     else:
-        row.append("\u25cb", style="yellow")
+        row.append("\u25cb", style="#E8734A")
 
     row.append(" ")
 

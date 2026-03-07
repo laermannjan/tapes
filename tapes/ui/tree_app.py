@@ -37,7 +37,7 @@ class StatusFooter(Static):
 
     def render(self) -> RenderableType:
         """Build styled keybinding hints based on current mode."""
-        cyan = "bold cyan"
+        cyan = "#6796C0"
         if self.mode == "detail":
             return Text.assemble(
                 " ",
@@ -93,25 +93,28 @@ class TreeApp(App):
     CSS = """
     Screen {
         background: transparent;
+        border: none;
+        margin: 0;
+        padding: 0;
     }
     TreeView {
         height: 3fr;
-        border: round cyan;
+        border: round #6796C0;
         padding: 0 1;
     }
     TreeView.-inactive {
-        border: round $surface-lighten-1;
+        border: round #555555;
     }
     TreeView.compressed {
         height: 7;
     }
     DetailView {
         height: 5;
-        border: round $surface-lighten-1;
+        border: round #555555;
         padding: 0 1;
     }
     DetailView.-active {
-        border: round cyan;
+        border: round #6796C0;
     }
     DetailView.expanded {
         height: auto;
@@ -120,6 +123,7 @@ class TreeApp(App):
     StatusFooter {
         dock: bottom;
         height: 1;
+        background: transparent;
     }
     HelpOverlay {
         display: none;

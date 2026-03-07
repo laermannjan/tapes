@@ -10,9 +10,7 @@ from textual.widget import Widget
 
 from tapes.fields import INT_FIELDS
 from tapes.ui.detail_render import (
-    COL_WIDTH,
     LABEL_WIDTH,
-    col,
     confidence_style,
     diff_style,
     display_val,
@@ -210,77 +208,88 @@ class DetailView(Widget):
 
         return [header, dest_line]
 
+    def _col_widths(self) -> tuple[int, int]:
+        """Compute dynamic column widths based on widget width.
+
+        Returns (result_col_width, source_col_width).
+        """
+        inner = max(0, self.size.width - 4)  # border + padding
+        available = inner - LABEL_WIDTH - 1  # -1 for ┃ separator
+        if available < 20:
+            return (10, 10)
+        half = available // 2
+        return (half, available - half)
+
+    def _col(self, text: str, width: int) -> str:
+        """Pad or truncate text to width."""
+        if len(text) > width:
+            return text[: width - 1] + "\u2026"
+        return text.ljust(width)
+
     def _render_grid_header(self) -> Text:
         """Render the column header row with optional cursor highlight."""
-        parts: list[tuple[str, str]] = []
+        result_w, source_w = self._col_widths()
+
+        line = Text()
 
         # Label area (empty for header)
-        parts.append((" " * LABEL_WIDTH, ""))
+        line.append(" " * LABEL_WIDTH)
 
         # Result column header
-        result_text = col("result")
+        result_text = self._col("result", result_w)
         style = "on #264f78" if self.cursor_row == -1 else ""
-        parts.append((result_text, style))
+        line.append(result_text, style=style)
 
         # Separator
-        parts.append(("\u2503", ""))
+        line.append("\u2503", style="dim")
 
         # Current source header with [N/M] indicator
-        # Source name in blue, confidence colored by threshold
         sources = self.node.sources
         if sources:
             idx = self.source_index
             src = sources[idx]
-            # Build styled source header as a Text object directly
             src_header = Text()
-            src_header.append(f"  {src.name}", style="blue")
+            src_header.append(f"  {src.name}", style="#6796C0")
             if src.confidence:
                 conf_text = f" ({src.confidence:.0%})"
                 src_header.append(conf_text, style=confidence_style(src.confidence))
             indicator = f"  [{idx + 1}/{len(sources)}]"
-            src_header.append(indicator)
-            # Pad/truncate to COL_WIDTH
+            src_header.append(indicator, style="dim")
+            # Pad to source column width
             plain_len = len(src_header.plain)
-            if plain_len < COL_WIDTH:
-                src_header.append(" " * (COL_WIDTH - plain_len))
-            styled_source_header = src_header
+            if plain_len < source_w:
+                src_header.append(" " * (source_w - plain_len))
+            line.append_text(src_header)
         else:
-            styled_source_header = None
-            parts.append((col("  (no sources)"), ""))
+            line.append(self._col("  (no sources)", source_w), style="dim")
 
-        line = Text()
-        for text, style in parts:
-            line.append(text, style=style)
-        if styled_source_header is not None:
-            line.append_text(styled_source_header)
         return line
 
     def _render_field_row(self, row_idx: int, field_name: str) -> Text:
         """Render a single field row with optional cursor highlight."""
-        parts: list[tuple[str, str]] = []
+        result_w, source_w = self._col_widths()
         shared = self._shared_result()
+
+        line = Text()
 
         # Label
         label = f" {field_name:<{LABEL_WIDTH - 1}}"
-        parts.append((label, ""))
+        line.append(label, style="dim")
 
         # Result value
         result_raw = shared.get(field_name)
         if self.editing and self.cursor_row == row_idx:
-            # Show edit input
-            edit_display = self._edit_value + "\u2588"  # block cursor
-            result_text = col(edit_display)
-            parts.append((result_text, "underline"))
+            edit_display = self._edit_value + "\u2588"
+            line.append(self._col(edit_display, result_w), style="underline")
         else:
             result_val = display_val(result_raw)
-            result_text = col(result_val)
-            style = "bold"
+            style = ""
             if self.cursor_row == row_idx:
                 style = "on #264f78"
-            parts.append((result_text, style))
+            line.append(self._col(result_val, result_w), style=style)
 
         # Separator
-        parts.append(("\u2503", ""))
+        line.append("\u2503", style="dim")
 
         # Current source value (diff-styled relative to result)
         sources = self.node.sources
@@ -288,21 +297,16 @@ class DetailView(Widget):
             src = sources[self.source_index]
             src_raw = src.fields.get(field_name)
             src_val = display_val(src_raw)
-            col_text = col(f"  {src_val}")
-            # No diff highlighting when result is a multi-value marker
             if is_multi_value(result_raw):
                 base_style = "dim"
             else:
                 base_style = diff_style(result_raw, src_raw)
             if self.cursor_row == row_idx:
                 base_style = "on #264f78"
-            parts.append((col_text, base_style))
+            line.append(self._col(f"  {src_val}", source_w), style=base_style)
         else:
-            parts.append((col("  \u00b7"), "dim"))
+            line.append(self._col("  \u00b7", source_w), style="dim")
 
-        line = Text()
-        for text, style in parts:
-            line.append(text, style=style)
         return line
 
     def move_cursor(self, row_delta: int = 0) -> None:

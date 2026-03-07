@@ -47,7 +47,7 @@ def _build_help_text() -> Text:
     def key_row(key: str, action: str) -> Text:
         t = Text()
         t.append("  ")
-        t.append(f"{key:<14}", "bold cyan")
+        t.append(f"{key:<14}", "#6796C0")
         t.append(action)
         pad = _WIDTH - 2 - 14 - len(action)
         if pad > 0:
