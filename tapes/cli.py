@@ -58,6 +58,7 @@ def import_cmd(
         auto_pipeline=True,
         movie_template=movie_template,
         tv_template=tv_template,
+        config=cfg,
     )
     tui.run()
 
@@ -111,5 +112,6 @@ def tree_cmd(
         root_path=resolved,
         movie_template=movie_template,
         tv_template=tv_template,
+        config=cfg,
     )
     tui.run()

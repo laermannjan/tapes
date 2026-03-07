@@ -8,6 +8,7 @@ from textual.binding import Binding
 from textual.events import Key
 from textual.widgets import Footer, Header, Static
 
+from tapes.config import TapesConfig
 from tapes.ui.detail_view import DetailView
 from tapes.ui.tree_model import (
     FileNode,
@@ -63,6 +64,7 @@ class TreeApp(App):
         *,
         movie_template: str | None = None,
         tv_template: str | None = None,
+        config: TapesConfig | None = None,
     ) -> None:
         super().__init__()
         self.model = model
@@ -70,6 +72,7 @@ class TreeApp(App):
         self.movie_template = movie_template
         self.tv_template = tv_template
         self.root_path = root_path
+        self.config = config or TapesConfig()
         self._in_detail = False
         self._undo = UndoManager()
         self._confirming_commit = False
@@ -100,7 +103,8 @@ class TreeApp(App):
         if self._auto_pipeline:
             from tapes.ui.pipeline import run_auto_pipeline
 
-            run_auto_pipeline(self.model)
+            threshold = self.config.metadata.auto_accept_threshold
+            run_auto_pipeline(self.model, confidence_threshold=threshold)
             self.query_one(TreeView).refresh_tree()
         self._update_footer()
 
@@ -166,12 +170,48 @@ class TreeApp(App):
         tv.toggle_staged_at_cursor()
         self._update_footer()
 
+    def _compute_file_pairs(
+        self, staged: list[FileNode]
+    ) -> list[tuple[Path, Path]]:
+        """Compute (source, destination) pairs for staged files."""
+        from tapes.ui.tree_render import compute_dest, select_template
+
+        library_root = Path(".")
+        cfg = self.config
+        pairs: list[tuple[Path, Path]] = []
+        for node in staged:
+            if self.movie_template and self.tv_template:
+                tmpl = select_template(
+                    node, self.movie_template, self.tv_template
+                )
+                # Choose library sub-root based on media_type
+                media_type = node.result.get("media_type")
+                if media_type == "episode" and cfg.library.tv:
+                    library_root = Path(cfg.library.tv)
+                elif cfg.library.movies:
+                    library_root = Path(cfg.library.movies)
+                else:
+                    library_root = Path(".")
+            else:
+                tmpl = self.template
+            dest_rel = compute_dest(node, tmpl)
+            if dest_rel is not None:
+                pairs.append((node.path, library_root / dest_rel))
+        return pairs
+
     def action_toggle_or_enter(self) -> None:
         if self._confirming_commit:
             self._confirming_commit = False
-            tv = self.query_one(TreeView)
             staged = [f for f in self.model.all_files() if f.staged]
-            self.exit(result=staged)
+            pairs = self._compute_file_pairs(staged)
+            from tapes.file_ops import process_staged
+
+            results = process_staged(
+                pairs,
+                self.config.library.operation,
+                dry_run=self.config.dry_run,
+            )
+            self.exit(result=results)
             return
         if self._in_detail:
             dv = self.query_one(DetailView)

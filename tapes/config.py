@@ -12,8 +12,12 @@ class ScanConfig(BaseModel):
     ignore_patterns: list[str] = ["Thumbs.db", ".DS_Store", "desktop.ini"]
 
 
+DEFAULT_AUTO_ACCEPT_THRESHOLD: float = 0.85
+
+
 class MetadataConfig(BaseModel):
     tmdb_token: str = ""
+    auto_accept_threshold: float = DEFAULT_AUTO_ACCEPT_THRESHOLD
 
 
 class LibraryConfig(BaseModel):
