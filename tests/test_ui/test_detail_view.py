@@ -425,6 +425,155 @@ class TestDetailViewApplyAllClear:
         assert view.node.result == original
 
 
+# --- Multi-file detail view (M15) ---
+
+
+class TestMultiFileDetail:
+    def _make_multi_view(self) -> tuple[DetailView, FileNode, FileNode]:
+        node1 = FileNode(
+            path=Path("/media/file1.mkv"),
+            result={"title": "Breaking Bad", "year": 2008, "season": 1, "episode": 1},
+            sources=[
+                Source(
+                    name="TMDB #1",
+                    fields={"title": "Breaking Bad", "year": 2008},
+                    confidence=0.75,
+                ),
+            ],
+        )
+        node2 = FileNode(
+            path=Path("/media/file2.mkv"),
+            result={"title": "Breaking Bad", "year": 2008, "season": 1, "episode": 2},
+            sources=[
+                Source(
+                    name="TMDB #1",
+                    fields={"title": "Breaking Bad", "year": 2008},
+                    confidence=0.75,
+                ),
+            ],
+        )
+        view = DetailView(node1, TEMPLATE)
+        view._fields = get_display_fields(TEMPLATE)
+        view.set_nodes([node1, node2])
+        return view, node1, node2
+
+    def test_is_multi(self) -> None:
+        view, _, _ = self._make_multi_view()
+        assert view.is_multi is True
+
+    def test_single_node_not_multi(self) -> None:
+        view = DetailView(_make_node(), TEMPLATE)
+        view._fields = get_display_fields(TEMPLATE)
+        assert view.is_multi is False
+
+    def test_shows_various_for_differing_values(self) -> None:
+        view, _, _ = self._make_multi_view()
+        shared = view._shared_result()
+        # title and year are same, season is same, episode differs
+        assert shared["title"] == "Breaking Bad"
+        assert shared["year"] == 2008
+        assert shared["season"] == 1
+        assert shared["episode"] == "(various)"
+
+    def test_shows_shared_values(self) -> None:
+        view, _, _ = self._make_multi_view()
+        shared = view._shared_result()
+        assert shared["title"] == "Breaking Bad"
+        assert shared["year"] == 2008
+
+    def test_header_shows_count(self) -> None:
+        view, _, _ = self._make_multi_view()
+        header = view._render_multi_header()
+        assert "2 files selected" in header[0]
+
+    def test_header_shows_various_destinations(self) -> None:
+        view, _, _ = self._make_multi_view()
+        header = view._render_multi_header()
+        assert "(various destinations)" in header[1]
+
+    def test_editing_applies_to_all_nodes(self) -> None:
+        view, node1, node2 = self._make_multi_view()
+        view.cursor_row = 0  # title
+        view.cursor_col = 0  # result
+        view._start_edit()
+        view._edit_value = "Better Call Saul"
+        view._commit_edit()
+        assert node1.result["title"] == "Better Call Saul"
+        assert node2.result["title"] == "Better Call Saul"
+
+    def test_applying_source_applies_to_all_nodes(self) -> None:
+        view, node1, node2 = self._make_multi_view()
+        # Clear years to test applying source
+        node1.result.pop("year", None)
+        node2.result.pop("year", None)
+        # Move to year field, source col
+        view.cursor_row = 1  # year
+        view.cursor_col = 1  # TMDB source
+        view.apply_source_field()
+        assert node1.result["year"] == 2008
+        assert node2.result["year"] == 2008
+
+    def test_apply_source_all_applies_to_all_nodes(self) -> None:
+        view, node1, node2 = self._make_multi_view()
+        # Clear results
+        node1.result = {}
+        node2.result = {}
+        # Apply all from TMDB source (header row)
+        view.cursor_row = -1
+        view.cursor_col = 1
+        view.apply_source_field()
+        assert node1.result["title"] == "Breaking Bad"
+        assert node2.result["title"] == "Breaking Bad"
+        assert node1.result["year"] == 2008
+        assert node2.result["year"] == 2008
+
+    def test_set_nodes_resets_cursor(self) -> None:
+        view, _, _ = self._make_multi_view()
+        view.cursor_row = 2
+        view.cursor_col = 1
+        new_node = FileNode(path=Path("/x.mkv"), result={"title": "X"})
+        view.set_nodes([new_node])
+        assert view.cursor_row == 0
+        assert view.cursor_col == 0
+        assert not view.is_multi
+
+    def test_edit_various_field_starts_empty(self) -> None:
+        view, _, _ = self._make_multi_view()
+        # episode is (various)
+        view.cursor_row = 3  # episode
+        view.cursor_col = 0
+        view._start_edit()
+        assert view._edit_value == ""
+
+    def test_notify_before_mutate_sends_all_nodes(self) -> None:
+        view, node1, node2 = self._make_multi_view()
+        notified: list[list[FileNode]] = []
+        view.on_before_mutate = lambda nodes: notified.append(nodes)
+        view.cursor_row = 0
+        view.cursor_col = 1
+        view.apply_source_field()
+        assert len(notified) == 1
+        assert node1 in notified[0]
+        assert node2 in notified[0]
+
+    def test_apply_all_clear_applies_to_all_nodes(self) -> None:
+        view, node1, node2 = self._make_multi_view()
+        # Set up result with extra fields
+        node1.result = {"title": "Old", "year": 9999, "season": 99, "episode": 99}
+        node2.result = {"title": "Old", "year": 9999, "season": 99, "episode": 99}
+        # TMDB source only has title and year
+        view.cursor_row = -1
+        view.cursor_col = 1
+        view.apply_source_all_clear()
+        assert node1.result["title"] == "Breaking Bad"
+        assert node2.result["title"] == "Breaking Bad"
+        assert node1.result["year"] == 2008
+        assert node2.result["year"] == 2008
+        # season and episode not in TMDB source, should be cleared
+        assert "season" not in node1.result
+        assert "season" not in node2.result
+
+
 # --- Async integration: tree -> detail -> back ---
 
 
@@ -475,3 +624,47 @@ class TestTreeDetailIntegration:
             assert app._in_detail is False
             assert tv.display is True
             assert dv.display is False
+
+
+@pytest.mark.skipif(not HAS_PILOT, reason="textual pilot not available")
+class TestMultiFileDetailIntegration:
+    @pytest.mark.asyncio()
+    async def test_enter_in_range_opens_multi_detail(self) -> None:
+        from tapes.ui.tree_app import TreeApp
+        from tapes.ui.tree_model import FolderNode, TreeModel
+        from tapes.ui.tree_view import TreeView
+
+        node1 = FileNode(
+            path=Path("/media/file1.mkv"),
+            result={"title": "Show", "year": 2020, "season": 1, "episode": 1},
+            sources=[
+                Source(name="TMDB", fields={"title": "Show"}, confidence=0.9),
+            ],
+        )
+        node2 = FileNode(
+            path=Path("/media/file2.mkv"),
+            result={"title": "Show", "year": 2020, "season": 1, "episode": 2},
+            sources=[
+                Source(name="TMDB", fields={"title": "Show"}, confidence=0.9),
+            ],
+        )
+        root = FolderNode(name="root", children=[node1, node2])
+        model = TreeModel(root=root)
+        app = TreeApp(model=model, template=TEMPLATE)
+
+        async with app.run_test() as pilot:
+            tv = app.query_one(TreeView)
+            dv = app.query_one(DetailView)
+
+            # Start range and select both files
+            await pilot.press("v")
+            await pilot.press("j")
+            # Enter opens multi-file detail
+            await pilot.press("enter")
+            assert app._in_detail is True
+            assert dv.is_multi is True
+            assert len(dv._file_nodes) == 2
+
+            # Escape returns to tree
+            await pilot.press("escape")
+            assert app._in_detail is False

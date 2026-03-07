@@ -1,7 +1,7 @@
 """Interactive Textual widget for the detail view with cursor and editing."""
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from rich.text import Text
 from textual import events
@@ -16,7 +16,7 @@ from tapes.ui.detail_render import (
     get_display_fields,
     render_detail_header,
 )
-from tapes.ui.tree_model import FileNode
+from tapes.ui.tree_model import FileNode, compute_shared_fields
 from tapes.ui.tree_render import compute_dest
 
 if TYPE_CHECKING:
@@ -24,7 +24,11 @@ if TYPE_CHECKING:
 
 
 class DetailView(Widget):
-    """Detail view showing a file's metadata grid with cursor navigation."""
+    """Detail view showing a file's metadata grid with cursor navigation.
+
+    Supports single-node and multi-node modes. In multi-node mode,
+    shared values are shown and edits apply to all nodes.
+    """
 
     can_focus = True
 
@@ -35,10 +39,16 @@ class DetailView(Widget):
     def __init__(self, node: FileNode, template: str) -> None:
         super().__init__()
         self.node = node
+        self._file_nodes: list[FileNode] = [node]
         self.template = template
         self._fields: list[str] = []
         self._edit_value: str = ""
         self.on_before_mutate: Callable[[list[FileNode]], None] | None = None
+
+    @property
+    def is_multi(self) -> bool:
+        """Whether multiple nodes are being displayed."""
+        return len(self._file_nodes) > 1
 
     def on_mount(self) -> None:
         self._fields = get_display_fields(self.template)
@@ -46,18 +56,44 @@ class DetailView(Widget):
     def set_node(self, node: FileNode) -> None:
         """Switch to a new file node, resetting cursor and edit state."""
         self.node = node
+        self._file_nodes = [node]
         self.cursor_row = 0
         self.cursor_col = 0
         self._fields = get_display_fields(self.template)
         self.editing = False
         self.refresh()
 
+    def set_nodes(self, nodes: list[FileNode]) -> None:
+        """Switch to multiple file nodes for multi-file detail view.
+
+        The first node is used as the primary for sources display.
+        Result column shows shared values, '(various)' for differing.
+        """
+        if not nodes:
+            return
+        self._file_nodes = list(nodes)
+        self.node = nodes[0]
+        self.cursor_row = 0
+        self.cursor_col = 0
+        self._fields = get_display_fields(self.template)
+        self.editing = False
+        self.refresh()
+
+    def _shared_result(self) -> dict[str, Any]:
+        """Compute the shared result for multi-node display."""
+        if not self.is_multi:
+            return self.node.result
+        return compute_shared_fields(self._file_nodes)
+
     def render(self) -> RenderableType:
         """Build Rich Text with cursor highlighting."""
         lines: list[Text] = []
 
-        # Header: filename + destination
-        header_lines = render_detail_header(self.node, self.template)
+        # Header: filename + destination (or multi-file summary)
+        if self.is_multi:
+            header_lines = self._render_multi_header()
+        else:
+            header_lines = render_detail_header(self.node, self.template)
         for hl in header_lines:
             lines.append(Text(hl))
 
@@ -79,6 +115,24 @@ class DetailView(Widget):
 
         return Text("\n").join(lines)
 
+    def _render_multi_header(self) -> list[str]:
+        """Render header for multi-file view."""
+        count = len(self._file_nodes)
+        header = f" {count} files selected"
+
+        # Compute destinations
+        dests: set[str] = set()
+        for n in self._file_nodes:
+            d = compute_dest(n, self.template)
+            dests.add(d or "???")
+
+        if len(dests) == 1:
+            dest_str = f" \u2192 {dests.pop()}"
+        else:
+            dest_str = " \u2192 (various destinations)"
+
+        return [header, dest_str]
+
     def _render_grid_header(self) -> Text:
         """Render the column header row with optional cursor highlight."""
         parts: list[tuple[str, str]] = []
@@ -94,7 +148,7 @@ class DetailView(Widget):
         # Separator
         parts.append(("\u2503", ""))
 
-        # Source headers
+        # Source headers (use primary node's sources)
         for i, src in enumerate(self.node.sources):
             conf = f" ({src.confidence:.0%})" if src.confidence else ""
             col_text = col(f"  {src.name}{conf}")
@@ -113,6 +167,7 @@ class DetailView(Widget):
     def _render_field_row(self, row_idx: int, field_name: str) -> Text:
         """Render a single field row with optional cursor highlight."""
         parts: list[tuple[str, str]] = []
+        shared = self._shared_result()
 
         # Label
         label = f" {field_name:<{LABEL_WIDTH - 1}}"
@@ -125,7 +180,7 @@ class DetailView(Widget):
             result_text = col(edit_display)
             parts.append((result_text, "underline"))
         else:
-            result_val = display_val(self.node.result.get(field_name))
+            result_val = display_val(shared.get(field_name))
             result_text = col(result_val)
             style = (
                 "reverse"
@@ -137,7 +192,7 @@ class DetailView(Widget):
         # Separator
         parts.append(("\u2503", ""))
 
-        # Source values
+        # Source values (use primary node's sources)
         for i, src in enumerate(self.node.sources):
             src_val = display_val(src.fields.get(field_name))
             col_text = col(f"  {src_val}")
@@ -169,7 +224,7 @@ class DetailView(Widget):
     def _notify_before_mutate(self) -> None:
         """Notify the on_before_mutate callback before a mutation."""
         if self.on_before_mutate is not None:
-            self.on_before_mutate([self.node])
+            self.on_before_mutate(list(self._file_nodes))
 
     def apply_source_field(self) -> None:
         """Handle enter on the current cursor cell."""
@@ -187,11 +242,12 @@ class DetailView(Widget):
             # Header row: apply all non-empty from this source
             self._apply_source_all(src_idx)
         else:
-            # Single field: copy value to result
+            # Single field: copy value to result for all nodes
             field_name = self._fields[self.cursor_row]
             val = self.node.sources[src_idx].fields.get(field_name)
             if val is not None:
-                self.node.result[field_name] = val
+                for n in self._file_nodes:
+                    n.result[field_name] = val
         self.refresh()
 
     def apply_source_all_clear(self) -> None:
@@ -206,9 +262,11 @@ class DetailView(Widget):
         for field_name in self._fields:
             val = src.fields.get(field_name)
             if val is not None:
-                self.node.result[field_name] = val
+                for n in self._file_nodes:
+                    n.result[field_name] = val
             else:
-                self.node.result.pop(field_name, None)
+                for n in self._file_nodes:
+                    n.result.pop(field_name, None)
         self.refresh()
 
     def _apply_source_all(self, src_idx: int) -> None:
@@ -217,20 +275,25 @@ class DetailView(Widget):
         for field_name in self._fields:
             val = src.fields.get(field_name)
             if val is not None:
-                self.node.result[field_name] = val
+                for n in self._file_nodes:
+                    n.result[field_name] = val
 
     def _start_edit(self) -> None:
         """Enter inline edit mode for the current result field."""
         if self.cursor_row < 0:
             return
         field_name = self._fields[self.cursor_row]
-        current = self.node.result.get(field_name)
-        self._edit_value = str(current) if current is not None else ""
+        shared = self._shared_result()
+        current = shared.get(field_name)
+        if current == "(various)":
+            self._edit_value = ""
+        else:
+            self._edit_value = str(current) if current is not None else ""
         self.editing = True
         self.refresh()
 
     def _commit_edit(self) -> None:
-        """Save the edited value to the result."""
+        """Save the edited value to the result for all nodes."""
         self._notify_before_mutate()
         field_name = self._fields[self.cursor_row]
         val: str | int = self._edit_value
@@ -239,7 +302,8 @@ class DetailView(Widget):
                 val = int(val)
             except ValueError:
                 pass
-        self.node.result[field_name] = val
+        for n in self._file_nodes:
+            n.result[field_name] = val
         self.editing = False
         self.refresh()
 

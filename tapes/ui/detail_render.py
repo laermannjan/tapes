@@ -35,6 +35,14 @@ def render_detail_header(node: FileNode, template: str) -> list[str]:
     ]
 
 
+def render_multi_header(count: int, template: str) -> list[str]:
+    """Render header for multi-file detail view."""
+    return [
+        f" {count} files selected",
+        " \u2192 (various destinations)",
+    ]
+
+
 def render_detail_grid(node: FileNode, template: str) -> list[str]:
     """Render the field/source grid as plain-text lines.
 

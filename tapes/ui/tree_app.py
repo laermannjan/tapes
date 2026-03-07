@@ -101,6 +101,16 @@ class TreeApp(App):
         detail.display = True
         detail.focus()
 
+    def _show_detail_multi(self, nodes: list[FileNode]) -> None:
+        """Switch from tree view to detail view for multiple file nodes."""
+        self._in_detail = True
+        detail = self.query_one(DetailView)
+        detail.set_nodes(nodes)
+        detail.on_before_mutate = self._snapshot_before_mutate
+        self.query_one(TreeView).display = False
+        detail.display = True
+        detail.focus()
+
     def _snapshot_before_mutate(self, nodes: list[FileNode]) -> None:
         """Save undo snapshot before a mutation."""
         self._undo.snapshot(nodes)
@@ -155,6 +165,13 @@ class TreeApp(App):
             dv.apply_source_field()
             return
         tv = self.query_one(TreeView)
+        if tv.in_range_mode:
+            nodes = tv.selected_nodes()
+            file_nodes = [n for n in nodes if isinstance(n, FileNode)]
+            if file_nodes:
+                self._show_detail_multi(file_nodes)
+            tv.clear_range_select()
+            return
         node = tv.cursor_node()
         if isinstance(node, FolderNode):
             tv.toggle_folder_at_cursor()
