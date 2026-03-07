@@ -196,11 +196,11 @@ class TreeApp(App):
 
     def action_cursor_left(self) -> None:
         if self._in_detail:
-            self.query_one(DetailView).move_cursor(col_delta=-1)
+            self.query_one(DetailView).cycle_source(-1)
 
     def action_cursor_right(self) -> None:
         if self._in_detail:
-            self.query_one(DetailView).move_cursor(col_delta=1)
+            self.query_one(DetailView).cycle_source(1)
 
     def action_toggle_staged(self) -> None:
         if self._in_detail:

@@ -123,12 +123,25 @@ class TestRenderDetailGrid:
         assert len(title_line) == 1
         assert "Breaking Bad" in title_line[0]
 
-    def test_source_columns_shown_with_confidence(self) -> None:
+    def test_source_column_shown_with_confidence(self) -> None:
         node = _make_node()
-        lines = render_detail_grid(node, TEMPLATE)
+        # Default source_index=0 shows filename source (confidence=0)
+        lines = render_detail_grid(node, TEMPLATE, source_index=1)
         header = lines[0]
         assert "TMDB #1" in header
         assert "95%" in header
+
+    def test_shows_source_indicator(self) -> None:
+        node = _make_node()
+        lines = render_detail_grid(node, TEMPLATE, source_index=0)
+        header = lines[0]
+        assert "[1/2]" in header
+
+    def test_second_source_indicator(self) -> None:
+        node = _make_node()
+        lines = render_detail_grid(node, TEMPLATE, source_index=1)
+        header = lines[0]
+        assert "[2/2]" in header
 
     def test_separator_present(self) -> None:
         node = _make_node()
@@ -139,11 +152,18 @@ class TestRenderDetailGrid:
 
     def test_none_values_shown_as_dot(self) -> None:
         node = _make_node()
-        lines = render_detail_grid(node, TEMPLATE)
-        # filename source has no year, so the year row should have a dot
+        # filename source (index 0) has no year
+        lines = render_detail_grid(node, TEMPLATE, source_index=0)
         year_line = [l for l in lines if l.strip().startswith("year")]
         assert len(year_line) == 1
         assert "\u00b7" in year_line[0]
+
+    def test_only_two_data_columns(self) -> None:
+        node = _make_node()
+        lines = render_detail_grid(node, TEMPLATE, source_index=0)
+        # Each line should have exactly one separator
+        for line in lines:
+            assert line.count("\u2503") == 1
 
 
 # --- DetailView cursor ---
@@ -160,7 +180,7 @@ class TestDetailViewCursor:
     def test_initial_position(self) -> None:
         view = self._make_view()
         assert view.cursor_row == 0
-        assert view.cursor_col == 0
+        assert view.source_index == 0
 
     def test_move_cursor_row_down(self) -> None:
         view = self._make_view()
@@ -182,29 +202,41 @@ class TestDetailViewCursor:
             view.move_cursor(row_delta=1)
         assert view.cursor_row == 3
 
-    def test_move_cursor_col_right(self) -> None:
+    def test_cycle_source_right(self) -> None:
         view = self._make_view()
-        view.move_cursor(col_delta=1)
-        assert view.cursor_col == 1
+        view.cycle_source(1)
+        assert view.source_index == 1
 
-    def test_move_cursor_col_clamps_at_zero(self) -> None:
+    def test_cycle_source_clamps_at_zero(self) -> None:
         view = self._make_view()
-        view.move_cursor(col_delta=-1)
-        assert view.cursor_col == 0
+        view.cycle_source(-1)
+        assert view.source_index == 0
 
-    def test_move_cursor_col_clamps_at_max(self) -> None:
+    def test_cycle_source_clamps_at_max(self) -> None:
         view = self._make_view()
-        # 2 sources => max col = 2
+        # 2 sources => max index = 1
         for _ in range(10):
-            view.move_cursor(col_delta=1)
-        assert view.cursor_col == 2
+            view.cycle_source(1)
+        assert view.source_index == 1
+
+    def test_cycle_source_noop_no_sources(self) -> None:
+        node = FileNode(path=Path("/test.mkv"), result={}, sources=[])
+        view = DetailView(node, TEMPLATE, TEMPLATE)
+        view._fields = get_display_fields(TEMPLATE)
+        view.cycle_source(1)
+        assert view.source_index == 0
 
     def test_move_cursor_noop_when_editing(self) -> None:
         view = self._make_view()
         view.editing = True
-        view.move_cursor(row_delta=1, col_delta=1)
+        view.move_cursor(row_delta=1)
         assert view.cursor_row == 0
-        assert view.cursor_col == 0
+
+    def test_cycle_source_noop_when_editing(self) -> None:
+        view = self._make_view()
+        view.editing = True
+        view.cycle_source(1)
+        assert view.source_index == 0
 
 
 # --- DetailView apply_source_field ---
@@ -219,9 +251,9 @@ class TestDetailViewApply:
 
     def test_copies_source_value_to_result(self) -> None:
         view = self._make_view()
-        # Move to row 0 (title), col 1 (filename source)
+        # source_index=0 (filename source), cursor on title row
         view.cursor_row = 0
-        view.cursor_col = 1
+        view.source_index = 0
         view.apply_source_field()
         assert view.node.result["title"] == "Breaking Bad"
 
@@ -229,7 +261,7 @@ class TestDetailViewApply:
         view = self._make_view()
         # filename source has no year
         view.cursor_row = 1  # year
-        view.cursor_col = 1  # filename source
+        view.source_index = 0  # filename source
         original = view.node.result["year"]
         view.apply_source_field()
         assert view.node.result["year"] == original
@@ -238,9 +270,9 @@ class TestDetailViewApply:
         view = self._make_view()
         # Clear result first
         view.node.result = {}
-        # Move to header row, col 2 (TMDB #1)
+        # Move to header row, source_index=1 (TMDB #1)
         view.cursor_row = -1
-        view.cursor_col = 2
+        view.source_index = 1
         view.apply_source_field()
         assert view.node.result["title"] == "Breaking Bad"
         assert view.node.result["year"] == 2008
@@ -252,24 +284,27 @@ class TestDetailViewApply:
         view.node.result = {"year": 9999}
         # Apply filename source (has no year)
         view.cursor_row = -1
-        view.cursor_col = 1
+        view.source_index = 0
         view.apply_source_field()
         # year should remain since filename source has no year
         assert view.node.result["year"] == 9999
 
-    def test_enter_on_result_starts_edit(self) -> None:
-        view = self._make_view()
+    def test_enter_on_result_starts_edit_no_sources(self) -> None:
+        node = FileNode(path=Path("/test.mkv"), result={"title": "Test"}, sources=[])
+        view = DetailView(node, TEMPLATE, TEMPLATE)
+        view._fields = get_display_fields(TEMPLATE)
         view.cursor_row = 0
-        view.cursor_col = 0
         view.apply_source_field()
         assert view.editing is True
 
-    def test_enter_on_result_header_no_edit(self) -> None:
+    def test_enter_on_header_no_edit(self) -> None:
         view = self._make_view()
         view.cursor_row = -1
-        view.cursor_col = 0
+        view.source_index = 0
+        # Header row with a source applies all from that source
+        view.node.result = {}
         view.apply_source_field()
-        # _start_edit returns early for row < 0
+        # Should have applied fields, not started editing
         assert view.editing is False
 
 
@@ -359,7 +394,7 @@ class TestDetailViewSetNode:
         view = DetailView(node, TEMPLATE, TEMPLATE)
         view._fields = get_display_fields(TEMPLATE)
         view.cursor_row = 2
-        view.cursor_col = 1
+        view.source_index = 1
         view.editing = True
 
         new_node = FileNode(
@@ -369,7 +404,7 @@ class TestDetailViewSetNode:
         view.set_node(new_node)
         assert view.node is new_node
         assert view.cursor_row == 0
-        assert view.cursor_col == 0
+        assert view.source_index == 0
         assert view.editing is False
 
     def test_set_node_updates_fields(self) -> None:
@@ -400,7 +435,7 @@ class TestDetailViewApplyAllClear:
             "episode": 99,
         }
         view.cursor_row = -1
-        view.cursor_col = 1  # filename source
+        view.source_index = 0  # filename source
         view.apply_source_all_clear()
         assert view.node.result["title"] == "Breaking Bad"
         assert view.node.result["season"] == 1
@@ -408,18 +443,10 @@ class TestDetailViewApplyAllClear:
         # year was cleared because filename source has no year
         assert "year" not in view.node.result
 
-    def test_noop_on_result_column(self) -> None:
-        view = self._make_view()
-        view.cursor_row = -1
-        view.cursor_col = 0  # result column
-        original = dict(view.node.result)
-        view.apply_source_all_clear()
-        assert view.node.result == original
-
     def test_noop_on_field_row(self) -> None:
         view = self._make_view()
         view.cursor_row = 0  # not header
-        view.cursor_col = 1
+        view.source_index = 0
         original = dict(view.node.result)
         view.apply_source_all_clear()
         assert view.node.result == original
@@ -494,7 +521,6 @@ class TestMultiFileDetail:
     def test_editing_applies_to_all_nodes(self) -> None:
         view, node1, node2 = self._make_multi_view()
         view.cursor_row = 0  # title
-        view.cursor_col = 0  # result
         view._start_edit()
         view._edit_value = "Better Call Saul"
         view._commit_edit()
@@ -506,9 +532,9 @@ class TestMultiFileDetail:
         # Clear years to test applying source
         node1.result.pop("year", None)
         node2.result.pop("year", None)
-        # Move to year field, source col
+        # Move to year field, source_index=0 (TMDB source)
         view.cursor_row = 1  # year
-        view.cursor_col = 1  # TMDB source
+        view.source_index = 0  # TMDB source (only one source per node)
         view.apply_source_field()
         assert node1.result["year"] == 2008
         assert node2.result["year"] == 2008
@@ -520,7 +546,7 @@ class TestMultiFileDetail:
         node2.result = {}
         # Apply all from TMDB source (header row)
         view.cursor_row = -1
-        view.cursor_col = 1
+        view.source_index = 0
         view.apply_source_field()
         assert node1.result["title"] == "Breaking Bad"
         assert node2.result["title"] == "Breaking Bad"
@@ -530,18 +556,17 @@ class TestMultiFileDetail:
     def test_set_nodes_resets_cursor(self) -> None:
         view, _, _ = self._make_multi_view()
         view.cursor_row = 2
-        view.cursor_col = 1
+        view.source_index = 1
         new_node = FileNode(path=Path("/x.mkv"), result={"title": "X"})
         view.set_nodes([new_node])
         assert view.cursor_row == 0
-        assert view.cursor_col == 0
+        assert view.source_index == 0
         assert not view.is_multi
 
     def test_edit_various_field_starts_empty(self) -> None:
         view, _, _ = self._make_multi_view()
         # episode is (various)
         view.cursor_row = 3  # episode
-        view.cursor_col = 0
         view._start_edit()
         assert view._edit_value == ""
 
@@ -550,7 +575,7 @@ class TestMultiFileDetail:
         notified: list[list[FileNode]] = []
         view.on_before_mutate = lambda nodes: notified.append(nodes)
         view.cursor_row = 0
-        view.cursor_col = 1
+        view.source_index = 0
         view.apply_source_field()
         assert len(notified) == 1
         assert node1 in notified[0]
@@ -563,7 +588,7 @@ class TestMultiFileDetail:
         node2.result = {"title": "Old", "year": 9999, "season": 99, "episode": 99}
         # TMDB source only has title and year
         view.cursor_row = -1
-        view.cursor_col = 1
+        view.source_index = 0
         view.apply_source_all_clear()
         assert node1.result["title"] == "Breaking Bad"
         assert node2.result["title"] == "Breaking Bad"
@@ -697,7 +722,7 @@ class TestTreeDetailIntegration:
             await pilot.press("j")
             assert dv.cursor_row == 1
             await pilot.press("l")
-            assert dv.cursor_col == 1
+            assert dv.source_index == 1
 
             # Escape returns to tree
             await pilot.press("escape")

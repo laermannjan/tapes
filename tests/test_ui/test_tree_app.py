@@ -707,7 +707,7 @@ class TestUndoIntegration:
 
             # Apply source field (title from src1)
             dv.cursor_row = 0
-            dv.cursor_col = 1
+            dv.source_index = 0
             await pilot.press("enter")
             assert node.result["title"] == "Alt"
 

@@ -34,7 +34,7 @@ class DetailView(Widget):
     can_focus = True
 
     cursor_row: reactive[int] = reactive(0)   # -1 = header, 0+ = fields
-    cursor_col: reactive[int] = reactive(0)   # 0 = result, 1+ = sources
+    source_index: reactive[int] = reactive(0)  # which TMDB source to display
     editing: reactive[bool] = reactive(False)
     active: reactive[bool] = reactive(False)
 
@@ -75,7 +75,7 @@ class DetailView(Widget):
         self.node = node
         self._file_nodes = [node]
         self.cursor_row = 0
-        self.cursor_col = 0
+        self.source_index = 0
         self._fields = get_display_fields(self._active_template(node))
         self.editing = False
         self.refresh()
@@ -91,7 +91,7 @@ class DetailView(Widget):
         self._file_nodes = list(nodes)
         self.node = nodes[0]
         self.cursor_row = 0
-        self.cursor_col = 0
+        self.source_index = 0
         self._fields = get_display_fields(self._active_template(self.node))
         self.editing = False
         self.refresh()
@@ -144,7 +144,7 @@ class DetailView(Widget):
         content.append(Text(" enter: apply/edit   shift-enter: apply all   esc: back"))
 
         # Now wrap in borders
-        # Top border: ├─ Detail ─...─┤ (shares border with tree above)
+        # Top border: shares border with tree above
         title = " Detail "
         top_fill = max(0, w - 2 - len(title))
         top_line = Text()
@@ -153,7 +153,7 @@ class DetailView(Widget):
             style=border_style,
         )
 
-        # Bottom border: └─...─┘
+        # Bottom border
         bot_line = Text()
         bot_line.append(
             "\u2514" + "\u2500" * max(0, w - 2) + "\u2518",
@@ -179,7 +179,7 @@ class DetailView(Widget):
 
         # Fill remaining height with blank bordered rows
         content_height = max(0, self.size.height - 2)
-        while len(bordered) - 1 < content_height:  # -1 for top_line already in bordered
+        while len(bordered) - 1 < content_height:
             blank = Text()
             blank.append("\u2502", style=border_style)
             blank.append(" " * inner_width)
@@ -216,22 +216,23 @@ class DetailView(Widget):
 
         # Result column header
         result_text = col("result")
-        style = "reverse" if self.cursor_row == -1 and self.cursor_col == 0 else ""
+        style = "reverse" if self.cursor_row == -1 else ""
         parts.append((result_text, style))
 
         # Separator
         parts.append(("\u2503", ""))
 
-        # Source headers (use primary node's sources)
-        for i, src in enumerate(self.node.sources):
+        # Current source header with [N/M] indicator
+        sources = self.node.sources
+        if sources:
+            idx = self.source_index
+            src = sources[idx]
             conf = f" ({src.confidence:.0%})" if src.confidence else ""
-            col_text = col(f"  {src.name}{conf}")
-            style = (
-                "reverse"
-                if self.cursor_row == -1 and self.cursor_col == i + 1
-                else ""
-            )
-            parts.append((col_text, style))
+            indicator = f"  [{idx + 1}/{len(sources)}]"
+            col_text = col(f"  {src.name}{conf}{indicator}")
+            parts.append((col_text, ""))
+        else:
+            parts.append((col("  (no sources)"), ""))
 
         line = Text()
         for text, style in parts:
@@ -248,7 +249,7 @@ class DetailView(Widget):
         parts.append((label, ""))
 
         # Result value
-        if self.editing and self.cursor_row == row_idx and self.cursor_col == 0:
+        if self.editing and self.cursor_row == row_idx:
             # Show edit input
             edit_display = self._edit_value + "\u2588"  # block cursor
             result_text = col(edit_display)
@@ -256,44 +257,47 @@ class DetailView(Widget):
         else:
             result_val = display_val(shared.get(field_name))
             result_text = col(result_val)
-            style = (
-                "reverse"
-                if self.cursor_row == row_idx and self.cursor_col == 0
-                else ""
-            )
+            style = "reverse" if self.cursor_row == row_idx else ""
             parts.append((result_text, style))
 
         # Separator
         parts.append(("\u2503", ""))
 
-        # Source values (use primary node's sources)
-        for i, src in enumerate(self.node.sources):
+        # Current source value
+        sources = self.node.sources
+        if sources:
+            src = sources[self.source_index]
             src_val = display_val(src.fields.get(field_name))
             col_text = col(f"  {src_val}")
-            style = (
-                "reverse"
-                if self.cursor_row == row_idx and self.cursor_col == i + 1
-                else ""
-            )
+            style = "reverse" if self.cursor_row == row_idx else ""
             parts.append((col_text, style))
+        else:
+            parts.append((col("  \u00b7"), ""))
 
         line = Text()
         for text, style in parts:
             line.append(text, style=style)
         return line
 
-    def move_cursor(self, row_delta: int = 0, col_delta: int = 0) -> None:
-        """Move cursor, clamping to valid range."""
+    def move_cursor(self, row_delta: int = 0) -> None:
+        """Move cursor row, clamping to valid range."""
         if self.editing:
             return
         max_row = len(self._fields) - 1
-        max_col = len(self.node.sources)  # 0 = result, 1..n = sources
 
         new_row = self.cursor_row + row_delta
-        new_col = self.cursor_col + col_delta
-
         self.cursor_row = max(-1, min(max_row, new_row))
-        self.cursor_col = max(0, min(max_col, new_col))
+
+    def cycle_source(self, delta: int) -> None:
+        """Cycle through sources with h/l. Clamp to [0, len(sources)-1]."""
+        if self.editing:
+            return
+        sources = self.node.sources
+        if not sources:
+            return
+        max_idx = len(sources) - 1
+        new_idx = self.source_index + delta
+        self.source_index = max(0, min(max_idx, new_idx))
 
     def _notify_before_mutate(self) -> None:
         """Notify the on_before_mutate callback before a mutation."""
@@ -301,14 +305,19 @@ class DetailView(Widget):
             self.on_before_mutate(list(self._file_nodes))
 
     def apply_source_field(self) -> None:
-        """Handle enter on the current cursor cell."""
-        if self.cursor_col == 0:
-            # Result column: start inline edit
+        """Handle enter on the current cursor cell.
+
+        On the result column (always visible on left), start inline edit.
+        On a source field, apply from the current source_index.
+        """
+        sources = self.node.sources
+        if not sources:
+            # No sources, just allow editing result
             self._start_edit()
             return
 
-        src_idx = self.cursor_col - 1
-        if src_idx >= len(self.node.sources):
+        src_idx = self.source_index
+        if src_idx >= len(sources):
             return
 
         self._notify_before_mutate()
@@ -318,7 +327,7 @@ class DetailView(Widget):
         else:
             # Single field: copy value to result for all nodes
             field_name = self._fields[self.cursor_row]
-            val = self.node.sources[src_idx].fields.get(field_name)
+            val = sources[src_idx].fields.get(field_name)
             if val is not None:
                 for n in self._file_nodes:
                     n.result[field_name] = val
@@ -326,13 +335,16 @@ class DetailView(Widget):
 
     def apply_source_all_clear(self) -> None:
         """Handle shift-enter: apply all fields from source including empties."""
-        if self.cursor_col == 0 or self.cursor_row != -1:
+        if self.cursor_row != -1:
             return
-        src_idx = self.cursor_col - 1
-        if src_idx >= len(self.node.sources):
+        sources = self.node.sources
+        if not sources:
+            return
+        src_idx = self.source_index
+        if src_idx >= len(sources):
             return
         self._notify_before_mutate()
-        src = self.node.sources[src_idx]
+        src = sources[src_idx]
         for field_name in self._fields:
             val = src.fields.get(field_name)
             if val is not None:
@@ -414,6 +426,6 @@ class DetailView(Widget):
         """React to cursor row changes."""
         self.refresh()
 
-    def watch_cursor_col(self) -> None:
-        """React to cursor col changes."""
+    def watch_source_index(self) -> None:
+        """React to source index changes."""
         self.refresh()
