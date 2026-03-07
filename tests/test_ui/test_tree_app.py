@@ -24,7 +24,7 @@ from tapes.ui.tree_view import TreeView
 def _simple_model() -> TreeModel:
     """Model with two folders (each with one file) and one top-level file.
 
-    Structure (all collapsed by default):
+    Structure (collapsed for test predictability):
         folderA/
             file_a.mkv
         folderB/
@@ -38,10 +38,12 @@ def _simple_model() -> TreeModel:
         children=[
             FolderNode(
                 name="folderA",
+                collapsed=True,
                 children=[FileNode(path=Path("/root/folderA/file_a.mkv"))],
             ),
             FolderNode(
                 name="folderB",
+                collapsed=True,
                 children=[FileNode(path=Path("/root/folderB/file_b.mkv"))],
             ),
             FileNode(path=Path("/root/top.mkv")),
@@ -638,6 +640,27 @@ class TestUndoManager:
         undo.undo()
         assert n1.result["title"] == "A"
         assert n2.result["title"] == "B"
+
+    def test_undo_restores_sources_and_staged(self) -> None:
+        undo = UndoManager()
+        node = FileNode(
+            path=Path("/a.mkv"),
+            result={"title": "Old"},
+            sources=[Source(name="src", fields={"title": "Old"}, confidence=0.5)],
+            staged=False,
+        )
+        undo.snapshot([node])
+        # Mutate everything
+        node.result = {"title": "New"}
+        node.sources = [Source(name="new", fields={"title": "New"}, confidence=0.9)]
+        node.staged = True
+        # Undo
+        assert undo.undo() is True
+        assert node.result == {"title": "Old"}
+        assert len(node.sources) == 1
+        assert node.sources[0].name == "src"
+        assert node.sources[0].confidence == 0.5
+        assert node.staged is False
 
     def test_single_level_only(self) -> None:
         node = FileNode(path=Path("/test.mkv"), result={"title": "V1"})

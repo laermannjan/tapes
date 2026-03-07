@@ -33,7 +33,7 @@ class FolderNode:
 
     name: str
     children: list[FileNode | FolderNode] = field(default_factory=list)
-    collapsed: bool = True
+    collapsed: bool = False
 
 
 @dataclass
@@ -73,6 +73,24 @@ class TreeModel:
     def toggle_collapsed(self, node: FolderNode) -> None:
         """Toggle collapsed flag on a folder node."""
         node.collapsed = not node.collapsed
+
+    def collapse_all(self) -> None:
+        """Collapse all folders."""
+        for folder in self._all_folders(self.root):
+            folder.collapsed = True
+
+    def expand_all(self) -> None:
+        """Expand all folders."""
+        for folder in self._all_folders(self.root):
+            folder.collapsed = False
+
+    def _all_folders(self, node: FolderNode) -> list[FolderNode]:
+        """Collect all folder nodes (including the given node)."""
+        result = [node]
+        for child in node.children:
+            if isinstance(child, FolderNode):
+                result.extend(self._all_folders(child))
+        return result
 
     def toggle_staged_recursive(self, node: FolderNode) -> None:
         """Toggle staged on all file descendants.
@@ -168,23 +186,28 @@ def _build_folder(
 class UndoManager:
     """Single-level undo for metadata changes on FileNodes.
 
-    Call ``snapshot()`` before a mutation to save node results.
+    Call ``snapshot()`` before a mutation to save node state.
     Call ``undo()`` to restore the most recent snapshot.
     """
 
     def __init__(self) -> None:
-        self._snapshot: list[tuple[FileNode, dict[str, Any]]] | None = None
+        self._snapshot: list[tuple[FileNode, dict[str, Any], list[Source], bool]] | None = None
 
     def snapshot(self, nodes: list[FileNode]) -> None:
-        """Save a deep copy of each node's result dict."""
-        self._snapshot = [(node, copy.deepcopy(node.result)) for node in nodes]
+        """Save a deep copy of each node's result, sources, and staged flag."""
+        self._snapshot = [
+            (node, copy.deepcopy(node.result), copy.deepcopy(node.sources), node.staged)
+            for node in nodes
+        ]
 
     def undo(self) -> bool:
         """Restore the most recent snapshot. Returns True if restored."""
         if self._snapshot is None:
             return False
-        for node, saved_result in self._snapshot:
+        for node, saved_result, saved_sources, saved_staged in self._snapshot:
             node.result = saved_result
+            node.sources = saved_sources
+            node.staged = saved_staged
         self._snapshot = None
         return True
 
