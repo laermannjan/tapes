@@ -10,8 +10,11 @@ logger = logging.getLogger(__name__)
 BASE_URL = "https://api.themoviedb.org/3"
 
 
-def _client(token: str) -> httpx.Client:
-    """Create an httpx client with auth headers."""
+def create_client(token: str) -> httpx.Client:
+    """Create an httpx client with TMDB auth headers.
+
+    Caller is responsible for closing the client.
+    """
     return httpx.Client(
         base_url=BASE_URL,
         headers={"Authorization": f"Bearer {token}"},
@@ -20,7 +23,8 @@ def _client(token: str) -> httpx.Client:
 
 
 def search_multi(
-    query: str, token: str, year: int | None = None
+    query: str, token: str, year: int | None = None,
+    *, client: httpx.Client | None = None,
 ) -> list[dict]:
     """Search /search/multi. Returns up to 3 results.
 
@@ -37,9 +41,13 @@ def search_multi(
         params["year"] = year
 
     try:
-        with _client(token) as client:
+        if client is not None:
             resp = client.get("/search/multi", params=params)
             resp.raise_for_status()
+        else:
+            with create_client(token) as c:
+                resp = c.get("/search/multi", params=params)
+                resp.raise_for_status()
     except (httpx.HTTPError, httpx.HTTPStatusError) as exc:
         logger.warning("TMDB search_multi failed: %s", exc)
         return []
@@ -81,15 +89,22 @@ def search_multi(
     return results
 
 
-def get_movie(tmdb_id: int, token: str) -> dict:
+def get_movie(
+    tmdb_id: int, token: str,
+    *, client: httpx.Client | None = None,
+) -> dict:
     """GET /movie/{id}. Returns {tmdb_id, title, year, media_type: "movie"}."""
     if not token:
         return {}
 
     try:
-        with _client(token) as client:
+        if client is not None:
             resp = client.get(f"/movie/{tmdb_id}")
             resp.raise_for_status()
+        else:
+            with create_client(token) as c:
+                resp = c.get(f"/movie/{tmdb_id}")
+                resp.raise_for_status()
     except (httpx.HTTPError, httpx.HTTPStatusError) as exc:
         logger.warning("TMDB get_movie failed: %s", exc)
         return {}
@@ -105,15 +120,22 @@ def get_movie(tmdb_id: int, token: str) -> dict:
     }
 
 
-def get_show(tmdb_id: int, token: str) -> dict:
+def get_show(
+    tmdb_id: int, token: str,
+    *, client: httpx.Client | None = None,
+) -> dict:
     """GET /tv/{id}. Returns show info with seasons list."""
     if not token:
         return {}
 
     try:
-        with _client(token) as client:
+        if client is not None:
             resp = client.get(f"/tv/{tmdb_id}")
             resp.raise_for_status()
+        else:
+            with create_client(token) as c:
+                resp = c.get(f"/tv/{tmdb_id}")
+                resp.raise_for_status()
     except (httpx.HTTPError, httpx.HTTPStatusError) as exc:
         logger.warning("TMDB get_show failed: %s", exc)
         return {}
@@ -141,6 +163,7 @@ def get_season_episodes(
     token: str,
     show_title: str = "",
     show_year: int | None = None,
+    *, client: httpx.Client | None = None,
 ) -> list[dict]:
     """GET /tv/{show_id}/season/{season_number}. Returns list of episode dicts.
 
@@ -151,9 +174,13 @@ def get_season_episodes(
         return []
 
     try:
-        with _client(token) as client:
+        if client is not None:
             resp = client.get(f"/tv/{show_id}/season/{season_number}")
             resp.raise_for_status()
+        else:
+            with create_client(token) as c:
+                resp = c.get(f"/tv/{show_id}/season/{season_number}")
+                resp.raise_for_status()
     except (httpx.HTTPError, httpx.HTTPStatusError) as exc:
         logger.warning("TMDB get_season_episodes failed: %s", exc)
         return []

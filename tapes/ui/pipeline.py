@@ -3,7 +3,10 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
+
+if TYPE_CHECKING:
+    import httpx
 
 from tapes.similarity import compute_confidence, compute_episode_confidence
 from tapes.ui.tree_model import FileNode, Source, TreeModel
@@ -92,6 +95,8 @@ def run_tmdb_pass(
     if not token:
         return
 
+    from tapes import tmdb
+
     files = list(model.all_files())
     total = len(files)
     if not total:
@@ -102,18 +107,21 @@ def run_tmdb_pass(
 
     cache = _TmdbCache()
 
-    def query_one(node: FileNode) -> None:
-        nonlocal done_count
-        _query_tmdb_for_node(node, token, confidence_threshold, cache=cache)
-        with lock:
-            done_count += 1
-            if on_progress is not None:
-                on_progress(done_count, total)
+    with tmdb.create_client(token) as client:
+        def query_one(node: FileNode) -> None:
+            nonlocal done_count
+            _query_tmdb_for_node(
+                node, token, confidence_threshold, cache=cache, client=client,
+            )
+            with lock:
+                done_count += 1
+                if on_progress is not None:
+                    on_progress(done_count, total)
 
-    with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futures = [pool.submit(query_one, node) for node in files]
-        for f in as_completed(futures):
-            f.result()  # propagate exceptions
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = [pool.submit(query_one, node) for node in files]
+            for f in as_completed(futures):
+                f.result()  # propagate exceptions
 
 
 def run_auto_pipeline(
@@ -186,6 +194,7 @@ def _populate_node_guessit(node: FileNode, extract_metadata_fn: Callable[[str], 
 def _query_tmdb_for_node(
     node: FileNode, token: str, threshold: float,
     cache: _TmdbCache | None = None,
+    client: "httpx.Client | None" = None,
 ) -> None:
     """Two-stage TMDB query for a single node.
 
@@ -216,10 +225,10 @@ def _query_tmdb_for_node(
     if cache is not None:
         search_key = ("search", title.lower(), year)
         search_results = cache.get_or_fetch(
-            search_key, lambda: tmdb.search_multi(title, token, year=year)
+            search_key, lambda: tmdb.search_multi(title, token, year=year, client=client)
         )
     else:
-        search_results = tmdb.search_multi(title, token, year=year)
+        search_results = tmdb.search_multi(title, token, year=year, client=client)
 
     if not search_results:
         return
@@ -247,7 +256,7 @@ def _query_tmdb_for_node(
 
         # Stage 2: if TV show, fetch episodes
         if best.fields.get("media_type") == "episode":
-            _query_episodes(node, token, threshold, best.fields, cache=cache)
+            _query_episodes(node, token, threshold, best.fields, cache=cache, client=client)
             return
 
     # Add show-level TMDB sources (not episode sources yet)
@@ -257,6 +266,7 @@ def _query_tmdb_for_node(
 def _query_episodes(
     node: FileNode, token: str, threshold: float, show_fields: dict,
     cache: _TmdbCache | None = None,
+    client: "httpx.Client | None" = None,
 ) -> None:
     """Stage 2: fetch episode data for a TV show match."""
     from tapes import tmdb
@@ -271,10 +281,10 @@ def _query_episodes(
     # Get show info to know available seasons
     if cache is not None:
         show_info = cache.get_or_fetch(
-            ("show", show_id), lambda: tmdb.get_show(show_id, token)
+            ("show", show_id), lambda: tmdb.get_show(show_id, token, client=client)
         )
     else:
-        show_info = tmdb.get_show(show_id, token)
+        show_info = tmdb.get_show(show_id, token, client=client)
     if not show_info:
         return
 
@@ -300,12 +310,14 @@ def _query_episodes(
                 lambda sn=season_num: tmdb.get_season_episodes(
                     show_id, sn, token,
                     show_title=show_title, show_year=show_year,
+                    client=client,
                 ),
             )
         else:
             episodes = tmdb.get_season_episodes(
                 show_id, season_num, token,
                 show_title=show_title, show_year=show_year,
+                client=client,
             )
 
         for ep in episodes:
