@@ -1,6 +1,8 @@
 """Auto-pipeline: populate sources and auto-accept confident matches."""
 from __future__ import annotations
 
+from typing import Any
+
 from tapes.ui.tree_model import FileNode, Source, TreeModel
 
 
@@ -24,6 +26,38 @@ def run_auto_pipeline(
         _populate_node(node, confidence_threshold, extract_metadata, mock_tmdb_lookup)
 
 
+def refresh_tmdb_source(
+    node: FileNode, confidence_threshold: float | None = None
+) -> None:
+    """Re-query mock TMDB for a file and update its sources.
+
+    Uses the node's current result title/episode for the query.
+    Removes existing TMDB sources, adds new one if found.
+    Auto-accepts if confidence >= threshold.
+    """
+    from tapes.ui.query import CONFIDENCE_THRESHOLD, mock_tmdb_lookup
+
+    if confidence_threshold is None:
+        confidence_threshold = CONFIDENCE_THRESHOLD
+
+    title = str(node.result.get("title", ""))
+    episode = node.result.get("episode")
+    tmdb_result = mock_tmdb_lookup(title, episode=episode)
+
+    # Remove existing TMDB sources
+    node.sources = [s for s in node.sources if not s.name.startswith("TMDB")]
+
+    if tmdb_result is not None:
+        fields, confidence = tmdb_result
+        tmdb_source = Source(name="TMDB #1", fields=fields, confidence=confidence)
+        node.sources.append(tmdb_source)
+
+        if confidence >= confidence_threshold:
+            for field, val in fields.items():
+                if val is not None:
+                    node.result[field] = val
+
+
 def _populate_node(
     node: FileNode,
     confidence_threshold: float,
@@ -31,11 +65,9 @@ def _populate_node(
     mock_tmdb_lookup_fn: object,
 ) -> None:
     """Populate a single node with sources and auto-accept if confident."""
-    from typing import Any
-
     # 1. Guessit: extract metadata from filename
     meta = extract_metadata_fn(node.path.name)  # type: ignore[operator]
-    filename_fields: dict[str, Any] = {}
+    filename_fields: dict = {}
     if meta.title:
         filename_fields["title"] = meta.title
     if meta.year is not None:

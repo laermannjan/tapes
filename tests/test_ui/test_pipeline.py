@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from tapes.ui.pipeline import run_auto_pipeline
+from tapes.ui.pipeline import refresh_tmdb_source, run_auto_pipeline
 from tapes.ui.tree_model import FileNode, FolderNode, Source, TreeModel
 
 
@@ -115,6 +115,87 @@ class TestRunAutoPipeline:
         assert node.staged is True
 
 
+# ---------------------------------------------------------------------------
+# Refresh TMDB source (M10)
+# ---------------------------------------------------------------------------
+
+
+class TestRefreshTmdbSource:
+    def test_updates_tmdb_source(self) -> None:
+        node = FileNode(
+            path=Path("/media/Dune.mkv"),
+            result={"title": "Dune"},
+            sources=[
+                Source(name="from filename", fields={"title": "Dune"}),
+            ],
+        )
+        refresh_tmdb_source(node)
+        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
+        assert len(tmdb_sources) == 1
+        assert tmdb_sources[0].confidence == 0.95
+
+    def test_replaces_existing_tmdb_source(self) -> None:
+        node = FileNode(
+            path=Path("/media/Dune.mkv"),
+            result={"title": "Dune"},
+            sources=[
+                Source(name="from filename", fields={"title": "Dune"}),
+                Source(name="TMDB #1", fields={"title": "Old"}, confidence=0.5),
+            ],
+        )
+        refresh_tmdb_source(node)
+        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
+        assert len(tmdb_sources) == 1
+        assert tmdb_sources[0].fields["title"] == "Dune"
+        assert tmdb_sources[0].confidence == 0.95
+
+    def test_keeps_filename_source(self) -> None:
+        node = FileNode(
+            path=Path("/media/Dune.mkv"),
+            result={"title": "Dune"},
+            sources=[
+                Source(name="from filename", fields={"title": "Dune"}),
+                Source(name="TMDB #1", fields={"title": "Old"}, confidence=0.5),
+            ],
+        )
+        refresh_tmdb_source(node)
+        filename_sources = [s for s in node.sources if s.name == "from filename"]
+        assert len(filename_sources) == 1
+
+    def test_no_match_removes_tmdb_source(self) -> None:
+        node = FileNode(
+            path=Path("/media/Unknown.mkv"),
+            result={"title": "Nonexistent"},
+            sources=[
+                Source(name="from filename", fields={"title": "Nonexistent"}),
+                Source(name="TMDB #1", fields={"title": "Old"}, confidence=0.5),
+            ],
+        )
+        refresh_tmdb_source(node)
+        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
+        assert len(tmdb_sources) == 0
+
+    def test_confident_auto_accepts(self) -> None:
+        node = FileNode(
+            path=Path("/media/Dune.mkv"),
+            result={"title": "Dune"},
+            sources=[Source(name="from filename", fields={"title": "Dune"})],
+        )
+        refresh_tmdb_source(node)
+        # Dune has 0.95 confidence, should auto-accept year
+        assert node.result.get("year") == 2021
+
+    def test_unconfident_does_not_auto_accept(self) -> None:
+        node = FileNode(
+            path=Path("/media/test.mkv"),
+            result={"title": "Breaking Bad"},
+            sources=[Source(name="from filename", fields={"title": "Breaking Bad"})],
+        )
+        refresh_tmdb_source(node)
+        # Breaking Bad has 0.75 confidence, should NOT auto-accept
+        assert node.result.get("year") is None
+
+
 try:
     from textual.pilot import Pilot  # noqa: F401
 
@@ -140,3 +221,49 @@ class TestAutoPipelineIntegration:
             # Pipeline should have run
             assert len(node.sources) >= 1
             assert node.staged is True  # Dune is confident
+
+
+@pytest.mark.skipif(not HAS_PILOT, reason="textual pilot not available")
+class TestRefreshQueryIntegration:
+    @pytest.mark.asyncio()
+    async def test_r_in_tree_refreshes_per_file(self) -> None:
+        from tapes.ui.tree_app import TreeApp
+
+        node = FileNode(
+            path=Path("/media/Dune.mkv"),
+            result={"title": "Dune"},
+            sources=[Source(name="from filename", fields={"title": "Dune"})],
+        )
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
+        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+
+        async with app.run_test() as pilot:
+            await pilot.press("r")
+            tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
+            assert len(tmdb_sources) == 1
+            assert tmdb_sources[0].confidence == 0.95
+
+    @pytest.mark.asyncio()
+    async def test_r_in_detail_refreshes_current_node(self) -> None:
+        from tapes.ui.detail_view import DetailView
+        from tapes.ui.tree_app import TreeApp
+
+        node = FileNode(
+            path=Path("/media/Arrival.mkv"),
+            result={"title": "Arrival"},
+            sources=[Source(name="from filename", fields={"title": "Arrival"})],
+        )
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
+        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+
+        async with app.run_test() as pilot:
+            # Enter detail view
+            await pilot.press("enter")
+            assert app._in_detail is True
+            await pilot.press("r")
+            tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
+            assert len(tmdb_sources) == 1
+            # Arrival is confident (0.95), so result should have year
+            assert node.result.get("year") == 2016

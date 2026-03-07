@@ -36,6 +36,7 @@ class TreeApp(App):
         Binding("x", "toggle_ignored", "Ignore"),
         Binding("c", "commit", "Commit"),
         Binding("a", "accept_best", "Accept"),
+        Binding("r", "refresh_query", "Refresh"),
         Binding("grave_accent", "toggle_flat", "Flat/Tree"),
     ]
 
@@ -207,6 +208,33 @@ class TreeApp(App):
             f"{count} file{'s' if count != 1 else ''} staged. "
             "Press enter to confirm, esc to cancel."
         )
+
+    def action_refresh_query(self) -> None:
+        from tapes.ui.pipeline import refresh_tmdb_source
+
+        if self._in_detail:
+            dv = self.query_one(DetailView)
+            node = dv.node
+            self._undo.snapshot([node])
+            refresh_tmdb_source(node)
+            dv.refresh()
+        else:
+            tv = self.query_one(TreeView)
+            if tv.in_range_mode:
+                nodes = tv.selected_nodes()
+                file_nodes = [n for n in nodes if isinstance(n, FileNode)]
+                if file_nodes:
+                    self._undo.snapshot(file_nodes)
+                    for fn in file_nodes:
+                        refresh_tmdb_source(fn)
+                tv.clear_range_select()
+            else:
+                node = tv.cursor_node()
+                if isinstance(node, FileNode):
+                    self._undo.snapshot([node])
+                    refresh_tmdb_source(node)
+            tv.refresh()
+        self._update_footer()
 
     def action_accept_best(self) -> None:
         if self._in_detail:
