@@ -13,11 +13,15 @@ from tapes.ui.detail_render import (
     COL_WIDTH,
     LABEL_WIDTH,
     col,
+    confidence_style,
+    diff_style,
     display_val,
     get_display_fields,
+    render_compact_preview,
     render_detail_header,
+    render_folder_preview,
 )
-from tapes.ui.tree_model import FileNode, compute_shared_fields
+from tapes.ui.tree_model import FileNode, FolderNode, compute_shared_fields
 from tapes.ui.tree_render import compute_dest, select_template
 
 if TYPE_CHECKING:
@@ -52,6 +56,7 @@ class DetailView(Widget):
         self._fields: list[str] = []
         self._edit_value: str = ""
         self.on_before_mutate: Callable[[list[FileNode]], None] | None = None
+        self._preview_node: FileNode | FolderNode | None = None
 
     def _active_template(self, node: FileNode | None = None) -> str:
         """Return the template for the given (or primary) node.
@@ -96,6 +101,11 @@ class DetailView(Widget):
         self.editing = False
         self.refresh()
 
+    def set_preview_node(self, node: FileNode | FolderNode | None) -> None:
+        """Set the node to show in compact preview mode."""
+        self._preview_node = node
+        self.refresh()
+
     def _shared_result(self) -> dict[str, Any]:
         """Compute the shared result for multi-node display."""
         if not self.is_multi:
@@ -116,32 +126,12 @@ class DetailView(Widget):
         border_style = self._border_style()
         inner_width = max(0, w - 2)
 
-        # Build content lines (without borders)
-        content: list[Text] = []
+        is_expanded = self.has_class("expanded")
 
-        # Header: filename + destination (or multi-file summary)
-        if self.is_multi:
-            header_lines = self._render_multi_header()
+        if is_expanded:
+            content = self._render_expanded_content(inner_width)
         else:
-            header_lines = render_detail_header(self.node, self._active_template())
-        for hl in header_lines:
-            content.append(Text(hl))
-
-        # Separator
-        content.append(Text("\u2576" + "\u2500" * min(78, inner_width) + "\u2574"))
-
-        # Grid header row
-        content.append(self._render_grid_header())
-
-        # Field rows
-        for row_idx, field_name in enumerate(self._fields):
-            content.append(self._render_field_row(row_idx, field_name))
-
-        # Bottom separator
-        content.append(Text("\u2576" + "\u2500" * min(78, inner_width) + "\u2574"))
-
-        # Help line
-        content.append(Text(" enter: apply/edit   shift-enter: apply all   esc: back"))
+            content = self._render_compact_content()
 
         # Now wrap in borders
         # Top border: shares border with tree above
@@ -189,6 +179,56 @@ class DetailView(Widget):
         bordered.append(bot_line)
         return Text("\n").join(bordered)
 
+    def _render_compact_content(self) -> list[Text]:
+        """Render 2-line compact preview for the hovered node."""
+        preview = self._preview_node
+        if preview is None:
+            return [Text(" (no file selected)", style="dim")]
+
+        if isinstance(preview, FolderNode):
+            preview_text = render_folder_preview(preview)
+        elif isinstance(preview, FileNode):
+            template = select_template(
+                preview, self.movie_template, self.tv_template
+            )
+            preview_text = render_compact_preview(preview, template)
+        else:
+            return [Text(" (no file selected)", style="dim")]
+
+        # The render functions return Text with a "\n" separator.
+        # Split into individual lines preserving styles.
+        return list(preview_text.split("\n"))
+
+    def _render_expanded_content(self, inner_width: int) -> list[Text]:
+        """Render the full detail grid (existing expanded behavior)."""
+        content: list[Text] = []
+
+        # Header: filename + destination (or multi-file summary)
+        if self.is_multi:
+            header_lines = self._render_multi_header()
+        else:
+            header_lines = render_detail_header(self.node, self._active_template())
+        for hl in header_lines:
+            content.append(Text(hl))
+
+        # Separator
+        content.append(Text("\u2576" + "\u2500" * min(78, inner_width) + "\u2574"))
+
+        # Grid header row
+        content.append(self._render_grid_header())
+
+        # Field rows
+        for row_idx, field_name in enumerate(self._fields):
+            content.append(self._render_field_row(row_idx, field_name))
+
+        # Bottom separator
+        content.append(Text("\u2576" + "\u2500" * min(78, inner_width) + "\u2574"))
+
+        # Help line
+        content.append(Text(" enter: apply/edit   shift-enter: apply all   esc: back"))
+
+        return content
+
     def _render_multi_header(self) -> list[str]:
         """Render header for multi-file view."""
         count = len(self._file_nodes)
@@ -223,20 +263,33 @@ class DetailView(Widget):
         parts.append(("\u2503", ""))
 
         # Current source header with [N/M] indicator
+        # Source name in blue, confidence colored by threshold
         sources = self.node.sources
         if sources:
             idx = self.source_index
             src = sources[idx]
-            conf = f" ({src.confidence:.0%})" if src.confidence else ""
+            # Build styled source header as a Text object directly
+            src_header = Text()
+            src_header.append(f"  {src.name}", style="blue")
+            if src.confidence:
+                conf_text = f" ({src.confidence:.0%})"
+                src_header.append(conf_text, style=confidence_style(src.confidence))
             indicator = f"  [{idx + 1}/{len(sources)}]"
-            col_text = col(f"  {src.name}{conf}{indicator}")
-            parts.append((col_text, ""))
+            src_header.append(indicator)
+            # Pad/truncate to COL_WIDTH
+            plain_len = len(src_header.plain)
+            if plain_len < COL_WIDTH:
+                src_header.append(" " * (COL_WIDTH - plain_len))
+            styled_source_header = src_header
         else:
+            styled_source_header = None
             parts.append((col("  (no sources)"), ""))
 
         line = Text()
         for text, style in parts:
             line.append(text, style=style)
+        if styled_source_header is not None:
+            line.append_text(styled_source_header)
         return line
 
     def _render_field_row(self, row_idx: int, field_name: str) -> Text:
@@ -249,30 +302,36 @@ class DetailView(Widget):
         parts.append((label, ""))
 
         # Result value
+        result_raw = shared.get(field_name)
         if self.editing and self.cursor_row == row_idx:
             # Show edit input
             edit_display = self._edit_value + "\u2588"  # block cursor
             result_text = col(edit_display)
             parts.append((result_text, "underline"))
         else:
-            result_val = display_val(shared.get(field_name))
+            result_val = display_val(result_raw)
             result_text = col(result_val)
-            style = "reverse" if self.cursor_row == row_idx else ""
+            style = "bold white"
+            if self.cursor_row == row_idx:
+                style = "reverse"
             parts.append((result_text, style))
 
         # Separator
         parts.append(("\u2503", ""))
 
-        # Current source value
+        # Current source value (diff-styled relative to result)
         sources = self.node.sources
         if sources:
             src = sources[self.source_index]
-            src_val = display_val(src.fields.get(field_name))
+            src_raw = src.fields.get(field_name)
+            src_val = display_val(src_raw)
             col_text = col(f"  {src_val}")
-            style = "reverse" if self.cursor_row == row_idx else ""
-            parts.append((col_text, style))
+            base_style = diff_style(result_raw, src_raw)
+            if self.cursor_row == row_idx:
+                base_style = "reverse"
+            parts.append((col_text, base_style))
         else:
-            parts.append((col("  \u00b7"), ""))
+            parts.append((col("  \u00b7"), "dim"))
 
         line = Text()
         for text, style in parts:

@@ -107,6 +107,7 @@ class TreeApp(App):
             run_guessit_pass(self.model)
             self.query_one(TreeView).refresh_tree()
             self._update_footer()
+            self._update_preview()
 
             token = self.config.metadata.tmdb_token
             if token:
@@ -118,6 +119,7 @@ class TreeApp(App):
                 )
         else:
             self._update_footer()
+            self._update_preview()
 
     def _run_tmdb_worker(self, token: str) -> object:
         """Return a callable that runs TMDB queries in a background thread."""
@@ -181,18 +183,27 @@ class TreeApp(App):
         tv.focus()
         tv.refresh()
         self._update_footer()
+        self._update_preview()
+
+    def _update_preview(self) -> None:
+        """Update the detail panel's compact preview with the current cursor node."""
+        tv = self.query_one(TreeView)
+        node = tv.cursor_node()
+        self.query_one(DetailView).set_preview_node(node)
 
     def action_cursor_down(self) -> None:
         if self._in_detail:
             self.query_one(DetailView).move_cursor(row_delta=1)
         else:
             self.query_one(TreeView).move_cursor(1)
+            self._update_preview()
 
     def action_cursor_up(self) -> None:
         if self._in_detail:
             self.query_one(DetailView).move_cursor(row_delta=-1)
         else:
             self.query_one(TreeView).move_cursor(-1)
+            self._update_preview()
 
     def action_cursor_left(self) -> None:
         if self._in_detail:
@@ -419,17 +430,20 @@ class TreeApp(App):
             return
         self.model.collapse_all()
         self.query_one(TreeView).refresh_tree()
+        self._update_preview()
 
     def action_expand_all(self) -> None:
         if self._in_detail:
             return
         self.model.expand_all()
         self.query_one(TreeView).refresh_tree()
+        self._update_preview()
 
     def action_toggle_flat(self) -> None:
         if self._in_detail:
             return
         self.query_one(TreeView).toggle_flat_mode()
+        self._update_preview()
 
     def action_undo(self) -> None:
         if self._undo.undo():
@@ -455,6 +469,7 @@ class TreeApp(App):
             self.query_one(DetailView).refresh()
         else:
             self.query_one(TreeView).refresh()
+            self._update_preview()
         self._update_footer()
 
     def _update_footer(self) -> None:

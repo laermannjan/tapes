@@ -3,8 +3,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from tapes.ui.tree_model import FileNode
-from tapes.ui.tree_render import compute_dest, template_field_names
+from rich.text import Text
+
+from tapes.ui.tree_model import FileNode, FolderNode, _collect_files
+from tapes.ui.tree_render import compute_dest, render_dest, template_field_names
 
 LABEL_WIDTH = 14
 COL_WIDTH = 28
@@ -80,8 +82,130 @@ def render_detail_grid(
     return lines
 
 
+def diff_style(result_val: Any, source_val: Any) -> str:
+    """Return a Rich style for a source value relative to the result.
+
+    - ``"dim"`` if source is None (missing) or matches the result.
+    - ``"green"`` if source fills an empty result slot.
+    - ``"yellow"`` if source differs from a non-empty result.
+    """
+    if source_val is None:
+        return "dim"
+    if result_val is None or result_val == "":
+        return "green"
+    if str(result_val) == str(source_val):
+        return "dim"
+    return "yellow"
+
+
+def confidence_style(confidence: float) -> str:
+    """Return a Rich style for a confidence percentage.
+
+    - ``"green"`` for >= 80%.
+    - ``"yellow"`` for 50-79%.
+    - ``"red"`` for < 50%.
+    """
+    if confidence >= 0.8:
+        return "green"
+    if confidence >= 0.5:
+        return "yellow"
+    return "red"
+
+
 def col(text: str) -> str:
     """Pad or truncate text to COL_WIDTH."""
     if len(text) > COL_WIDTH:
         return text[: COL_WIDTH - 1] + "\u2026"
     return text.ljust(COL_WIDTH)
+
+
+def render_compact_preview(node: FileNode, template: str) -> Text:
+    """Render a 2-line compact preview for a file node.
+
+    Line 1: filename (bold white) + "  " + destination (styled)
+    Line 2: key fields (title, year, type, S, E) with dim labels
+             and TMDB confidence on the right.
+    """
+    # Line 1: filename -> destination
+    line1 = Text()
+    line1.append(f" {node.path.name}", style="bold white")
+    line1.append("  ")
+    line1.append("\u2192 ", style="dim")
+    dest = compute_dest(node, template)
+    line1.append_text(render_dest(dest))
+
+    # Line 2: key fields + TMDB confidence
+    line2 = Text()
+    line2.append(" ")
+
+    result = node.result
+    field_specs = [
+        ("title", "title"),
+        ("year", "year"),
+        ("type", "media_type"),
+        ("S", "season"),
+        ("E", "episode"),
+    ]
+    for i, (label, key) in enumerate(field_specs):
+        if i > 0:
+            line2.append("  ")
+        line2.append(f"{label}: ", style="dim")
+        val = result.get(key)
+        if val is None:
+            line2.append("\u00b7", style="dim")
+        else:
+            line2.append(str(val))
+
+    # TMDB confidence from best source
+    best_conf = 0.0
+    for src in node.sources:
+        if src.confidence > best_conf:
+            best_conf = src.confidence
+    if best_conf > 0:
+        conf_str = f"{best_conf:.0%}"
+        # Right-align: add spacing
+        line2.append("  ")
+        line2.append("TMDB ", style="blue")
+        line2.append(conf_str, style=confidence_style(best_conf))
+
+    result_text = Text()
+    result_text.append_text(line1)
+    result_text.append("\n")
+    result_text.append_text(line2)
+    return result_text
+
+
+def render_folder_preview(folder: FolderNode) -> Text:
+    """Render a 2-line compact preview for a folder node.
+
+    Line 1: folder name + "/" (bold white)
+    Line 2: "N files . N unstaged . N ignored" (dim), omitting zero counts.
+    """
+    line1 = Text()
+    line1.append(f" {folder.name}/", style="bold white")
+
+    files = _collect_files(folder)
+    total = len(files)
+    unstaged = sum(1 for f in files if not f.staged and not f.ignored)
+    ignored = sum(1 for f in files if f.ignored)
+
+    parts: list[str] = []
+    if total > 0:
+        parts.append(f"{total} file{'s' if total != 1 else ''}")
+    if unstaged > 0:
+        parts.append(f"{unstaged} unstaged")
+    if ignored > 0:
+        parts.append(f"{ignored} ignored")
+
+    line2 = Text()
+    line2.append(" ")
+    if parts:
+        line2.append(" \u00b7 ".join(parts), style="dim")
+    else:
+        line2.append("empty", style="dim")
+
+    result_text = Text()
+    result_text.append_text(line1)
+    result_text.append("\n")
+    result_text.append_text(line2)
+    return result_text
