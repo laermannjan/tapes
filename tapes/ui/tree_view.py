@@ -291,9 +291,8 @@ class TreeView(Widget):
         self._arrow_col = self._compute_arrow_col()
 
     def watch_cursor_index(self) -> None:
-        """React to cursor changes by scrolling and refreshing."""
+        """Keep cursor visible in viewport when index changes."""
         self._scroll_to_cursor()
-        self.refresh()
 
     def _scroll_to_cursor(self) -> None:
         """Adjust scroll offset so cursor stays visible with scrolloff."""

@@ -442,10 +442,3 @@ class DetailView(Widget):
             event.prevent_default()
             event.stop()
 
-    def watch_cursor_row(self) -> None:
-        """React to cursor row changes."""
-        self.refresh()
-
-    def watch_source_index(self) -> None:
-        """React to source index changes."""
-        self.refresh()
