@@ -36,16 +36,32 @@ def compute_dest(node: FileNode, template: str) -> str | None:
     """Compute the destination path for a file node using a template.
 
     Extracts fields from ``node.result`` and adds ``ext`` from the file
-    suffix. Returns None if any required template field is missing.
+    suffix. Returns None if any required template field is missing or None.
+
+    Format specs (e.g. ``{season:02d}``) are applied when all fields are
+    present. If a field with a format spec is missing, the spec is dropped
+    and ``?`` is shown instead so the user can see partial progress.
     """
     fields: dict[str, Any] = dict(node.result)
     fields["ext"] = node.path.suffix.lstrip(".")
 
     needed = template_field_names(template)
-    if any(f not in fields for f in needed):
+    missing = [f for f in needed if fields.get(f) is None]
+
+    if not missing:
+        return template.format_map(fields)
+
+    # All fields missing -> no useful destination
+    if len(missing) == len(needed):
         return None
 
-    return template.format_map(fields)
+    # Partial: fill missing fields with "?" and strip format specs
+    patched = dict(fields)
+    for f in missing:
+        patched[f] = "?"
+    # Remove format specs so "?" doesn't fail on e.g. :02d
+    safe_template = re.sub(r"\{(\w+):[^}]+\}", r"{\1}", template)
+    return safe_template.format_map(patched)
 
 
 def render_file_row(

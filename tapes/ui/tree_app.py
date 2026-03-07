@@ -41,16 +41,16 @@ class TreeApp(App):
         Binding("r", "refresh_query", "Refresh"),
         Binding("grave_accent", "toggle_flat", "Flat/Tree"),
         Binding("slash", "start_search", "Search"),
+        Binding("minus", "collapse_all", "Collapse All"),
+        Binding("equals_sign", "expand_all", "Expand All"),
     ]
 
     CSS = """
     TreeView {
         height: 1fr;
-        overflow-y: auto;
     }
     DetailView {
         height: 1fr;
-        overflow-y: auto;
         display: none;
     }
     """
@@ -77,6 +77,8 @@ class TreeApp(App):
         self._undo = UndoManager()
         self._confirming_commit = False
         self._auto_pipeline = auto_pipeline
+        self._tmdb_querying = False
+        self._tmdb_progress = (0, 0)
         self._searching = False
         self._search_query = ""
 
@@ -101,15 +103,42 @@ class TreeApp(App):
 
     def on_mount(self) -> None:
         if self._auto_pipeline:
-            from tapes.ui.pipeline import run_auto_pipeline
+            from tapes.ui.pipeline import run_guessit_pass
 
-            threshold = self.config.metadata.auto_accept_threshold
-            token = self.config.metadata.tmdb_token
-            run_auto_pipeline(
-                self.model, token=token, confidence_threshold=threshold
-            )
+            run_guessit_pass(self.model)
             self.query_one(TreeView).refresh_tree()
-        self._update_footer()
+            self._update_footer()
+
+            token = self.config.metadata.tmdb_token
+            if token:
+                self._tmdb_querying = True
+                self._update_footer()
+                self.run_worker(
+                    self._run_tmdb_worker(token),
+                    thread=True,
+                )
+        else:
+            self._update_footer()
+
+    def _run_tmdb_worker(self, token: str) -> object:
+        """Return a callable that runs TMDB queries in a background thread."""
+        from tapes.ui.pipeline import run_tmdb_pass
+
+        threshold = self.config.metadata.auto_accept_threshold
+
+        def worker() -> None:
+            def on_progress(done: int, total: int) -> None:
+                self.call_from_thread(self._on_tmdb_progress, done, total)
+
+            run_tmdb_pass(
+                self.model,
+                token=token,
+                confidence_threshold=threshold,
+                on_progress=on_progress,
+            )
+            self.call_from_thread(self._on_tmdb_done)
+
+        return worker
 
     def _show_detail(self, node: FileNode) -> None:
         """Switch from tree view to detail view for a file node."""
@@ -385,6 +414,18 @@ class TreeApp(App):
             event.prevent_default()
             event.stop()
 
+    def action_collapse_all(self) -> None:
+        if self._in_detail:
+            return
+        self.model.collapse_all()
+        self.query_one(TreeView).refresh_tree()
+
+    def action_expand_all(self) -> None:
+        if self._in_detail:
+            return
+        self.model.expand_all()
+        self.query_one(TreeView).refresh_tree()
+
     def action_toggle_flat(self) -> None:
         if self._in_detail:
             return
@@ -398,6 +439,24 @@ class TreeApp(App):
                 self.query_one(TreeView).refresh()
             self._update_footer()
 
+    def _on_tmdb_progress(self, done: int, total: int) -> None:
+        """Called from worker thread via call_from_thread after each file."""
+        self._tmdb_progress = (done, total)
+        if self._in_detail:
+            self.query_one(DetailView).refresh()
+        else:
+            self.query_one(TreeView).refresh()
+        self._update_footer()
+
+    def _on_tmdb_done(self) -> None:
+        """Called when all TMDB queries are complete."""
+        self._tmdb_querying = False
+        if self._in_detail:
+            self.query_one(DetailView).refresh()
+        else:
+            self.query_one(TreeView).refresh()
+        self._update_footer()
+
     def _update_footer(self) -> None:
         tv = self.query_one(TreeView)
         status = self.query_one("#status", Static)
@@ -406,4 +465,7 @@ class TreeApp(App):
         if ignored:
             parts.append(f"{ignored} ignored")
         parts.append(f"{tv.total_count} total")
+        if self._tmdb_querying:
+            done, total = self._tmdb_progress
+            parts.append(f"TMDB {done}/{total}")
         status.update(" / ".join(parts))
