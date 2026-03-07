@@ -1,5 +1,5 @@
 """Textual TUI for tapes."""
 
-from tapes.ui.app import ReviewApp
+from tapes.ui.tree_app import TreeApp
 
-__all__ = ["ReviewApp"]
+__all__ = ["TreeApp"]

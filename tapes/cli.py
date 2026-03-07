@@ -51,10 +51,26 @@ def import_cmd(
         return
 
     if not no_tui:
-        from tapes.ui import ReviewApp
+        from tapes.metadata import extract_metadata
+        from tapes.scanner import scan
+        from tapes.ui.tree_app import TreeApp
+        from tapes.ui.tree_model import build_tree
 
-        tui_app = ReviewApp(groups)
-        tui_app.run()
+        resolved = path.resolve()
+        files = scan(resolved)
+        if not files:
+            console.print("No video files found.")
+            return
+
+        model = build_tree(files, resolved)
+        template = cfg.library.movie_template
+        tui = TreeApp(
+            model=model,
+            template=template,
+            root_path=resolved,
+            auto_pipeline=True,
+        )
+        tui.run()
         return
 
     _print_scan(path.resolve(), groups)
@@ -114,71 +130,6 @@ def _meta_parts(meta: FileMetadata) -> list[tuple[str, str]]:
     if meta.part is not None:
         parts.append((f"CD{meta.part}", "yellow"))
     return parts
-
-
-def _mock_groups() -> list[ImportGroup]:
-    """Return mock ImportGroups matching the HTML mockup for grid dev."""
-    # -- Dune --
-    dune_meta = FileMetadata(media_type="movie", title="Dune", year=2021)
-    dune = ImportGroup(metadata=dune_meta)
-    dune.add_file(FileEntry(path=Path("Dune.2021.2160p.BluRay.x265.mkv"), metadata=dune_meta))
-    dune.add_file(FileEntry(path=Path("Dune.2021.2160p.BluRay.x265.en.srt")))
-    dune.add_file(FileEntry(path=Path("Dune.2021.2160p.BluRay.x265.de.srt")))
-
-    # -- Arrival --
-    arrival_meta = FileMetadata(media_type="movie", title="Arrival", year=2016)
-    arrival = ImportGroup(metadata=arrival_meta)
-    arrival.add_file(FileEntry(path=Path("Arrival.2016.1080p.WEB-DL.mkv"), metadata=arrival_meta))
-    arrival.add_file(FileEntry(path=Path("Arrival.2016.1080p.WEB-DL.en.srt")))
-
-    # -- Breaking Bad S01 (3 per-episode groups) --
-    bb_episodes: list[ImportGroup] = []
-    for ep in (1, 2, 3):
-        ep_meta = FileMetadata(
-            media_type="episode", title="Breaking Bad", season=1, episode=ep
-        )
-        ep_group = ImportGroup(metadata=ep_meta)
-        ep_group.add_file(
-            FileEntry(
-                path=Path(f"Breaking.Bad.S01E{ep:02d}.720p.mkv"), metadata=ep_meta
-            )
-        )
-        ep_group.add_file(FileEntry(path=Path(f"Breaking.Bad.S01E{ep:02d}.720p.en.srt")))
-        bb_episodes.append(ep_group)
-
-    # -- random_clip --
-    clip_meta = FileMetadata(media_type="movie", title="Interstellar")
-    clip = ImportGroup(metadata=clip_meta)
-    clip.add_file(FileEntry(path=Path("random_clip.avi"), metadata=clip_meta))
-
-    # -- bonus_featurette --
-    bonus_meta = FileMetadata()
-    bonus = ImportGroup(metadata=bonus_meta)
-    bonus.add_file(FileEntry(path=Path("bonus_featurette.mkv")))
-
-    return [dune, arrival, *bb_episodes, clip, bonus]
-
-
-@app.command("grid")
-def grid_cmd(
-    path: Path = typer.Argument(None, help="Directory to scan (uses mock data if omitted)"),
-    config_file: Optional[Path] = typer.Option(
-        None, "--config", "-c", help="Path to config file"
-    ),
-) -> None:
-    """Launch the grid TUI (dev command)."""
-    cfg = load_config(config_file) if config_file else TapesConfig()
-    if path is not None:
-        groups = run_pipeline(path, config=cfg)
-    else:
-        groups = _mock_groups()
-    if not groups:
-        console.print("No video files found.")
-        return
-    from tapes.ui.grid import GridApp
-
-    tui = GridApp(groups, config=cfg)
-    tui.run()
 
 
 @app.command("tree")
