@@ -6,7 +6,7 @@ from pathlib import Path
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.events import Key
-from textual.widgets import Footer, Header, Static
+from textual.widgets import Footer, Static
 
 from tapes.config import TapesConfig
 from tapes.fields import MEDIA_TYPE, MEDIA_TYPE_EPISODE
@@ -48,11 +48,16 @@ class TreeApp(App):
 
     CSS = """
     TreeView {
-        height: 1fr;
+        height: 3fr;
+    }
+    TreeView.compressed {
+        height: 7;
     }
     DetailView {
+        height: 5;
+    }
+    DetailView.expanded {
         height: 1fr;
-        display: none;
     }
     """
 
@@ -82,14 +87,12 @@ class TreeApp(App):
         self._search_query = ""
 
     def compose(self) -> ComposeResult:
-        yield Header()
         yield TreeView(
             self.model,
             self.movie_template,
             self.tv_template,
             root_path=self.root_path,
         )
-        # Hidden until a file is selected; set_node() replaces the placeholder
         yield DetailView(
             FileNode(path=Path("placeholder")),
             self.movie_template,
@@ -143,8 +146,8 @@ class TreeApp(App):
         detail = self.query_one(DetailView)
         detail.set_node(node)
         detail.on_before_mutate = self._snapshot_before_mutate
-        self.query_one(TreeView).display = False
-        detail.display = True
+        self.query_one(TreeView).add_class("compressed")
+        detail.add_class("expanded")
         detail.focus()
 
     def _show_detail_multi(self, nodes: list[FileNode]) -> None:
@@ -153,8 +156,8 @@ class TreeApp(App):
         detail = self.query_one(DetailView)
         detail.set_nodes(nodes)
         detail.on_before_mutate = self._snapshot_before_mutate
-        self.query_one(TreeView).display = False
-        detail.display = True
+        self.query_one(TreeView).add_class("compressed")
+        detail.add_class("expanded")
         detail.focus()
 
     def _snapshot_before_mutate(self, nodes: list[FileNode]) -> None:
@@ -165,9 +168,9 @@ class TreeApp(App):
         """Switch from detail view back to tree view."""
         self._in_detail = False
         detail = self.query_one(DetailView)
-        detail.display = False
+        detail.remove_class("expanded")
         tv = self.query_one(TreeView)
-        tv.display = True
+        tv.remove_class("compressed")
         tv.focus()
         tv.refresh()
         self._update_footer()
