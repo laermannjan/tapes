@@ -91,6 +91,9 @@ class TreeApp(App):
     ]
 
     CSS = """
+    Screen {
+        layers: default overlay;
+    }
     TreeView {
         height: 1fr;
         border: round #7AB8FF;
