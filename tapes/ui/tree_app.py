@@ -231,9 +231,9 @@ class TreeApp(App):
 
         if self._in_detail:
             dv = self.query_one(DetailView)
-            node = dv.node
-            self._undo.snapshot([node])
-            refresh_tmdb_source(node)
+            self._undo.snapshot(dv._file_nodes)
+            for fn in dv._file_nodes:
+                refresh_tmdb_source(fn)
             dv.refresh()
         else:
             tv = self.query_one(TreeView)
@@ -267,7 +267,7 @@ class TreeApp(App):
             tv.clear_range_select()
         else:
             node = tv.cursor_node()
-            if isinstance(node, FileNode):
+            if isinstance(node, FileNode) and node.sources:
                 self._undo.snapshot([node])
                 accept_best_source(node)
         tv.refresh()

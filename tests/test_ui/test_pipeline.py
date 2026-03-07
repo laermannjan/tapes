@@ -246,7 +246,6 @@ class TestRefreshQueryIntegration:
 
     @pytest.mark.asyncio()
     async def test_r_in_detail_refreshes_current_node(self) -> None:
-        from tapes.ui.detail_view import DetailView
         from tapes.ui.tree_app import TreeApp
 
         node = FileNode(
@@ -267,3 +266,60 @@ class TestRefreshQueryIntegration:
             assert len(tmdb_sources) == 1
             # Arrival is confident (0.95), so result should have year
             assert node.result.get("year") == 2016
+
+    @pytest.mark.asyncio()
+    async def test_r_in_tree_range_refreshes_all(self) -> None:
+        from tapes.ui.tree_app import TreeApp
+
+        node1 = FileNode(
+            path=Path("/media/Dune.mkv"),
+            result={"title": "Dune"},
+            sources=[Source(name="from filename", fields={"title": "Dune"})],
+        )
+        node2 = FileNode(
+            path=Path("/media/Arrival.mkv"),
+            result={"title": "Arrival"},
+            sources=[Source(name="from filename", fields={"title": "Arrival"})],
+        )
+        root = FolderNode(name="root", children=[node1, node2])
+        model = TreeModel(root=root)
+        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+
+        async with app.run_test() as pilot:
+            await pilot.press("v")  # start range
+            await pilot.press("j")  # extend to node2
+            await pilot.press("r")
+            # Both should have TMDB sources now
+            for n in [node1, node2]:
+                tmdb = [s for s in n.sources if s.name.startswith("TMDB")]
+                assert len(tmdb) == 1
+
+    @pytest.mark.asyncio()
+    async def test_r_in_multi_detail_refreshes_all_nodes(self) -> None:
+        from tapes.ui.tree_app import TreeApp
+
+        node1 = FileNode(
+            path=Path("/media/Dune.mkv"),
+            result={"title": "Dune"},
+            sources=[Source(name="from filename", fields={"title": "Dune"})],
+        )
+        node2 = FileNode(
+            path=Path("/media/Arrival.mkv"),
+            result={"title": "Arrival"},
+            sources=[Source(name="from filename", fields={"title": "Arrival"})],
+        )
+        root = FolderNode(name="root", children=[node1, node2])
+        model = TreeModel(root=root)
+        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+
+        async with app.run_test() as pilot:
+            # Select range and enter multi-file detail
+            await pilot.press("v")
+            await pilot.press("j")
+            await pilot.press("enter")
+            assert app._in_detail is True
+            await pilot.press("r")
+            # Both nodes should have TMDB sources
+            for n in [node1, node2]:
+                tmdb = [s for s in n.sources if s.name.startswith("TMDB")]
+                assert len(tmdb) == 1
