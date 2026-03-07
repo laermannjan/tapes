@@ -5,8 +5,6 @@ matching (Levenshtein, phonetic, transliteration, etc.).
 """
 from __future__ import annotations
 
-DEFAULT_AUTO_ACCEPT_THRESHOLD = 0.85
-
 
 def title_similarity(a: str, b: str) -> float:
     """Compute Jaccard similarity between two title strings.
@@ -70,23 +68,17 @@ def compute_episode_confidence(query: dict, episode: dict) -> float:
     """Score an episode match against a query.
 
     Considers:
-    - Episode number match (exact = 0.6 boost)
-    - Episode title similarity (weight 0.2, if available in query)
-    - Season number match (exact = 0.2 boost)
+    - Season number match (exact = 0.25 boost)
+    - Episode number match (exact = 0.65 boost)
+    - Episode title similarity (weight 0.1, if available in query)
+
+    Season + episode match = 0.9, well above the 0.85 threshold.
+    This is important because guessit never provides episode_title,
+    so the title bonus rarely applies during auto-pipeline.
 
     Returns 0.0-1.0.
     """
     score = 0.0
-
-    # Episode number match (most important)
-    q_ep = query.get("episode")
-    e_ep = episode.get("episode")
-    if q_ep is not None and e_ep is not None:
-        try:
-            if int(q_ep) == int(e_ep):
-                score += 0.6
-        except (ValueError, TypeError):
-            pass
 
     # Season number match
     q_season = query.get("season")
@@ -94,7 +86,17 @@ def compute_episode_confidence(query: dict, episode: dict) -> float:
     if q_season is not None and e_season is not None:
         try:
             if int(q_season) == int(e_season):
-                score += 0.2
+                score += 0.25
+        except (ValueError, TypeError):
+            pass
+
+    # Episode number match (most important)
+    q_ep = query.get("episode")
+    e_ep = episode.get("episode")
+    if q_ep is not None and e_ep is not None:
+        try:
+            if int(q_ep) == int(e_ep):
+                score += 0.65
         except (ValueError, TypeError):
             pass
 
@@ -102,6 +104,6 @@ def compute_episode_confidence(query: dict, episode: dict) -> float:
     q_title = query.get("episode_title", "")
     e_title = episode.get("episode_title", "")
     if q_title and e_title:
-        score += 0.2 * title_similarity(str(q_title), str(e_title))
+        score += 0.1 * title_similarity(str(q_title), str(e_title))
 
     return min(score, 1.0)

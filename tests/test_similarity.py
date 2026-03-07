@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import pytest
 
+from tapes.config import DEFAULT_AUTO_ACCEPT_THRESHOLD
 from tapes.similarity import (
-    DEFAULT_AUTO_ACCEPT_THRESHOLD,
     compute_confidence,
     compute_episode_confidence,
     title_similarity,
@@ -142,21 +142,22 @@ class TestComputeEpisodeConfidence:
             {"season": 1, "episode": 1},
             {"season": 1, "episode": 1},
         )
-        assert score == pytest.approx(0.8)
+        # 0.65 (ep) + 0.25 (season) = 0.9
+        assert score == pytest.approx(0.9)
 
     def test_episode_match_only(self) -> None:
         score = compute_episode_confidence(
             {"episode": 3},
             {"season": 1, "episode": 3},
         )
-        assert score == pytest.approx(0.6)
+        assert score == pytest.approx(0.65)
 
     def test_season_match_only(self) -> None:
         score = compute_episode_confidence(
             {"season": 2},
             {"season": 2, "episode": 5},
         )
-        assert score == pytest.approx(0.2)
+        assert score == pytest.approx(0.25)
 
     def test_no_match(self) -> None:
         score = compute_episode_confidence(
@@ -170,7 +171,7 @@ class TestComputeEpisodeConfidence:
             {"season": 1, "episode": 1, "episode_title": "Pilot"},
             {"season": 1, "episode": 1, "episode_title": "Pilot"},
         )
-        # 0.6 (ep) + 0.2 (season) + 0.2 * 1.0 (title) = 1.0
+        # 0.65 (ep) + 0.25 (season) + 0.1 * 1.0 (title) = 1.0
         assert score == pytest.approx(1.0)
 
     def test_episode_title_partial(self) -> None:
@@ -178,8 +179,8 @@ class TestComputeEpisodeConfidence:
             {"season": 1, "episode": 1, "episode_title": "The Pilot Episode"},
             {"season": 1, "episode": 1, "episode_title": "Pilot"},
         )
-        # 0.6 + 0.2 + 0.2 * (1/3) = 0.8 + 0.0667 = 0.8667
-        expected = 0.6 + 0.2 + 0.2 * (1.0 / 3.0)
+        # 0.65 + 0.25 + 0.1 * (1/3) = 0.9 + 0.0333 = 0.9333
+        expected = 0.65 + 0.25 + 0.1 * (1.0 / 3.0)
         assert score == pytest.approx(expected)
 
     def test_empty_query(self) -> None:
@@ -194,7 +195,7 @@ class TestComputeEpisodeConfidence:
             {"season": 1, "episode": 1},
             {"season": 1, "episode": 5},
         )
-        assert score == pytest.approx(0.2)
+        assert score == pytest.approx(0.25)
 
     def test_capped_at_1(self) -> None:
         # Even with all fields matching, should not exceed 1.0
