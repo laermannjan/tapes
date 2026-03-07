@@ -12,3 +12,4 @@ dist/
 tapes.toml
 *.mkv
 .worktrees/
+*.DS_Store
