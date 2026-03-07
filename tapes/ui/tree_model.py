@@ -97,7 +97,7 @@ class TreeModel:
 
         If ALL are staged, unstage all. Otherwise stage all.
         """
-        files = _collect_files(node)
+        files = collect_files(node)
         if not files:
             return
         all_staged = all(f.staged for f in files)
@@ -109,7 +109,7 @@ class TreeModel:
 
         If ALL are ignored, un-ignore all. Otherwise ignore all.
         """
-        files = _collect_files(node)
+        files = collect_files(node)
         if not files:
             return
         all_ignored = all(f.ignored for f in files)
@@ -118,17 +118,17 @@ class TreeModel:
 
     def all_files(self) -> list[FileNode]:
         """Return all FileNodes depth-first."""
-        return _collect_files(self.root)
+        return collect_files(self.root)
 
 
-def _collect_files(node: FolderNode) -> list[FileNode]:
+def collect_files(node: FolderNode) -> list[FileNode]:
     """Collect all FileNode descendants of a folder, depth-first."""
     result: list[FileNode] = []
     for child in node.children:
         if isinstance(child, FileNode):
             result.append(child)
         elif isinstance(child, FolderNode):
-            result.extend(_collect_files(child))
+            result.extend(collect_files(child))
     return result
 
 

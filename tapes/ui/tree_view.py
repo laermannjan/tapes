@@ -223,11 +223,7 @@ class TreeView(Widget):
                 flat_mode=self.flat_mode,
                 root_path=self.root_path,
             )
-            # Convert to Text if render_row returned a plain string
-            if isinstance(row_result, str):
-                row_text = Text(row_result)
-            else:
-                row_text = row_result
+            row_text = row_result
 
             # Pad or truncate to fit inner width
             plain_len = len(row_text.plain)
@@ -275,7 +271,7 @@ class TreeView(Widget):
                 flat_mode=self.flat_mode,
                 root_path=self.root_path,
             )
-            lines.append(row.plain if isinstance(row, Text) else row)
+            lines.append(row.plain)
         return "\n".join(lines)
 
     def move_cursor(self, delta: int) -> None:

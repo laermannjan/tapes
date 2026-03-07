@@ -237,17 +237,20 @@ class TestRenderFolderRow:
     def test_collapsed_arrow(self) -> None:
         node = FolderNode(name="movies", collapsed=True)
         row = render_folder_row(node)
-        assert row == "\u25b6 movies/"
+        assert isinstance(row, Text)
+        assert row.plain == "\u25b6 movies/"
 
     def test_expanded_arrow(self) -> None:
         node = FolderNode(name="movies", collapsed=False)
         row = render_folder_row(node)
-        assert row == "\u25bc movies/"
+        assert isinstance(row, Text)
+        assert row.plain == "\u25bc movies/"
 
     def test_with_indentation(self) -> None:
         node = FolderNode(name="Season 01", collapsed=True)
         row = render_folder_row(node, depth=1)
-        assert row == "  \u25b6 Season 01/"
+        assert isinstance(row, Text)
+        assert row.plain == "  \u25b6 Season 01/"
 
 
 # --- render_row ---
@@ -267,7 +270,8 @@ class TestRenderRow:
     def test_dispatches_to_folder(self) -> None:
         node = FolderNode(name="tv", collapsed=True)
         row = render_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
-        assert row == "\u25b6 tv/"
+        assert isinstance(row, Text)
+        assert row.plain == "\u25b6 tv/"
 
 
 # --- flatten_with_depth ---

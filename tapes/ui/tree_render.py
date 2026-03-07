@@ -187,8 +187,8 @@ def render_file_row(
     return row
 
 
-def render_folder_row(node: FolderNode, depth: int = 0) -> str:
-    """Render a single folder row as a plain string.
+def render_folder_row(node: FolderNode, depth: int = 0) -> Text:
+    """Render a single folder row as a Rich :class:`Text` object.
 
     Format: ``indent + arrow + " " + name + "/"``
 
@@ -198,7 +198,7 @@ def render_folder_row(node: FolderNode, depth: int = 0) -> str:
     """
     indent = "  " * depth
     arrow = "\u25b6" if node.collapsed else "\u25bc"
-    return f"{indent}{arrow} {node.name}/"
+    return Text(f"{indent}{arrow} {node.name}/")
 
 
 def render_row(
@@ -208,11 +208,10 @@ def render_row(
     depth: int = 0,
     flat_mode: bool = False,
     root_path: Path | None = None,
-) -> Text | str:
+) -> Text:
     """Render a single row, dispatching to file or folder renderer.
 
-    Returns :class:`Text` for file rows (with marker/dest coloring)
-    and a plain ``str`` for folder rows.
+    Returns :class:`Text` for both file and folder rows.
     """
     if isinstance(node, FileNode):
         return render_file_row(

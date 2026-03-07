@@ -5,7 +5,7 @@ from typing import Any
 
 from rich.text import Text
 
-from tapes.ui.tree_model import FileNode, FolderNode, _collect_files
+from tapes.ui.tree_model import FileNode, FolderNode, collect_files
 from tapes.ui.tree_render import compute_dest, render_dest, template_field_names
 
 LABEL_WIDTH = 14
@@ -191,7 +191,7 @@ def render_folder_preview(folder: FolderNode) -> Text:
     line1 = Text()
     line1.append(f" {folder.name}/", style="bold white")
 
-    files = _collect_files(folder)
+    files = collect_files(folder)
     total = len(files)
     unstaged = sum(1 for f in files if not f.staged and not f.ignored)
     ignored = sum(1 for f in files if f.ignored)

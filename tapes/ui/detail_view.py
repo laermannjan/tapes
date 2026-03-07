@@ -375,10 +375,11 @@ class DetailView(Widget):
             self.on_before_mutate(list(self._file_nodes))
 
     def apply_source_field(self) -> None:
-        """Handle enter on the current cursor cell.
+        """Apply the current source field value to the result.
 
-        On the result column (always visible on left), start inline edit.
-        On a source field, apply from the current source_index.
+        If no sources exist, starts inline edit instead. When the cursor
+        is on the header row (-1), applies all non-empty fields from the
+        current source. Otherwise applies the single field at cursor_row.
         """
         sources = self.node.sources
         if not sources:
