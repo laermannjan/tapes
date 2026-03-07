@@ -30,7 +30,7 @@ class TestRunAutoPipeline:
         assert node.sources[0].name == "from filename"
 
     def test_confident_match_auto_stages(self) -> None:
-        # "Dune" has 0.95 confidence in mock TMDB
+        # "Dune" with exact title+year match -> confidence 1.0
         model = _make_model("Dune.2021.1080p.BluRay.mkv")
         run_auto_pipeline(model)
         node = model.all_files()[0]
@@ -38,33 +38,30 @@ class TestRunAutoPipeline:
         # TMDB source should be present
         tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
         assert len(tmdb_sources) == 1
-        assert tmdb_sources[0].confidence == 0.95
+        assert tmdb_sources[0].confidence == 1.0
         # Result should have TMDB year
         assert node.result["year"] == 2021
 
-    def test_unconfident_match_not_auto_staged(self) -> None:
-        # "Breaking Bad" has 0.75 confidence
+    def test_confident_match_title_only_auto_stages(self) -> None:
+        # "Breaking Bad" -- guessit has no year, TMDB has year.
+        # With real scoring: title match 1.0, no year in query -> confidence 1.0
         model = _make_model("Breaking.Bad.S01E01.720p.mkv")
         run_auto_pipeline(model)
         node = model.all_files()[0]
-        assert node.staged is False
-        # TMDB source should still be present
+        assert node.staged is True
         tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
         assert len(tmdb_sources) == 1
-        assert tmdb_sources[0].confidence == 0.75
+        assert tmdb_sources[0].confidence == 1.0
 
-    def test_unconfident_match_result_not_overwritten_by_tmdb(self) -> None:
-        # Breaking Bad has confidence 0.75, so TMDB fields should NOT overwrite result
+    def test_confident_match_result_overwritten_by_tmdb(self) -> None:
+        # Breaking Bad has confidence 1.0 (exact title, no year in query),
+        # so TMDB fields SHOULD overwrite result
         model = _make_model("Breaking.Bad.S01E01.720p.mkv")
         run_auto_pipeline(model)
         node = model.all_files()[0]
-        # The result should come from guessit (filename), not TMDB
-        # guessit extracts title "Breaking Bad" and TMDB also has "Breaking Bad"
-        # but the year from TMDB (2008) should NOT be in result
-        # since guessit doesn't extract year from this filename, it won't be in result
-        # UNLESS guessit happens to find it. Let's check TMDB didn't override.
-        # The key test: node should NOT be staged
-        assert node.staged is False
+        # TMDB year should be applied since confidence >= threshold
+        assert node.result["year"] == 2008
+        assert node.staged is True
 
     def test_no_tmdb_match_only_filename_source(self) -> None:
         # "Unknown Movie" has no TMDB match
@@ -108,7 +105,7 @@ class TestRunAutoPipeline:
         assert tmdb_sources[0].fields.get("episode_title") == "Pilot"
 
     def test_custom_confidence_threshold(self) -> None:
-        # With threshold 0.5, Breaking Bad (0.75) should auto-accept
+        # With threshold 0.5, anything with title match should auto-accept
         model = _make_model("Breaking.Bad.S01E01.mkv")
         run_auto_pipeline(model, confidence_threshold=0.5)
         node = model.all_files()[0]
@@ -132,7 +129,8 @@ class TestRefreshTmdbSource:
         refresh_tmdb_source(node)
         tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
         assert len(tmdb_sources) == 1
-        assert tmdb_sources[0].confidence == 0.95
+        # Title match "Dune" vs "Dune", no year in query -> 1.0
+        assert tmdb_sources[0].confidence == 1.0
 
     def test_replaces_existing_tmdb_source(self) -> None:
         node = FileNode(
@@ -147,7 +145,7 @@ class TestRefreshTmdbSource:
         tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
         assert len(tmdb_sources) == 1
         assert tmdb_sources[0].fields["title"] == "Dune"
-        assert tmdb_sources[0].confidence == 0.95
+        assert tmdb_sources[0].confidence == 1.0
 
     def test_keeps_filename_source(self) -> None:
         node = FileNode(
@@ -182,18 +180,18 @@ class TestRefreshTmdbSource:
             sources=[Source(name="from filename", fields={"title": "Dune"})],
         )
         refresh_tmdb_source(node)
-        # Dune has 0.95 confidence, should auto-accept year
+        # Dune has confidence 1.0 (exact title, no year in query), should auto-accept year
         assert node.result.get("year") == 2021
 
-    def test_unconfident_does_not_auto_accept(self) -> None:
+    def test_title_only_match_auto_accepts(self) -> None:
         node = FileNode(
             path=Path("/media/test.mkv"),
             result={"title": "Breaking Bad"},
             sources=[Source(name="from filename", fields={"title": "Breaking Bad"})],
         )
         refresh_tmdb_source(node)
-        # Breaking Bad has 0.75 confidence, should NOT auto-accept
-        assert node.result.get("year") is None
+        # Breaking Bad: exact title, no year in query -> confidence 1.0, auto-accepts
+        assert node.result.get("year") == 2008
 
 
 try:
@@ -242,7 +240,7 @@ class TestRefreshQueryIntegration:
             await pilot.press("r")
             tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
             assert len(tmdb_sources) == 1
-            assert tmdb_sources[0].confidence == 0.95
+            assert tmdb_sources[0].confidence == 1.0
 
     @pytest.mark.asyncio()
     async def test_r_in_detail_refreshes_current_node(self) -> None:

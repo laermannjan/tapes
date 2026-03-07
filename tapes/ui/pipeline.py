@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from tapes.similarity import compute_confidence
 from tapes.ui.tree_model import FileNode, Source, TreeModel
 
 
@@ -48,7 +49,8 @@ def refresh_tmdb_source(
     node.sources = [s for s in node.sources if not s.name.startswith("TMDB")]
 
     if tmdb_result is not None:
-        fields, confidence = tmdb_result
+        fields, _mock_confidence = tmdb_result
+        confidence = compute_confidence(node.result, fields)
         tmdb_source = Source(name="TMDB #1", fields=fields, confidence=confidence)
         node.sources.append(tmdb_source)
 
@@ -95,7 +97,8 @@ def _populate_node(
     episode = node.result.get("episode")
     tmdb_result = mock_tmdb_lookup_fn(str(title), episode=episode)  # type: ignore[operator]
     if tmdb_result is not None:
-        tmdb_fields, confidence = tmdb_result
+        tmdb_fields, _mock_confidence = tmdb_result
+        confidence = compute_confidence(node.result, tmdb_fields)
         tmdb_source = Source(
             name="TMDB #1",
             fields=tmdb_fields,
