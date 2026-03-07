@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+import threading
+from typing import Any, Callable
 
 from tapes.similarity import compute_confidence, compute_episode_confidence
 from tapes.ui.tree_model import FileNode, Source, TreeModel
@@ -10,12 +11,117 @@ from tapes.ui.tree_model import FileNode, Source, TreeModel
 logger = logging.getLogger(__name__)
 
 
+class _TmdbCache:
+    """Thread-safe cache for TMDB API responses.
+
+    If multiple threads request the same key, only one fetches;
+    the others block until the result is ready.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._data: dict[tuple, Any] = {}
+        self._pending: dict[tuple, threading.Event] = {}
+
+    def get_or_fetch(self, key: tuple, fetch_fn: Callable[[], Any]) -> Any:
+        with self._lock:
+            if key in self._data:
+                return self._data[key]
+            if key in self._pending:
+                # Another thread is already fetching this key
+                event = self._pending[key]
+                is_fetcher = False
+            else:
+                # We will fetch; create an event others can wait on
+                event = threading.Event()
+                self._pending[key] = event
+                is_fetcher = True
+
+        if not is_fetcher:
+            event.wait()
+            with self._lock:
+                if key in self._data:
+                    return self._data[key]
+            # Fetch failed for this key
+            raise KeyError(f"Fetch failed for {key}")
+
+        # We are the fetcher
+        try:
+            result = fetch_fn()
+            with self._lock:
+                self._data[key] = result
+            return result
+        finally:
+            event.set()
+
+
+def run_guessit_pass(model: TreeModel) -> None:
+    """Extract metadata from filenames via guessit for all files.
+
+    This is fast (local-only) and should be called synchronously before
+    rendering the UI.
+    """
+    from tapes.metadata import extract_metadata
+
+    for node in model.all_files():
+        _populate_node_guessit(node, extract_metadata)
+
+
+def run_tmdb_pass(
+    model: TreeModel,
+    token: str = "",
+    confidence_threshold: float | None = None,
+    on_progress: Callable[[int, int], None] | None = None,
+    max_workers: int = 4,
+) -> None:
+    """Query TMDB for all files using a thread pool.
+
+    Args:
+        on_progress: Optional callback(done: int, total: int) called after
+            each file is processed.
+        max_workers: Number of concurrent TMDB queries.
+    """
+    import threading
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    from tapes.config import DEFAULT_AUTO_ACCEPT_THRESHOLD
+
+    if confidence_threshold is None:
+        confidence_threshold = DEFAULT_AUTO_ACCEPT_THRESHOLD
+
+    if not token:
+        return
+
+    files = list(model.all_files())
+    total = len(files)
+    if not total:
+        return
+
+    done_count = 0
+    lock = threading.Lock()
+
+    cache = _TmdbCache()
+
+    def query_one(node: FileNode) -> None:
+        nonlocal done_count
+        _query_tmdb_for_node(node, token, confidence_threshold, cache=cache)
+        with lock:
+            done_count += 1
+            if on_progress is not None:
+                on_progress(done_count, total)
+
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = [pool.submit(query_one, node) for node in files]
+        for f in as_completed(futures):
+            f.result()  # propagate exceptions
+
+
 def run_auto_pipeline(
     model: TreeModel,
     token: str = "",
     confidence_threshold: float | None = None,
 ) -> None:
-    """Populate sources and auto-accept confident matches.
+    """Populate sources and auto-accept confident matches (synchronous).
 
     For each file node:
     1. Extract metadata from filename via guessit -> result + "from filename" source
@@ -23,14 +129,12 @@ def run_auto_pipeline(
     3. If TMDB confidence >= threshold, apply TMDB fields to result and auto-stage
     """
     from tapes.config import DEFAULT_AUTO_ACCEPT_THRESHOLD
-    from tapes.metadata import extract_metadata
 
     if confidence_threshold is None:
         confidence_threshold = DEFAULT_AUTO_ACCEPT_THRESHOLD
 
-    for node in model.all_files():
-        _populate_node_guessit(node, extract_metadata)
-        _query_tmdb_for_node(node, token, confidence_threshold)
+    run_guessit_pass(model)
+    run_tmdb_pass(model, token=token, confidence_threshold=confidence_threshold)
 
 
 def refresh_tmdb_source(
@@ -55,9 +159,9 @@ def refresh_tmdb_source(
     _query_tmdb_for_node(node, token, confidence_threshold)
 
 
-def _populate_node_guessit(node: FileNode, extract_metadata_fn: object) -> None:
+def _populate_node_guessit(node: FileNode, extract_metadata_fn: Callable[[str], Any]) -> None:
     """Extract metadata from filename via guessit and set as result + source."""
-    meta = extract_metadata_fn(node.path.name)  # type: ignore[operator]
+    meta = extract_metadata_fn(node.path.name)
     filename_fields: dict = {}
     if meta.title:
         filename_fields["title"] = meta.title
@@ -80,7 +184,8 @@ def _populate_node_guessit(node: FileNode, extract_metadata_fn: object) -> None:
 
 
 def _query_tmdb_for_node(
-    node: FileNode, token: str, threshold: float
+    node: FileNode, token: str, threshold: float,
+    cache: _TmdbCache | None = None,
 ) -> None:
     """Two-stage TMDB query for a single node.
 
@@ -108,7 +213,13 @@ def _query_tmdb_for_node(
     year = node.result.get("year")
 
     # Stage 1: search for movie/show
-    search_results = tmdb.search_multi(title, token, year=year)
+    if cache is not None:
+        search_key = ("search", title.lower(), year)
+        search_results = cache.get_or_fetch(
+            search_key, lambda: tmdb.search_multi(title, token, year=year)
+        )
+    else:
+        search_results = tmdb.search_multi(title, token, year=year)
 
     if not search_results:
         return
@@ -136,7 +247,7 @@ def _query_tmdb_for_node(
 
         # Stage 2: if TV show, fetch episodes
         if best.fields.get("media_type") == "episode":
-            _query_episodes(node, token, threshold, best.fields)
+            _query_episodes(node, token, threshold, best.fields, cache=cache)
             return
 
     # Add show-level TMDB sources (not episode sources yet)
@@ -144,7 +255,8 @@ def _query_tmdb_for_node(
 
 
 def _query_episodes(
-    node: FileNode, token: str, threshold: float, show_fields: dict
+    node: FileNode, token: str, threshold: float, show_fields: dict,
+    cache: _TmdbCache | None = None,
 ) -> None:
     """Stage 2: fetch episode data for a TV show match."""
     from tapes import tmdb
@@ -157,7 +269,12 @@ def _query_episodes(
         return
 
     # Get show info to know available seasons
-    show_info = tmdb.get_show(show_id, token)
+    if cache is not None:
+        show_info = cache.get_or_fetch(
+            ("show", show_id), lambda: tmdb.get_show(show_id, token)
+        )
+    else:
+        show_info = tmdb.get_show(show_id, token)
     if not show_info:
         return
 
@@ -174,13 +291,22 @@ def _query_episodes(
             seasons_to_try.append(s)
 
     all_episode_sources: list[Source] = []
-    accepted = False
+    best_match_found = False
 
     for season_num in seasons_to_try:
-        episodes = tmdb.get_season_episodes(
-            show_id, season_num, token,
-            show_title=show_title, show_year=show_year,
-        )
+        if cache is not None:
+            episodes = cache.get_or_fetch(
+                ("episodes", show_id, season_num),
+                lambda sn=season_num: tmdb.get_season_episodes(
+                    show_id, sn, token,
+                    show_title=show_title, show_year=show_year,
+                ),
+            )
+        else:
+            episodes = tmdb.get_season_episodes(
+                show_id, season_num, token,
+                show_title=show_title, show_year=show_year,
+            )
 
         for ep in episodes:
             confidence = compute_episode_confidence(node.result, ep)
@@ -191,20 +317,24 @@ def _query_episodes(
             )
             all_episode_sources.append(source)
 
-            if not accepted and confidence >= threshold:
-                # Auto-accept this episode
-                for field, val in ep.items():
-                    if val is not None:
-                        node.result[field] = val
-                accepted = True
-
-        # If we found a match in the preferred season, stop
-        if accepted and season_num == query_season:
+        # If we found a match in this season, stop searching more
+        if any(s.confidence >= threshold for s in all_episode_sources):
+            best_match_found = True
             break
 
     # Keep top 3 episode sources by confidence
     all_episode_sources.sort(key=lambda s: s.confidence, reverse=True)
     top_sources = all_episode_sources[:3]
+
+    # Always apply the best episode's fields to the result.
+    # We're only here because the show was confidently matched,
+    # so the best episode data should be used regardless of its
+    # confidence score.
+    if top_sources:
+        best_ep = top_sources[0]
+        for field, val in best_ep.fields.items():
+            if val is not None:
+                node.result[field] = val
 
     # Re-number them
     for i, src in enumerate(top_sources):

@@ -329,6 +329,7 @@ class TestAutoPipelineIntegration:
                 config=config_obj,
             )
             async with app.run_test() as pilot:
+                await app.workers.wait_for_complete()
                 node = model.all_files()[0]
                 assert len(node.sources) >= 1
                 assert node.staged is True
@@ -443,3 +444,32 @@ def _make_config(token: str = ""):
     """Create a TapesConfig with the given token."""
     from tapes.config import TapesConfig
     return TapesConfig(metadata={"tmdb_token": token})
+
+
+class TestTmdbCache:
+    def test_exception_does_not_deadlock(self) -> None:
+        """If fetch_fn raises, waiting threads should not hang."""
+        import threading
+        from tapes.ui.pipeline import _TmdbCache
+
+        cache = _TmdbCache()
+
+        def bad_fetch():
+            raise RuntimeError("TMDB down")
+
+        # First call should raise
+        with pytest.raises(RuntimeError):
+            cache.get_or_fetch(("key",), bad_fetch)
+
+        # Second call with same key should also raise (not deadlock)
+        results: list[str] = []
+        def try_fetch():
+            try:
+                cache.get_or_fetch(("key",), bad_fetch)
+            except (RuntimeError, KeyError):
+                results.append("raised")
+
+        t = threading.Thread(target=try_fetch)
+        t.start()
+        t.join(timeout=2.0)
+        assert not t.is_alive(), "Thread deadlocked waiting for failed fetch"
