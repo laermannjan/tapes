@@ -1469,24 +1469,22 @@ class TestVisualIntegration:
 
     @pytest.mark.asyncio()
     async def test_question_mark_toggles_help(self) -> None:
-        """Pressing ? shows help overlay, pressing ? again hides it."""
-        from tapes.ui.help_overlay import HelpOverlay
+        """Pressing ? pushes HelpScreen, pressing ? again dismisses it."""
+        from tapes.ui.help_overlay import HelpScreen
         from tapes.ui.tree_app import TreeApp
 
         model = _expanded_model()
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
-            overlay = app.query_one(HelpOverlay)
-            assert "visible" not in overlay.classes
-            assert app._help_visible is False
+            # No modal initially
+            assert len(app.screen_stack) == 1
 
             # Show help
             await pilot.press("question_mark")
-            assert app._help_visible is True
-            assert "visible" in overlay.classes
+            assert len(app.screen_stack) == 2
+            assert isinstance(app.screen, HelpScreen)
 
-            # Hide help
+            # Dismiss help (? is bound to dismiss on HelpScreen)
             await pilot.press("question_mark")
-            assert app._help_visible is False
-            assert "visible" not in overlay.classes
+            assert len(app.screen_stack) == 1

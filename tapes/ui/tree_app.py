@@ -16,7 +16,7 @@ from tapes.config import TapesConfig
 from tapes.fields import MEDIA_TYPE, MEDIA_TYPE_EPISODE
 from tapes.ui.commit_modal import CommitModal
 from tapes.ui.detail_view import DetailView
-from tapes.ui.help_overlay import HelpOverlay
+from tapes.ui.help_overlay import HelpScreen
 from tapes.ui.tree_model import (
     FileNode,
     FolderNode,
@@ -114,16 +114,6 @@ class TreeApp(App):
         dock: bottom;
         height: 1;
     }
-    HelpOverlay {
-        display: none;
-        layer: overlay;
-        dock: top;
-        width: 100%;
-        height: 100%;
-    }
-    HelpOverlay.visible {
-        display: block;
-    }
     CommitModal {
         display: none;
         layer: overlay;
@@ -163,12 +153,10 @@ class TreeApp(App):
         self._tmdb_progress = (0, 0)
         self._searching = False
         self._search_query = ""
-        self._help_visible = False
         self._commit_visible = False
 
     def compose(self) -> ComposeResult:
         yield CommitModal(id="commit-modal")
-        yield HelpOverlay(id="help")
         yield TreeView(
             self.model,
             self.movie_template,
@@ -286,20 +274,8 @@ class TreeApp(App):
         self.query_one(DetailView).set_preview_node(node)
 
     def action_toggle_help(self) -> None:
-        """Toggle the help overlay."""
-        self._help_visible = not self._help_visible
-        overlay = self.query_one(HelpOverlay)
-        if self._help_visible:
-            overlay.add_class("visible")
-            self.add_class("modal-open")
-            overlay.focus()
-        else:
-            overlay.remove_class("visible")
-            self.remove_class("modal-open")
-            if self._in_detail:
-                self.query_one(DetailView).focus()
-            else:
-                self.query_one(TreeView).focus()
+        """Show the help screen."""
+        self.push_screen(HelpScreen())
 
     def action_cursor_down(self) -> None:
         if self._in_detail:
@@ -384,9 +360,6 @@ class TreeApp(App):
         self.query_one(TreeView).start_range_select()
 
     def action_cancel(self) -> None:
-        if self._help_visible:
-            self.action_toggle_help()
-            return
         if self._searching:
             self._finish_search(keep_filter=False)
             return
@@ -536,14 +509,7 @@ class TreeApp(App):
         self._update_footer()
 
     def on_key(self, event: Key) -> None:
-        """Intercept key events during search, help, and commit modal modes."""
-        if self._help_visible:
-            # Only allow ? and esc through (handled by bindings)
-            if event.key not in ("question_mark", "escape"):
-                event.prevent_default()
-                event.stop()
-            return
-
+        """Intercept key events during search and commit modal modes."""
         if self._commit_visible:
             event.prevent_default()
             event.stop()

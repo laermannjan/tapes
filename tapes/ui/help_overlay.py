@@ -1,17 +1,13 @@
-"""Help overlay showing keybinding reference."""
+"""Help screen showing keybinding reference."""
 from __future__ import annotations
-
-from typing import TYPE_CHECKING
 
 from rich.text import Text
 from textual.app import ComposeResult
-from textual.containers import Center, Middle
+from textual.binding import Binding
+from textual.screen import ModalScreen
 from textual.widgets import Static
 
 from tapes.ui.tree_render import MUTED
-
-if TYPE_CHECKING:
-    pass
 
 
 def _build_help_text() -> Text:
@@ -86,19 +82,14 @@ def _build_help_text() -> Text:
     return result
 
 
-class HelpOverlay(Middle):
-    """Centered modal overlay showing keybinding reference."""
+class HelpScreen(ModalScreen):
+    """Modal screen showing keybinding reference."""
 
     DEFAULT_CSS = """
-    HelpOverlay {
+    HelpScreen {
         align: center middle;
     }
-    HelpOverlay > Center {
-        align: center middle;
-        width: 100%;
-        height: auto;
-    }
-    HelpOverlay #help-panel {
+    HelpScreen #help-panel {
         width: 64;
         height: auto;
         max-height: 90%;
@@ -108,8 +99,10 @@ class HelpOverlay(Middle):
     }
     """
 
-    can_focus = True
+    BINDINGS = [
+        Binding("question_mark", "dismiss", "Close", show=False),
+        Binding("escape", "dismiss", "Close", show=False),
+    ]
 
     def compose(self) -> ComposeResult:
-        with Center():
-            yield Static(_build_help_text(), id="help-panel")
+        yield Static(_build_help_text(), id="help-panel")

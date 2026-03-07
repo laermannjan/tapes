@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from tapes.ui.help_overlay import HelpOverlay, _build_help_text
+from tapes.ui.help_overlay import HelpScreen, _build_help_text
 from tapes.ui.tree_app import TreeApp
 from tapes.ui.tree_model import FileNode, FolderNode, TreeModel
 
@@ -90,22 +90,21 @@ class TestHelpTextContent:
 # ---------------------------------------------------------------------------
 
 
-class TestHelpOverlayToggle:
-    """Test that the help overlay state is managed correctly."""
+class TestHelpScreen:
+    """Test that HelpScreen is a proper ModalScreen."""
 
-    def test_help_initially_hidden(self) -> None:
-        app = _make_app()
-        assert app._help_visible is False
+    def test_is_modal_screen(self) -> None:
+        from textual.screen import ModalScreen
 
-    def test_help_binding_registered(self) -> None:
-        """Verify the question_mark binding is present in BINDINGS."""
-        keys = [b.key for b in TreeApp.BINDINGS]
+        assert issubclass(HelpScreen, ModalScreen)
+
+    def test_has_dismiss_bindings(self) -> None:
+        """HelpScreen should handle escape and ? to dismiss."""
+        keys = [b.key for b in HelpScreen.BINDINGS]
+        assert "escape" in keys
         assert "question_mark" in keys
 
-    def test_help_overlay_in_compose(self) -> None:
-        """Verify HelpOverlay is yielded by compose."""
-        app = _make_app()
-        widgets = list(app.compose())
-        overlay_widgets = [w for w in widgets if isinstance(w, HelpOverlay)]
-        assert len(overlay_widgets) == 1
-        assert overlay_widgets[0].id == "help"
+    def test_help_binding_registered_on_app(self) -> None:
+        """Verify the question_mark binding is present in TreeApp.BINDINGS."""
+        keys = [b.key for b in TreeApp.BINDINGS]
+        assert "question_mark" in keys
