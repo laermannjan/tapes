@@ -8,6 +8,7 @@ from textual import events
 from textual.reactive import reactive
 from textual.widget import Widget
 
+from tapes.fields import INT_FIELDS
 from tapes.ui.detail_render import (
     COL_WIDTH,
     LABEL_WIDTH,
@@ -312,7 +313,7 @@ class DetailView(Widget):
         self._notify_before_mutate()
         field_name = self._fields[self.cursor_row]
         val: str | int = self._edit_value
-        if field_name in ("year", "season", "episode"):
+        if field_name in INT_FIELDS:
             try:
                 val = int(val)
             except ValueError:

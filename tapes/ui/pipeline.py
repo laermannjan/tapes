@@ -8,6 +8,15 @@ from typing import TYPE_CHECKING, Any, Callable
 if TYPE_CHECKING:
     import httpx
 
+from tapes.fields import (
+    EPISODE,
+    MEDIA_TYPE,
+    MEDIA_TYPE_EPISODE,
+    SEASON,
+    TITLE,
+    TMDB_ID,
+    YEAR,
+)
 from tapes.similarity import compute_confidence, compute_episode_confidence
 from tapes.ui.tree_model import FileNode, Source, TreeModel
 
@@ -172,15 +181,15 @@ def _populate_node_guessit(node: FileNode, extract_metadata_fn: Callable[[str], 
     meta = extract_metadata_fn(node.path.name)
     filename_fields: dict = {}
     if meta.title:
-        filename_fields["title"] = meta.title
+        filename_fields[TITLE] = meta.title
     if meta.year is not None:
-        filename_fields["year"] = meta.year
+        filename_fields[YEAR] = meta.year
     if meta.season is not None:
-        filename_fields["season"] = meta.season
+        filename_fields[SEASON] = meta.season
     if meta.episode is not None:
-        filename_fields["episode"] = meta.episode
+        filename_fields[EPISODE] = meta.episode
     if meta.media_type:
-        filename_fields["media_type"] = meta.media_type
+        filename_fields[MEDIA_TYPE] = meta.media_type
     # Add raw fields (codec, media_source, etc.)
     for k, v in meta.raw.items():
         if v is not None:
@@ -215,11 +224,11 @@ def _query_tmdb_for_node(
     if not token:
         return
 
-    title = str(node.result.get("title", ""))
+    title = str(node.result.get(TITLE, ""))
     if not title:
         return
 
-    year = node.result.get("year")
+    year = node.result.get(YEAR)
 
     # Stage 1: search for movie/show
     if cache is not None:
@@ -255,7 +264,7 @@ def _query_tmdb_for_node(
         node.staged = True
 
         # Stage 2: if TV show, fetch episodes
-        if best.fields.get("media_type") == "episode":
+        if best.fields.get(MEDIA_TYPE) == MEDIA_TYPE_EPISODE:
             _query_episodes(node, token, threshold, best.fields, cache=cache, client=client)
             return
 
@@ -271,9 +280,9 @@ def _query_episodes(
     """Stage 2: fetch episode data for a TV show match."""
     from tapes import tmdb
 
-    show_id = show_fields.get("tmdb_id")
-    show_title = show_fields.get("title", "")
-    show_year = show_fields.get("year")
+    show_id = show_fields.get(TMDB_ID)
+    show_title = show_fields.get(TITLE, "")
+    show_year = show_fields.get(YEAR)
 
     if show_id is None:
         return
@@ -289,7 +298,7 @@ def _query_episodes(
         return
 
     available_seasons = show_info.get("seasons", [])
-    query_season = node.result.get("season")
+    query_season = node.result.get(SEASON)
 
     # Try the query season first, then others
     seasons_to_try: list[int] = []

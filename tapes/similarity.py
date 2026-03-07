@@ -5,6 +5,8 @@ matching (Levenshtein, phonetic, transliteration, etc.).
 """
 from __future__ import annotations
 
+from tapes.fields import EPISODE, EPISODE_TITLE, SEASON, TITLE, YEAR
+
 
 def title_similarity(a: str, b: str) -> float:
     """Compute Jaccard similarity between two title strings.
@@ -34,16 +36,16 @@ def compute_confidence(query: dict, result: dict) -> float:
     If no year in either dict, title similarity alone (weight 1.0).
     Returns 0.0-1.0.
     """
-    query_title = query.get("title")
-    result_title = result.get("title")
+    query_title = query.get(TITLE)
+    result_title = result.get(TITLE)
 
     if not query_title or not result_title:
         return 0.0
 
     title_score = title_similarity(str(query_title), str(result_title))
 
-    query_year = query.get("year")
-    result_year = result.get("year")
+    query_year = query.get(YEAR)
+    result_year = result.get(YEAR)
 
     if query_year is None or result_year is None:
         return title_score
@@ -81,8 +83,8 @@ def compute_episode_confidence(query: dict, episode: dict) -> float:
     score = 0.0
 
     # Season number match
-    q_season = query.get("season")
-    e_season = episode.get("season")
+    q_season = query.get(SEASON)
+    e_season = episode.get(SEASON)
     if q_season is not None and e_season is not None:
         try:
             if int(q_season) == int(e_season):
@@ -91,8 +93,8 @@ def compute_episode_confidence(query: dict, episode: dict) -> float:
             pass
 
     # Episode number match (most important)
-    q_ep = query.get("episode")
-    e_ep = episode.get("episode")
+    q_ep = query.get(EPISODE)
+    e_ep = episode.get(EPISODE)
     if q_ep is not None and e_ep is not None:
         try:
             if int(q_ep) == int(e_ep):
@@ -101,8 +103,8 @@ def compute_episode_confidence(query: dict, episode: dict) -> float:
             pass
 
     # Episode title similarity (if query has episode_title)
-    q_title = query.get("episode_title", "")
-    e_title = episode.get("episode_title", "")
+    q_title = query.get(EPISODE_TITLE, "")
+    e_title = episode.get(EPISODE_TITLE, "")
     if q_title and e_title:
         score += 0.1 * title_similarity(str(q_title), str(e_title))
 

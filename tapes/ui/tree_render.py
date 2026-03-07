@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from tapes.fields import MEDIA_TYPE, MEDIA_TYPE_EPISODE
 from tapes.ui.tree_model import FileNode, FolderNode, TreeModel
 
 
@@ -26,8 +27,8 @@ def select_template(
     Returns ``tv_template`` if ``media_type`` is ``"episode"``,
     otherwise ``movie_template``.
     """
-    media_type = node.result.get("media_type")
-    if media_type == "episode":
+    media_type = node.result.get(MEDIA_TYPE)
+    if media_type == MEDIA_TYPE_EPISODE:
         return tv_template
     return movie_template
 

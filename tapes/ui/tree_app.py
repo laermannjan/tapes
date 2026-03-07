@@ -9,6 +9,7 @@ from textual.events import Key
 from textual.widgets import Footer, Header, Static
 
 from tapes.config import TapesConfig
+from tapes.fields import MEDIA_TYPE, MEDIA_TYPE_EPISODE
 from tapes.ui.detail_view import DetailView
 from tapes.ui.tree_model import (
     FileNode,
@@ -211,8 +212,8 @@ class TreeApp(App):
                 node, self.movie_template, self.tv_template
             )
             # Choose library sub-root based on media_type
-            media_type = node.result.get("media_type")
-            if media_type == "episode" and cfg.library.tv:
+            media_type = node.result.get(MEDIA_TYPE)
+            if media_type == MEDIA_TYPE_EPISODE and cfg.library.tv:
                 library_root = Path(cfg.library.tv)
             elif cfg.library.movies:
                 library_root = Path(cfg.library.movies)

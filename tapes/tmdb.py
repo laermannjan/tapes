@@ -5,6 +5,18 @@ import logging
 
 import httpx
 
+from tapes.fields import (
+    EPISODE,
+    EPISODE_TITLE,
+    MEDIA_TYPE,
+    MEDIA_TYPE_EPISODE,
+    MEDIA_TYPE_MOVIE,
+    SEASON,
+    TITLE,
+    TMDB_ID,
+    YEAR,
+)
+
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://api.themoviedb.org/3"
@@ -63,10 +75,10 @@ def search_multi(
             yr = int(release_date[:4]) if len(release_date) >= 4 else None
             results.append(
                 {
-                    "tmdb_id": item["id"],
-                    "title": title,
-                    "year": yr,
-                    "media_type": "movie",
+                    TMDB_ID: item["id"],
+                    TITLE: title,
+                    YEAR: yr,
+                    MEDIA_TYPE: MEDIA_TYPE_MOVIE,
                 }
             )
         elif mt == "tv":
@@ -75,10 +87,10 @@ def search_multi(
             yr = int(first_air[:4]) if len(first_air) >= 4 else None
             results.append(
                 {
-                    "tmdb_id": item["id"],
-                    "title": title,
-                    "year": yr,
-                    "media_type": "episode",
+                    TMDB_ID: item["id"],
+                    TITLE: title,
+                    YEAR: yr,
+                    MEDIA_TYPE: MEDIA_TYPE_EPISODE,
                 }
             )
         # Skip "person" and other types
@@ -113,10 +125,10 @@ def get_movie(
     release_date = data.get("release_date", "") or ""
     yr = int(release_date[:4]) if len(release_date) >= 4 else None
     return {
-        "tmdb_id": data["id"],
-        "title": data.get("title", ""),
-        "year": yr,
-        "media_type": "movie",
+        TMDB_ID: data["id"],
+        TITLE: data.get("title", ""),
+        YEAR: yr,
+        MEDIA_TYPE: MEDIA_TYPE_MOVIE,
     }
 
 
@@ -149,10 +161,10 @@ def get_show(
         if s.get("season_number") is not None
     ]
     return {
-        "tmdb_id": data["id"],
-        "title": data.get("name", ""),
-        "year": yr,
-        "media_type": "episode",
+        TMDB_ID: data["id"],
+        TITLE: data.get("name", ""),
+        YEAR: yr,
+        MEDIA_TYPE: MEDIA_TYPE_EPISODE,
         "seasons": seasons,
     }
 
@@ -190,13 +202,13 @@ def get_season_episodes(
     for ep in data.get("episodes", []):
         episodes.append(
             {
-                "tmdb_id": show_id,
-                "title": show_title,
-                "year": show_year,
-                "media_type": "episode",
-                "season": season_number,
-                "episode": ep.get("episode_number"),
-                "episode_title": ep.get("name", ""),
+                TMDB_ID: show_id,
+                TITLE: show_title,
+                YEAR: show_year,
+                MEDIA_TYPE: MEDIA_TYPE_EPISODE,
+                SEASON: season_number,
+                EPISODE: ep.get("episode_number"),
+                EPISODE_TITLE: ep.get("name", ""),
             }
         )
     return episodes
