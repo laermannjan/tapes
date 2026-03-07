@@ -118,6 +118,26 @@ class TreeView(Widget):
         """React to cursor changes by refreshing the display."""
         self.refresh()
 
+    def toggle_staged_at_cursor(self) -> None:
+        """Toggle staged state for the node under the cursor."""
+        node = self.cursor_node()
+        if isinstance(node, FileNode):
+            self.model.toggle_staged(node)
+            self.refresh()
+        elif isinstance(node, FolderNode):
+            self.model.toggle_staged_recursive(node)
+            self.refresh()
+
+    @property
+    def staged_count(self) -> int:
+        """Number of staged files."""
+        return sum(1 for f in self.model.all_files() if f.staged)
+
+    @property
+    def total_count(self) -> int:
+        """Total number of files."""
+        return len(self.model.all_files())
+
     @property
     def item_count(self) -> int:
         """Number of visible items."""

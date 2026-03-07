@@ -168,6 +168,59 @@ class TestTreeViewCursor:
         assert len(lines) == 3
 
 
+class TestTreeViewStaging:
+    def test_toggle_staged_on_file(self) -> None:
+        view = _make_view()
+        view.move_cursor(2)  # top.mkv (FileNode)
+        node = view.cursor_node()
+        assert isinstance(node, FileNode)
+        assert not node.staged
+        view.toggle_staged_at_cursor()
+        assert node.staged
+        view.toggle_staged_at_cursor()
+        assert not node.staged
+
+    def test_toggle_staged_on_folder(self) -> None:
+        model = _simple_model()
+        view = _make_view(model)
+        # Cursor on folderA (FolderNode)
+        node = view.cursor_node()
+        assert isinstance(node, FolderNode)
+        # Stage all children
+        view.toggle_staged_at_cursor()
+        file_a = model.root.children[0]
+        assert isinstance(file_a, FolderNode)
+        assert file_a.children[0].staged  # type: ignore[union-attr]
+        # Unstage all children
+        view.toggle_staged_at_cursor()
+        assert not file_a.children[0].staged  # type: ignore[union-attr]
+
+    def test_staged_count(self) -> None:
+        model = _simple_model()
+        view = _make_view(model)
+        assert view.staged_count == 0
+        assert view.total_count == 3  # file_a.mkv, file_b.mkv, top.mkv
+        # Stage top.mkv
+        view.move_cursor(2)
+        view.toggle_staged_at_cursor()
+        assert view.staged_count == 1
+        assert view.total_count == 3
+
+    def test_staged_marker_in_render(self) -> None:
+        view = _make_view()
+        view.move_cursor(2)  # top.mkv
+        view.toggle_staged_at_cursor()
+        output = view.render_tree()
+        # Staged file should show checkmark
+        assert "\u2713" in output  # ✓
+
+    def test_unstaged_marker_in_render(self) -> None:
+        view = _make_view()
+        output = view.render_tree()
+        # Unstaged, non-ignored files show ○
+        assert "\u25cb" in output  # ○
+
+
 class TestTreeViewRender:
     def test_render_returns_renderable(self) -> None:
         view = _make_view()
@@ -278,6 +331,40 @@ class TestTreeAppKeys:
             await pilot.press("enter")
             # folderA expanded
             assert tv.item_count == 4
+
+    @pytest.mark.asyncio()
+    async def test_space_toggles_staged_file(
+        self, model: TreeModel, template: str
+    ) -> None:
+        from tapes.ui.tree_app import TreeApp
+
+        app = TreeApp(model=model, template=template)
+        async with app.run_test() as pilot:
+            tv = app.query_one(TreeView)
+            # Move to top.mkv (index 2)
+            await pilot.press("j")
+            await pilot.press("j")
+            node = tv.cursor_node()
+            assert isinstance(node, FileNode)
+            assert not node.staged
+            await pilot.press("space")
+            assert node.staged
+
+    @pytest.mark.asyncio()
+    async def test_space_updates_status(
+        self, model: TreeModel, template: str
+    ) -> None:
+        from tapes.ui.tree_app import TreeApp
+        from textual.widgets import Static
+
+        app = TreeApp(model=model, template=template)
+        async with app.run_test() as pilot:
+            # Move to top.mkv and stage it
+            await pilot.press("j")
+            await pilot.press("j")
+            await pilot.press("space")
+            status = app.query_one("#status", Static)
+            assert "1 staged" in status.renderable  # type: ignore[operator]
 
     @pytest.mark.asyncio()
     async def test_q_quits(self, model: TreeModel, template: str) -> None:
