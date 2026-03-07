@@ -40,15 +40,17 @@ TUI (textual, lazygit-inspired)
   tapes/ui/tree_app.py      -- main Textual App with keybindings
   tapes/ui/tree_view.py     -- file tree widget with cursor, staging, filtering
   tapes/ui/tree_model.py    -- FileNode, FolderNode, TreeModel, Source, UndoManager
-  tapes/ui/tree_render.py   -- pure rendering (compute_dest, flatten, render_row)
+  tapes/ui/tree_render.py   -- pure rendering (compute_dest, flatten, render_row, select_template)
   tapes/ui/detail_view.py   -- detail view for metadata curation
   tapes/ui/detail_render.py -- detail view rendering (header, grid, field display)
-  tapes/ui/pipeline.py      -- auto-pipeline (guessit + TMDB per file)
-  tapes/ui/query.py         -- TMDB lookup (currently mock, to be replaced)
+  tapes/ui/pipeline.py      -- auto-pipeline (guessit + two-stage TMDB per file)
 
 Core
-  tapes/scanner.py          -- find files (currently video-only, will be broadened)
+  tapes/scanner.py          -- find all files (with ignore_patterns filtering)
   tapes/metadata.py         -- guessit wrapper, FileMetadata, field normalization
+  tapes/tmdb.py             -- TMDB API client (search_multi, get_movie, get_show, get_season_episodes)
+  tapes/similarity.py       -- confidence scoring (title similarity, episode matching)
+  tapes/file_ops.py         -- file processing (copy, move/copy-verify-delete, symlink)
   tapes/config.py           -- Pydantic v2 config (scan, metadata, library, dry_run)
 ```
 
@@ -97,7 +99,7 @@ Core
   git user (`git config user.name` / `git config user.email`), never to Claude
   or any AI. When spawning subagents, pass `--author="$(git config user.name) <$(git config user.email)>"` explicitly.
 - **Tests:** pytest in `tests/`. Mirror the source tree. Use `tmp_path` fixture
-  for file system tests. Mock external HTTP with the `responses` library.
+  for file system tests. Mock external HTTP with `respx` (for httpx).
 - **Config:** Pydantic v2 models with sane defaults.
 - **guessit field names:** `extract_metadata` normalizes guessit keys:
   `video_codec` -> `codec`, `source` -> `media_source`, `audio_codec` -> `audio`.
@@ -106,7 +108,11 @@ Core
 
 ## Current status
 
-**Pre-alpha. TUI milestones M1-M16 complete (412 tests passing).**
+**Pre-alpha. TUI + core pipeline complete (381 tests passing).**
 
-Next steps: real TMDB integration, broadened scanner (all files + ignore list),
-file processing on commit, similarity/confidence scoring.
+Implemented: TUI (M1-M16), real TMDB integration (two-stage search),
+similarity/confidence scoring, template selection, broadened scanner,
+file processing on commit, config wiring.
+
+Next steps: revisit similarity scoring for more sophisticated matching,
+end-to-end manual testing, error handling polish.
