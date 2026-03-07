@@ -9,8 +9,7 @@ from pydantic import BaseModel
 
 
 class ScanConfig(BaseModel):
-    companion_separators: list[str] = [".", "_", "-"]
-    companion_depth: int = 3
+    pass
 
 
 class MetadataConfig(BaseModel):

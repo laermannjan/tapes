@@ -263,3 +263,48 @@ one cell in the field/source grid.
 `/` enters search mode. A text input appears, typing filters the tree to
 matching filenames. `enter` jumps to the match. `esc` clears the filter
 and returns to full tree view.
+
+---
+
+## TMDB query strategy (added 2026-03-07)
+
+TMDB integration uses a two-stage approach for TV content. A single
+`tmdb_id` field identifies the movie or TV show.
+
+### Stage 1: Find movie/show
+
+- No `tmdb_id` in result: search `/search/multi` with title (+year if
+  available). Return top 3 results as sources.
+- `tmdb_id` already set: skip search, direct lookup via `/movie/{id}` or
+  `/tv/{id}`. Validate/enrich metadata.
+- Auto-accept runs. If accepted and `media_type == "movie"`, done.
+
+### Stage 2: Find episode (TV only, after show is accepted)
+
+Only runs when stage 1 accepted a TV show.
+
+1. If `season` is set in result: query `/tv/{id}/season/{n}`. Try to
+   auto-accept an episode match (by episode number and/or episode title).
+2. If no auto-accept from that season: fan out to all other seasons, try
+   auto-accept across the whole show.
+3. If still no auto-accept (or no `season` in result to begin with):
+   show top 3 episode matches as sources.
+
+Accepted episode populates: `episode`, `episode_title`, `season`
+(corrected if the guessit season was wrong).
+
+### When `tmdb_id` is already set
+
+Skip the show/movie search entirely. For TV, still run stage 2 to
+find/validate the episode.
+
+### Episode matching
+
+guessit may extract `episode_title`. When matching episodes from a TMDB
+season response, score against:
+
+1. **Episode number** (exact match, highest weight)
+2. **Episode title** (fuzzy string similarity against TMDB `name` field)
+
+Episode number match + title match = high confidence. Only one matches =
+lower confidence, flag for review.

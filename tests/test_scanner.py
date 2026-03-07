@@ -4,8 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from tapes.scanner import scan
-from tapes.models import VIDEO_EXTENSIONS
+from tapes.scanner import VIDEO_EXTENSIONS, scan
 
 
 def _touch(path: Path) -> Path:

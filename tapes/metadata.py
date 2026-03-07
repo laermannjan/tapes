@@ -2,9 +2,22 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+
 import guessit
 
-from tapes.models import FileMetadata
+
+@dataclass
+class FileMetadata:
+    """Parsed metadata about a media file."""
+
+    media_type: str | None = None
+    title: str | None = None
+    year: int | None = None
+    season: int | None = None
+    episode: int | list[int] | None = None
+    part: int | None = None
+    raw: dict = field(default_factory=dict)
 
 # guessit key -> normalized key
 _RENAME_KEYS: dict[str, str] = {

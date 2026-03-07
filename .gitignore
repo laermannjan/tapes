@@ -13,3 +13,4 @@ tapes.toml
 *.mkv
 .worktrees/
 *.DS_Store
+test_media/

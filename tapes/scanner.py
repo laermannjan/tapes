@@ -5,7 +5,9 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from tapes.models import VIDEO_EXTENSIONS
+VIDEO_EXTENSIONS: frozenset[str] = frozenset(
+    {".mkv", ".mp4", ".avi", ".mov", ".m4v", ".ts", ".m2ts", ".wmv", ".flv"}
+)
 
 SAMPLE_RE = re.compile(
     r"(?i)(^sample$|^sample[.\-_ ]|[.\-_ ]sample[.\-_ ]|[.\-_ ]sample$)"
