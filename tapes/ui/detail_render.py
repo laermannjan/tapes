@@ -6,9 +6,9 @@ from typing import Any
 from rich.text import Text
 
 from tapes.ui.tree_model import FileNode, FolderNode, collect_files
-from tapes.ui.tree_render import compute_dest, render_dest, template_field_names
+from tapes.ui.tree_render import MUTED, compute_dest, render_dest, template_field_names
 
-LABEL_WIDTH = 14
+LABEL_WIDTH = 16
 COL_WIDTH = 28
 
 
@@ -92,16 +92,16 @@ def is_multi_value(val: Any) -> bool:
 def diff_style(result_val: Any, source_val: Any) -> str:
     """Return a Rich style for a source value relative to the result.
 
-    - ``"dim"`` if source is None (missing) or matches the result.
+    - Muted gray if source is None (missing) or matches the result.
     - ``"green"`` if source fills an empty result slot.
     - ``"#E07A47"`` (ember) if source differs from a non-empty result.
     """
     if source_val is None:
-        return "dim"
+        return MUTED
     if result_val is None or result_val == "":
         return "#86E89A"
     if str(result_val) == str(source_val):
-        return "dim"
+        return MUTED
     return "#E07A47"
 
 
@@ -137,7 +137,7 @@ def render_compact_preview(node: FileNode, template: str) -> Text:
     line1 = Text()
     line1.append(f" {node.path.name}", style="bold")
     line1.append("  ")
-    line1.append("\u2192 ", style="dim")
+    line1.append("\u2192 ", style=MUTED)
     dest = compute_dest(node, template)
     line1.append_text(render_dest(dest))
 
@@ -156,10 +156,10 @@ def render_compact_preview(node: FileNode, template: str) -> Text:
     for i, (label, key) in enumerate(field_specs):
         if i > 0:
             line2.append("  ")
-        line2.append(f"{label}: ", style="dim")
+        line2.append(f"{label}: ", style=MUTED)
         val = result.get(key)
         if val is None:
-            line2.append("\u00b7", style="dim")
+            line2.append("\u00b7", style=MUTED)
         else:
             line2.append(str(val))
 
@@ -207,9 +207,9 @@ def render_folder_preview(folder: FolderNode) -> Text:
     line2 = Text()
     line2.append(" ")
     if parts:
-        line2.append(" \u00b7 ".join(parts), style="dim")
+        line2.append(" \u00b7 ".join(parts), style=MUTED)
     else:
-        line2.append("empty", style="dim")
+        line2.append("empty", style=MUTED)
 
     result_text = Text()
     result_text.append_text(line1)

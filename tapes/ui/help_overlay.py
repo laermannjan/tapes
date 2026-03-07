@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING
 from rich.text import Text
 from textual.widget import Widget
 
+from tapes.ui.tree_render import MUTED
+
 if TYPE_CHECKING:
     from rich.console import RenderableType
 
@@ -135,12 +137,12 @@ def _build_help_text() -> Text:
 
     source_line1 = "  Sources provide metadata from TMDB. Apply values"
     source_line2 = "  to the result to build the destination path."
-    result.append(_border_line(source_line1) + "\n", "dim")
-    result.append(_border_line(source_line2) + "\n", "dim")
+    result.append(_border_line(source_line1) + "\n", MUTED)
+    result.append(_border_line(source_line2) + "\n", MUTED)
 
     result.append(_border_line() + "\n")
     result.append(
-        _border_line("  Press ? or esc to close") + "\n", "dim italic"
+        _border_line("  Press ? or esc to close") + "\n", f"{MUTED} italic"
     )
     result.append(_border_bottom() + "\n")
 

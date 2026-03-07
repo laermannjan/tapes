@@ -19,11 +19,11 @@ from tapes.ui.tree_model import FileNode, FolderNode, Source
 
 class TestDiffStyle:
     def test_matches_result(self) -> None:
-        assert diff_style("Breaking Bad", "Breaking Bad") == "dim"
+        assert diff_style("Breaking Bad", "Breaking Bad") == "#888888"
 
     def test_matches_result_int_coerced(self) -> None:
         # str comparison: int result vs int source
-        assert diff_style(2008, 2008) == "dim"
+        assert diff_style(2008, 2008) == "#888888"
 
     def test_differs_from_result(self) -> None:
         assert diff_style("Breaking Bad", "Better Call Saul") == "#E07A47"
@@ -38,10 +38,10 @@ class TestDiffStyle:
         assert diff_style("", "Breaking Bad") == "#86E89A"
 
     def test_missing_source(self) -> None:
-        assert diff_style("Breaking Bad", None) == "dim"
+        assert diff_style("Breaking Bad", None) == "#888888"
 
     def test_both_none(self) -> None:
-        assert diff_style(None, None) == "dim"
+        assert diff_style(None, None) == "#888888"
 
     def test_source_zero_fills_none_result(self) -> None:
         # 0 is a valid value, not None

@@ -266,7 +266,8 @@ class TestBuildTree:
         assert isinstance(root.children[0], FolderNode)
         assert root.children[0].name == "movies"
         assert isinstance(root.children[1], FolderNode)
-        assert root.children[1].name == "shows"
+        # shows/s01 merged because shows only contained s01
+        assert root.children[1].name == "shows/s01"
         assert isinstance(root.children[2], FileNode)
         assert root.children[2].path == tmp_path / "readme.txt"
 

@@ -751,14 +751,12 @@ class TestTreeDetailIntegration:
             tv = app.query_one(TreeView)
             dv = app.query_one(DetailView)
 
-            # Initially tree is not compressed, detail is not expanded
-            assert "compressed" not in tv.classes
+            # Initially detail is not expanded
             assert "expanded" not in dv.classes
 
             # Enter on the file node opens detail
             await pilot.press("enter")
             assert app._in_detail is True
-            assert "compressed" in tv.classes
             assert "expanded" in dv.classes
             assert dv.node is node
 
@@ -771,7 +769,6 @@ class TestTreeDetailIntegration:
             # Escape returns to tree
             await pilot.press("escape")
             assert app._in_detail is False
-            assert "compressed" not in tv.classes
             assert "expanded" not in dv.classes
 
 

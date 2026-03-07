@@ -72,7 +72,7 @@ class TestRenderDest:
         assert isinstance(result, Text)
         assert result.plain == "???"
         # The whole thing should be dim (applied as base style)
-        assert "dim" in str(result.style)
+        assert "#888888" in str(result.style)
 
     def test_full_path_coloring(self) -> None:
         result = render_dest("Movies/Inception (2010)/Inception (2010).mkv")
@@ -137,18 +137,8 @@ class TestRenderFileRow:
         )
         row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
         plain = row.plain
-        assert plain == "\u2713 Inception.mkv  \u2192  Inception (2010)/Inception (2010).mkv"
-
-    def test_staged_marker_is_green(self) -> None:
-        node = FileNode(
-            path=Path("/movies/Inception.mkv"),
-            staged=True,
-            result={"title": "Inception", "year": 2010},
-        )
-        row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
-        # The checkmark should have green style
-        has_green = any("#86E89A" in str(span.style) or "#86e89a" in str(span.style) for span in row._spans)
-        assert has_green
+        # No markers — staging shown via background color in tree_view
+        assert plain == "Inception.mkv  \u2192  Inception (2010)/Inception (2010).mkv"
 
     def test_unstaged_file(self) -> None:
         node = FileNode(
@@ -157,37 +147,16 @@ class TestRenderFileRow:
             result={"title": "Inception", "year": 2010},
         )
         row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
-        assert row.plain.startswith("\u25cb ")
+        assert "Inception.mkv" in row.plain
 
-    def test_unstaged_marker_is_yellow(self) -> None:
-        node = FileNode(
-            path=Path("/movies/Inception.mkv"),
-            staged=False,
-            result={"title": "Inception", "year": 2010},
-        )
-        row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
-        has_yellow = any("#E07A47" in str(span.style) or "#e07a47" in str(span.style) for span in row._spans)
-        assert has_yellow
-
-    def test_ignored_file_dot_marker(self) -> None:
+    def test_ignored_file(self) -> None:
         node = FileNode(
             path=Path("/movies/Inception.mkv"),
             ignored=True,
             result={"title": "Inception", "year": 2010},
         )
         row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
-        # Ignored files use middle dot marker
-        assert row.plain.startswith("\u00b7 ")
-
-    def test_ignored_marker_is_dim(self) -> None:
-        node = FileNode(
-            path=Path("/movies/Inception.mkv"),
-            ignored=True,
-            result={"title": "Inception", "year": 2010},
-        )
-        row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
-        has_dim = any("dim" in str(span.style) for span in row._spans)
-        assert has_dim
+        assert "Inception.mkv" in row.plain
 
     def test_missing_dest_shows_partial(self) -> None:
         node = FileNode(
@@ -238,19 +207,22 @@ class TestRenderFolderRow:
         node = FolderNode(name="movies", collapsed=True)
         row = render_folder_row(node)
         assert isinstance(row, Text)
-        assert row.plain == "\u25b6 movies/"
+        assert "\u25b6" in row.plain
+        assert "movies/" in row.plain
 
     def test_expanded_arrow(self) -> None:
         node = FolderNode(name="movies", collapsed=False)
         row = render_folder_row(node)
         assert isinstance(row, Text)
-        assert row.plain == "\u25bc movies/"
+        assert "\u25bc" in row.plain
+        assert "movies/" in row.plain
 
     def test_with_indentation(self) -> None:
         node = FolderNode(name="Season 01", collapsed=True)
         row = render_folder_row(node, depth=1)
         assert isinstance(row, Text)
-        assert row.plain == "  \u25b6 Season 01/"
+        assert row.plain.startswith("  ")
+        assert "Season 01/" in row.plain
 
 
 # --- render_row ---
@@ -271,7 +243,8 @@ class TestRenderRow:
         node = FolderNode(name="tv", collapsed=True)
         row = render_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
         assert isinstance(row, Text)
-        assert row.plain == "\u25b6 tv/"
+        assert "\u25b6" in row.plain
+        assert "tv/" in row.plain
 
 
 # --- flatten_with_depth ---

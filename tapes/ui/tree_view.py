@@ -9,7 +9,7 @@ from textual.reactive import reactive
 from textual.widget import Widget
 
 from tapes.ui.tree_model import FileNode, FolderNode, TreeModel
-from tapes.ui.tree_render import flatten_all_with_depth, flatten_with_depth, render_row
+from tapes.ui.tree_render import CURSOR_BG, MUTED, RANGE_BG, STAGED_BG, flatten_all_with_depth, flatten_with_depth, render_row
 
 if TYPE_CHECKING:
     from rich.console import RenderableType
@@ -160,7 +160,7 @@ class TreeView(Widget):
             if not isinstance(node, FileNode):
                 continue
             effective_depth = 0 if self.flat_mode else depth
-            indent_len = effective_depth * 2
+            indent_len = effective_depth * 4
             if self.flat_mode and self.root_path is not None:
                 try:
                     filename = str(node.path.relative_to(self.root_path))
@@ -168,11 +168,10 @@ class TreeView(Widget):
                     filename = node.path.name
             else:
                 filename = node.path.name
-            # 2 = marker char + space
-            width = indent_len + 2 + len(filename)
+            width = indent_len + len(filename)
             if width > max_width:
                 max_width = width
-        inner_width = max(0, self.size.width - 4)  # border + padding
+        inner_width = self.size.width  # self.size is already the content area
         max_allowed = inner_width // 2
         return min(max_width + 3, max_allowed)
 
@@ -187,10 +186,10 @@ class TreeView(Widget):
     def render(self) -> RenderableType:
         """Render the visible window of the tree with cursor highlighting."""
         w = self.size.width
-        inner_width = max(0, w - 2)  # account for CSS border + padding
+        inner_width = w  # self.size is already the content area
 
         if not self._items:
-            return Text("(empty)", style="dim")
+            return Text("(empty)", style=MUTED)
 
         # Viewport height = widget height minus CSS border (2 lines)
         viewport_height = max(1, self.size.height - 2)
@@ -222,11 +221,13 @@ class TreeView(Widget):
                 row_text.append(" " * (inner_width - plain_len))
 
             if isinstance(node, FileNode) and node.ignored:
-                row_text.stylize("dim")
+                row_text.stylize(MUTED)
+            elif isinstance(node, FileNode) and node.staged:
+                row_text.stylize(STAGED_BG)
             if i == self.cursor_index:
-                row_text.stylize("on #264f78")
+                row_text.stylize(CURSOR_BG)
             elif rng and rng[0] <= i <= rng[1]:
-                row_text.stylize("on #1a3a52")
+                row_text.stylize(RANGE_BG)
 
             content_lines.append(row_text)
 
@@ -285,6 +286,10 @@ class TreeView(Widget):
         self.refresh()
 
     SCROLLOFF = 3
+
+    def on_resize(self) -> None:
+        """Recompute arrow column when widget is resized."""
+        self._arrow_col = self._compute_arrow_col()
 
     def watch_active(self, value: bool) -> None:
         """React to active state changes by toggling CSS classes."""

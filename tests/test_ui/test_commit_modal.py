@@ -95,7 +95,7 @@ class TestBuildCommitText:
             "copy",
         )
         plain = text.plain
-        assert "\u2713" in plain  # checkmark
+        assert "\u2713" in plain  # checkmark in commit list
 
     def test_contains_confirm_cancel_hints(self) -> None:
         text = build_commit_text(

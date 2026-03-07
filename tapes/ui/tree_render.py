@@ -10,6 +10,17 @@ from rich.text import Text
 from tapes.fields import MEDIA_TYPE, MEDIA_TYPE_EPISODE
 from tapes.ui.tree_model import FileNode, FolderNode, TreeModel
 
+# Explicit muted gray instead of Rich "dim" (which thins the font weight).
+MUTED = "#888888"
+# Lighter muted for fold arrows (more visible than MUTED).
+MUTED_LIGHT = "#aaaaaa"
+# Dark mossy green background for staged files.
+STAGED_BG = "on #1e3320"
+# Cursor highlight (lazygit-style dark slate).
+CURSOR_BG = "on #36345a"
+# Range selection background.
+RANGE_BG = "on #2a2844"
+
 
 def template_field_names(template: str) -> list[str]:
     """Extract unique field names referenced in a template string."""
@@ -70,7 +81,7 @@ def compute_dest(node: FileNode, template: str) -> str | None:
 def render_dest(dest: str | None) -> Text:
     """Render a destination path with semantic coloring.
 
-    - If *dest* is ``None``: returns ``Text("???", "dim")``.
+    - If *dest* is ``None``: returns ``Text("???")`` in muted style.
     - Arrow ``\u2192`` is dim.
     - Directory portion (everything before the last ``/``) is dim.
     - Filename stem (after last ``/``, before last ``.``) is normal foreground.
@@ -78,7 +89,7 @@ def render_dest(dest: str | None) -> Text:
     - Any ``?`` placeholder characters are highlighted ember.
     """
     if dest is None:
-        return Text("???", style="dim")
+        return Text("???", style=MUTED)
 
     result = Text()
 
@@ -93,7 +104,7 @@ def render_dest(dest: str | None) -> Text:
 
     # Render directory part: dim, but ? chars yellow
     if dir_part:
-        _append_with_yellow_placeholders(result, dir_part, "dim")
+        _append_with_yellow_placeholders(result, dir_part, MUTED)
 
     # Split basename into stem and extension
     dot_pos = basename.rfind(".")
@@ -109,7 +120,7 @@ def render_dest(dest: str | None) -> Text:
 
     # Render extension: dim, but ? chars yellow
     if ext:
-        _append_with_yellow_placeholders(result, ext, "dim")
+        _append_with_yellow_placeholders(result, ext, MUTED)
 
     return result
 
@@ -143,33 +154,22 @@ def render_file_row(
 ) -> Text:
     """Render a single file row as a Rich :class:`Text` object.
 
-    Format: ``indent + marker + " " + filename + padding + " \u2192 " + dest``
+    Format: ``indent + filename + padding + " \u2192 " + dest``
 
     When *arrow_col* is given, the filename area is padded so the arrow
     starts at that column position, creating aligned two-column output.
 
-    Markers (with color):
-    - ``"\\u2713"`` (checkmark, green) if staged
-    - ``"\\u25cb"`` (circle, ember) if not staged and not ignored
-    - ``"\\u00b7"`` (middle dot, dim) if ignored
+    Staging is shown via background color (mossy green), not markers.
+    Ignored files are rendered in muted style.
     """
     effective_template = select_template(node, movie_template, tv_template)
 
-    indent = "" if flat_mode else "  " * depth
+    indent = "" if flat_mode else "    " * depth
 
     row = Text()
 
     if indent:
         row.append(indent)
-
-    if node.staged:
-        row.append("\u2713", style="#86E89A")
-    elif node.ignored:
-        row.append("\u00b7", style="dim")
-    else:
-        row.append("\u25cb", style="#E07A47")
-
-    row.append(" ")
 
     if flat_mode and root_path is not None:
         try:
@@ -186,9 +186,9 @@ def render_file_row(
         current_len = len(row.plain)
         if current_len < arrow_col:
             row.append(" " * (arrow_col - current_len))
-        row.append("\u2192 ", style="dim")
+        row.append("\u2192 ", style=MUTED)
     else:
-        row.append("  \u2192  ", style="dim")
+        row.append("  \u2192  ", style=MUTED)
 
     dest = compute_dest(node, effective_template)
     row.append_text(render_dest(dest))
@@ -205,9 +205,14 @@ def render_folder_row(node: FolderNode, depth: int = 0) -> Text:
     - ``"\\u25bc"`` (down triangle) if expanded (not collapsed)
     - ``"\\u25b6"`` (right triangle) if collapsed
     """
-    indent = "  " * depth
-    arrow = "\u25b6" if node.collapsed else "\u25bc"
-    return Text(f"{indent}{arrow} {node.name}/")
+    indent = "    " * depth
+    row = Text()
+    if indent:
+        row.append(indent)
+    arrow = "\u25bc" if not node.collapsed else "\u25b6"
+    row.append(arrow, style=MUTED_LIGHT)
+    row.append(f" {node.name}/", style=MUTED)
+    return row
 
 
 def render_row(

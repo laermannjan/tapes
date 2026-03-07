@@ -99,9 +99,6 @@ class TreeApp(App):
     TreeView.-inactive {
         border: round #555555;
     }
-    TreeView.compressed {
-        height: 7;
-    }
     DetailView {
         height: 5;
         border: round #555555;
@@ -109,9 +106,6 @@ class TreeApp(App):
     }
     DetailView.-active {
         border: round #7AB8FF;
-    }
-    DetailView.expanded {
-        height: 14;
     }
     StatusFooter {
         dock: bottom;
@@ -238,8 +232,9 @@ class TreeApp(App):
         detail.on_before_mutate = self._snapshot_before_mutate
         detail.on_editing_changed = self._on_detail_editing_changed
         tv = self.query_one(TreeView)
-        tv.add_class("compressed")
         tv.active = False
+        # Compute height: header(2) + separator + grid_header + fields + separator + border(2)
+        detail.styles.height = len(detail._fields) + 7
         detail.add_class("expanded")
         detail.active = True
         detail.focus()
@@ -253,8 +248,9 @@ class TreeApp(App):
         detail.on_before_mutate = self._snapshot_before_mutate
         detail.on_editing_changed = self._on_detail_editing_changed
         tv = self.query_one(TreeView)
-        tv.add_class("compressed")
         tv.active = False
+        # Compute height: header(2) + separator + grid_header + fields + separator + border(2)
+        detail.styles.height = len(detail._fields) + 7
         detail.add_class("expanded")
         detail.active = True
         detail.focus()
@@ -274,9 +270,9 @@ class TreeApp(App):
         self._in_detail = False
         detail = self.query_one(DetailView)
         detail.remove_class("expanded")
+        detail.styles.height = None  # reset to CSS default
         detail.active = False
         tv = self.query_one(TreeView)
-        tv.remove_class("compressed")
         tv.active = True
         tv.focus()
         tv.refresh()

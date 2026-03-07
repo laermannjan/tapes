@@ -152,6 +152,7 @@ def build_tree(files: list[Path], root_path: Path) -> TreeModel:
 
     root = FolderNode(name=root_path.name)
     _build_folder(root, tree_dict, root_path)
+    _compress_single_child_dirs(root)
     return TreeModel(root=root)
 
 
@@ -181,6 +182,32 @@ def _build_folder(
 
     for name in file_names:
         folder.children.append(FileNode(path=current_path / name))
+
+
+def _compress_single_child_dirs(folder: FolderNode) -> None:
+    """Merge chains of single-child directories.
+
+    If a folder's only child is another folder (no sibling files),
+    merge them: ``foo/ -> bar/`` becomes ``foo/bar/``.
+    Applied recursively bottom-up.
+    """
+    for child in folder.children:
+        if isinstance(child, FolderNode):
+            _compress_single_child_dirs(child)
+
+    i = 0
+    while i < len(folder.children):
+        child = folder.children[i]
+        if isinstance(child, FolderNode):
+            # Merge while this child has exactly one child and it's a folder
+            while (
+                len(child.children) == 1
+                and isinstance(child.children[0], FolderNode)
+            ):
+                grandchild = child.children[0]
+                child.name = f"{child.name}/{grandchild.name}"
+                child.children = grandchild.children
+        i += 1
 
 
 class UndoManager:

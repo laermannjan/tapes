@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from rich.text import Text
 from textual.widget import Widget
 
-from tapes.ui.tree_render import render_dest
+from tapes.ui.tree_render import MUTED, render_dest
 
 if TYPE_CHECKING:
     from rich.console import RenderableType
@@ -96,18 +96,18 @@ def build_commit_text(
 
         # Destination line: arrow + rendered dest
         dest_line = Text()
-        dest_line.append("    \u2192 ", style="dim")
+        dest_line.append("    \u2192 ", style=MUTED)
         if dest is not None:
             dest_text = render_dest(dest)
             # Truncate if needed
             max_dest = _WIDTH - 6  # 4 spaces + arrow + space
             if len(dest_text.plain) > max_dest:
                 plain = dest_text.plain[: max_dest - 1] + "\u2026"
-                dest_line.append(plain, style="dim")
+                dest_line.append(plain, style=MUTED)
             else:
                 dest_line.append_text(dest_text)
         else:
-            dest_line.append("???", style="dim")
+            dest_line.append("???", style=MUTED)
         result.append_text(_border_line_text(dest_line))
         result.append("\n")
 

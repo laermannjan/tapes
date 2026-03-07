@@ -21,7 +21,7 @@ from tapes.ui.detail_render import (
     render_folder_preview,
 )
 from tapes.ui.tree_model import FileNode, FolderNode, compute_shared_fields
-from tapes.ui.tree_render import compute_dest, select_template
+from tapes.ui.tree_render import MUTED, compute_dest, select_template
 
 if TYPE_CHECKING:
     from rich.console import RenderableType
@@ -132,7 +132,7 @@ class DetailView(Widget):
     def render(self) -> RenderableType:
         """Build Rich Text content (borders handled by Textual CSS)."""
         w = self.size.width
-        inner_width = max(0, w - 2)  # account for CSS border + padding
+        inner_width = w  # self.size is already the content area
 
         is_expanded = self.has_class("expanded")
 
@@ -147,7 +147,7 @@ class DetailView(Widget):
         """Render 2-line compact preview for the hovered node."""
         preview = self._preview_node
         if preview is None:
-            return [Text(" (no file selected)", style="dim")]
+            return [Text(" (no file selected)", style=MUTED)]
 
         if isinstance(preview, FolderNode):
             preview_text = render_folder_preview(preview)
@@ -157,7 +157,7 @@ class DetailView(Widget):
             )
             preview_text = render_compact_preview(preview, template)
         else:
-            return [Text(" (no file selected)", style="dim")]
+            return [Text(" (no file selected)", style=MUTED)]
 
         # The render functions return Text with a "\n" separator.
         # Split into individual lines preserving styles.
@@ -176,7 +176,7 @@ class DetailView(Widget):
                 content.append(Text(hl))
 
         # Separator
-        content.append(Text("\u2500" * inner_width, style="dim"))
+        content.append(Text("\u2500" * inner_width, style=MUTED))
 
         # Grid header row
         content.append(self._render_grid_header())
@@ -186,7 +186,7 @@ class DetailView(Widget):
             content.append(self._render_field_row(row_idx, field_name))
 
         # Bottom separator
-        content.append(Text("\u2500" * inner_width, style="dim"))
+        content.append(Text("\u2500" * inner_width, style=MUTED))
 
         return content
 
@@ -213,7 +213,7 @@ class DetailView(Widget):
 
         Returns (result_col_width, source_col_width).
         """
-        inner = max(0, self.size.width - 4)  # border + padding
+        inner = self.size.width  # self.size is already the content area
         available = inner - LABEL_WIDTH - 1  # -1 for ┃ separator
         if available < 20:
             return (10, 10)
@@ -237,11 +237,11 @@ class DetailView(Widget):
 
         # Result column header
         result_text = self._col("result", result_w)
-        style = "on #264f78" if self.cursor_row == -1 else ""
+        style = "bold on #36345a" if self.cursor_row == -1 else "bold"
         line.append(result_text, style=style)
 
         # Separator
-        line.append("\u2503", style="dim")
+        line.append("\u2503", style=MUTED)
 
         # Current source header with [N/M] indicator
         sources = self.node.sources
@@ -254,14 +254,14 @@ class DetailView(Widget):
                 conf_text = f" ({src.confidence:.0%})"
                 src_header.append(conf_text, style=confidence_style(src.confidence))
             indicator = f"  [{idx + 1}/{len(sources)}]"
-            src_header.append(indicator, style="dim")
+            src_header.append(indicator, style=MUTED)
             # Pad to source column width
             plain_len = len(src_header.plain)
             if plain_len < source_w:
                 src_header.append(" " * (source_w - plain_len))
             line.append_text(src_header)
         else:
-            line.append(self._col("  (no sources)", source_w), style="dim")
+            line.append(self._col("  (no sources)", source_w), style=MUTED)
 
         return line
 
@@ -272,24 +272,24 @@ class DetailView(Widget):
 
         line = Text()
 
-        # Label
-        label = f" {field_name:<{LABEL_WIDTH - 1}}"
-        line.append(label, style="dim")
+        # Label (with trailing padding)
+        label = f"  {field_name:<{LABEL_WIDTH - 2}}"
+        line.append(label, style=MUTED)
 
-        # Result value
+        # Result value (bold per design spec)
         result_raw = shared.get(field_name)
         if self.editing and self.cursor_row == row_idx:
             edit_display = self._edit_value + "\u2588"
             line.append(self._col(edit_display, result_w), style="underline")
         else:
             result_val = display_val(result_raw)
-            style = ""
+            style = "bold"
             if self.cursor_row == row_idx:
-                style = "on #264f78"
+                style = "bold on #36345a"
             line.append(self._col(result_val, result_w), style=style)
 
         # Separator
-        line.append("\u2503", style="dim")
+        line.append("\u2503", style=MUTED)
 
         # Current source value (diff-styled relative to result)
         sources = self.node.sources
@@ -302,10 +302,10 @@ class DetailView(Widget):
             else:
                 base_style = diff_style(result_raw, src_raw)
             if self.cursor_row == row_idx:
-                base_style = "on #264f78"
+                base_style = "on #36345a"
             line.append(self._col(f"  {src_val}", source_w), style=base_style)
         else:
-            line.append(self._col("  \u00b7", source_w), style="dim")
+            line.append(self._col("  \u00b7", source_w), style=MUTED)
 
         return line
 

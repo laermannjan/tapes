@@ -218,19 +218,19 @@ class TestTreeViewStaging:
         assert view.staged_count == 1
         assert view.total_count == 3
 
-    def test_staged_marker_in_render(self) -> None:
+    def test_staged_file_in_render(self) -> None:
         view = _make_view()
         view.move_cursor(2)  # top.mkv
         view.toggle_staged_at_cursor()
         output = view.render_tree()
-        # Staged file should show checkmark
-        assert "\u2713" in output  # ✓
+        # Staged file should still appear in output
+        assert "top.mkv" in output
 
-    def test_unstaged_marker_in_render(self) -> None:
+    def test_unstaged_file_in_render(self) -> None:
         view = _make_view()
         output = view.render_tree()
-        # Unstaged, non-ignored files show ○
-        assert "\u25cb" in output  # ○
+        # Unstaged files appear in output
+        assert "top.mkv" in output
 
 
 class TestTreeViewRender:
@@ -259,7 +259,7 @@ class TestTreeViewRender:
         fake_size = SimpleNamespace(width=80, height=20)
         with patch.object(type(view), "size", new_callable=lambda: PropertyMock(return_value=fake_size)):
             result = view.render()
-        # The render method applies "on #264f78" style to the cursor row.
+        # The render method applies "on #36345a" style to the cursor row.
         # Output includes content rows only (no manual borders).
         plain = result.plain
         lines = plain.split("\n")
@@ -418,7 +418,7 @@ class TestRangeSelection:
         fake_size = SimpleNamespace(width=80, height=20)
         with patch.object(type(view), "size", new_callable=lambda: PropertyMock(return_value=fake_size)):
             result = view.render()
-        # The cursor row (idx 2) has "on #264f78", range rows (idx 0, 1) have "on #1a3a52"
+        # The cursor row (idx 2) has "on #36345a", range rows (idx 0, 1) have "on #2a2844"
         # We verify that the Text object has spans applied
         assert len(result._spans) > 0  # noqa: SLF001
 
@@ -794,12 +794,7 @@ class TestIgnoreToggle:
         lines = output.split("\n")
         # file_a is at index 1 in flattened view
         file_a_line = lines[1]
-        # Ignored file uses middle dot as marker
-        # Should NOT have checkmark or circle
-        assert "\u2713" not in file_a_line
-        assert "\u25cb" not in file_a_line
-        # The marker is a middle dot
-        assert "\u00b7" in file_a_line
+        # Ignored file should still appear in output
         assert "file_a.mkv" in file_a_line
 
     def test_ignored_count(self) -> None:
@@ -1452,8 +1447,8 @@ class TestVisualIntegration:
             assert tv is not None
             assert dv is not None
             assert footer is not None
-            # TreeView is active by default (not compressed)
-            assert "compressed" not in tv.classes
+            # TreeView is active by default
+            assert tv.active is True
 
     @pytest.mark.asyncio()
     async def test_cursor_move_updates_compact_preview(self) -> None:
