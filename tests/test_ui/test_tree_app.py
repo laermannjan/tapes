@@ -775,7 +775,7 @@ class TestIgnoreToggle:
         assert files[0].ignored  # file_a
         assert files[1].ignored  # file_b
 
-    def test_ignored_file_renders_with_space_marker(self) -> None:
+    def test_ignored_file_renders_with_dot_marker(self) -> None:
         model = _expanded_model()
         view = _make_view(model)
         files = model.all_files()
@@ -784,12 +784,12 @@ class TestIgnoreToggle:
         lines = output.split("\n")
         # file_a is at index 1 in flattened view
         file_a_line = lines[1]
-        # Ignored file uses space as marker (indent + space + space + filename)
+        # Ignored file uses middle dot as marker
         # Should NOT have checkmark or circle
         assert "\u2713" not in file_a_line
         assert "\u25cb" not in file_a_line
-        # The marker is a space, so after indent we get "  " + space_marker + " " + filename
-        # Verify the line contains the filename but no other markers
+        # The marker is a middle dot
+        assert "\u00b7" in file_a_line
         assert "file_a.mkv" in file_a_line
 
     def test_ignored_count(self) -> None:

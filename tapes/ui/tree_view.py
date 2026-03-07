@@ -215,7 +215,7 @@ class TreeView(Widget):
         for i in range(start, end):
             node, depth = self._items[i]
             effective_depth = 0 if self.flat_mode else depth
-            row_str = render_row(
+            row_result = render_row(
                 node,
                 self.movie_template,
                 self.tv_template,
@@ -223,13 +223,19 @@ class TreeView(Widget):
                 flat_mode=self.flat_mode,
                 root_path=self.root_path,
             )
-            # Pad or truncate to fit inner width
-            if len(row_str) > inner_width:
-                row_str = row_str[:inner_width]
+            # Convert to Text if render_row returned a plain string
+            if isinstance(row_result, str):
+                row_text = Text(row_result)
             else:
-                row_str = row_str + " " * (inner_width - len(row_str))
+                row_text = row_result
 
-            row_text = Text(row_str)
+            # Pad or truncate to fit inner width
+            plain_len = len(row_text.plain)
+            if plain_len > inner_width:
+                row_text.truncate(inner_width)
+            elif plain_len < inner_width:
+                row_text.append(" " * (inner_width - plain_len))
+
             if isinstance(node, FileNode) and node.ignored:
                 row_text.stylize("dim")
             if i == self.cursor_index:
@@ -261,7 +267,7 @@ class TreeView(Widget):
         lines: list[str] = []
         for node, depth in self._items:
             effective_depth = 0 if self.flat_mode else depth
-            line = render_row(
+            row = render_row(
                 node,
                 self.movie_template,
                 self.tv_template,
@@ -269,7 +275,7 @@ class TreeView(Widget):
                 flat_mode=self.flat_mode,
                 root_path=self.root_path,
             )
-            lines.append(line)
+            lines.append(row.plain if isinstance(row, Text) else row)
         return "\n".join(lines)
 
     def move_cursor(self, delta: int) -> None:

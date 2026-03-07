@@ -5,6 +5,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from rich.text import Text
+
 from tapes.fields import MEDIA_TYPE, MEDIA_TYPE_EPISODE
 from tapes.ui.tree_model import FileNode, FolderNode, TreeModel
 
@@ -65,6 +67,71 @@ def compute_dest(node: FileNode, template: str) -> str | None:
     return safe_template.format_map(patched)
 
 
+def render_dest(dest: str | None) -> Text:
+    """Render a destination path with semantic coloring.
+
+    - If *dest* is ``None``: returns ``Text("???", "dim")``.
+    - Arrow ``\u2192`` is dim.
+    - Directory portion (everything before the last ``/``) is dim.
+    - Filename stem (after last ``/``, before last ``.``) is normal foreground.
+    - Extension (last ``.`` onward) is dim.
+    - Any ``?`` placeholder characters are highlighted yellow.
+    """
+    if dest is None:
+        return Text("???", style="dim")
+
+    result = Text()
+
+    # Split into directory and basename
+    last_slash = dest.rfind("/")
+    if last_slash >= 0:
+        dir_part = dest[: last_slash + 1]  # includes trailing /
+        basename = dest[last_slash + 1 :]
+    else:
+        dir_part = ""
+        basename = dest
+
+    # Render directory part: dim, but ? chars yellow
+    if dir_part:
+        _append_with_yellow_placeholders(result, dir_part, "dim")
+
+    # Split basename into stem and extension
+    dot_pos = basename.rfind(".")
+    if dot_pos > 0:
+        stem = basename[:dot_pos]
+        ext = basename[dot_pos:]  # includes the dot
+    else:
+        stem = basename
+        ext = ""
+
+    # Render stem: normal, but ? chars yellow
+    _append_with_yellow_placeholders(result, stem, "")
+
+    # Render extension: dim, but ? chars yellow
+    if ext:
+        _append_with_yellow_placeholders(result, ext, "dim")
+
+    return result
+
+
+def _append_with_yellow_placeholders(text: Text, s: str, base_style: str) -> None:
+    """Append *s* to *text*, coloring ``?`` characters yellow."""
+    i = 0
+    while i < len(s):
+        j = i
+        if s[i] == "?":
+            # Collect consecutive ?
+            while j < len(s) and s[j] == "?":
+                j += 1
+            text.append(s[i:j], style="yellow")
+        else:
+            # Collect non-? characters
+            while j < len(s) and s[j] != "?":
+                j += 1
+            text.append(s[i:j], style=base_style)
+        i = j
+
+
 def render_file_row(
     node: FileNode,
     movie_template: str,
@@ -72,29 +139,36 @@ def render_file_row(
     depth: int = 0,
     flat_mode: bool = False,
     root_path: Path | None = None,
-) -> str:
-    """Render a single file row as a plain string.
+) -> Text:
+    """Render a single file row as a Rich :class:`Text` object.
 
     Format: ``indent + marker + " " + filename + "  ->  " + dest``
 
     The template is selected automatically based on
     ``node.result["media_type"]``.
 
-    Markers:
-    - ``"\\u2713"`` (checkmark) if staged
-    - ``"\\u25cb"`` (circle) if not staged and not ignored
-    - ``" "`` (space) if ignored
+    Markers (with color):
+    - ``"\\u2713"`` (checkmark, green) if staged
+    - ``"\\u25cb"`` (circle, yellow) if not staged and not ignored
+    - ``"\\u00b7"`` (middle dot, dim) if ignored
     """
     effective_template = select_template(node, movie_template, tv_template)
 
     indent = "" if flat_mode else "  " * depth
 
+    row = Text()
+
+    if indent:
+        row.append(indent)
+
     if node.staged:
-        marker = "\u2713"
+        row.append("\u2713", style="green")
     elif node.ignored:
-        marker = " "
+        row.append("\u00b7", style="dim")
     else:
-        marker = "\u25cb"
+        row.append("\u25cb", style="yellow")
+
+    row.append(" ")
 
     if flat_mode and root_path is not None:
         try:
@@ -104,9 +178,13 @@ def render_file_row(
     else:
         filename = node.path.name
 
-    dest = compute_dest(node, effective_template) or "???"
+    row.append(filename)
+    row.append("  \u2192  ", style="dim")
 
-    return f"{indent}{marker} {filename}  \u2192  {dest}"
+    dest = compute_dest(node, effective_template)
+    row.append_text(render_dest(dest))
+
+    return row
 
 
 def render_folder_row(node: FolderNode, depth: int = 0) -> str:
@@ -130,8 +208,12 @@ def render_row(
     depth: int = 0,
     flat_mode: bool = False,
     root_path: Path | None = None,
-) -> str:
-    """Render a single row, dispatching to file or folder renderer."""
+) -> Text | str:
+    """Render a single row, dispatching to file or folder renderer.
+
+    Returns :class:`Text` for file rows (with marker/dest coloring)
+    and a plain ``str`` for folder rows.
+    """
     if isinstance(node, FileNode):
         return render_file_row(
             node,
