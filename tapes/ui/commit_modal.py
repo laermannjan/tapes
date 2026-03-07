@@ -1,17 +1,13 @@
-"""Commit confirmation modal listing staged files with destinations."""
+"""Commit confirmation screen listing staged files with destinations."""
 from __future__ import annotations
-
-from typing import TYPE_CHECKING
 
 from rich.text import Text
 from textual.app import ComposeResult
-from textual.containers import Center, Middle
+from textual.binding import Binding
+from textual.screen import ModalScreen
 from textual.widgets import Static
 
 from tapes.ui.tree_render import MUTED, render_dest
-
-if TYPE_CHECKING:
-    pass
 
 
 def build_commit_text(
@@ -63,19 +59,14 @@ def build_commit_text(
     return result
 
 
-class CommitModal(Middle):
-    """Centered modal overlay showing commit confirmation."""
+class CommitScreen(ModalScreen[bool]):
+    """Modal screen showing commit confirmation. Dismisses with True/False."""
 
     DEFAULT_CSS = """
-    CommitModal {
+    CommitScreen {
         align: center middle;
     }
-    CommitModal > Center {
-        align: center middle;
-        width: 100%;
-        height: auto;
-    }
-    CommitModal #commit-panel {
+    CommitScreen #commit-panel {
         width: 80%;
         max-width: 100;
         min-width: 50;
@@ -87,33 +78,29 @@ class CommitModal(Middle):
     }
     """
 
-    can_focus = True
+    BINDINGS = [
+        Binding("y", "confirm", "Confirm", show=False),
+        Binding("n", "cancel", "Cancel", show=False),
+        Binding("escape", "cancel", "Cancel", show=False),
+    ]
 
     def __init__(
-        self,
-        staged_files: list[tuple[str, str | None]] | None = None,
-        operation: str = "copy",
-        **kwargs: object,
-    ) -> None:
-        super().__init__(**kwargs)
-        self._staged_files: list[tuple[str, str | None]] = staged_files or []
-        self._operation = operation
-
-    def compose(self) -> ComposeResult:
-        with Center():
-            yield Static(
-                build_commit_text(self._staged_files, self._operation),
-                id="commit-panel",
-            )
-
-    def update_content(
         self,
         staged_files: list[tuple[str, str | None]],
         operation: str,
     ) -> None:
-        """Update the modal content and refresh."""
+        super().__init__()
         self._staged_files = staged_files
         self._operation = operation
-        self.query_one("#commit-panel", Static).update(
-            build_commit_text(staged_files, operation)
+
+    def compose(self) -> ComposeResult:
+        yield Static(
+            build_commit_text(self._staged_files, self._operation),
+            id="commit-panel",
         )
+
+    def action_confirm(self) -> None:
+        self.dismiss(True)
+
+    def action_cancel(self) -> None:
+        self.dismiss(False)

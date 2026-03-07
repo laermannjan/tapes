@@ -14,7 +14,7 @@ from textual.widgets import Static
 
 from tapes.config import TapesConfig
 from tapes.fields import MEDIA_TYPE, MEDIA_TYPE_EPISODE
-from tapes.ui.commit_modal import CommitModal
+from tapes.ui.commit_modal import CommitScreen
 from tapes.ui.detail_view import DetailView
 from tapes.ui.help_overlay import HelpScreen
 from tapes.ui.tree_model import (
@@ -91,9 +91,6 @@ class TreeApp(App):
     ]
 
     CSS = """
-    Screen {
-        layers: default overlay;
-    }
     TreeView {
         height: 1fr;
         border: round #555555;
@@ -113,20 +110,6 @@ class TreeApp(App):
     StatusFooter {
         dock: bottom;
         height: 1;
-    }
-    CommitModal {
-        display: none;
-        layer: overlay;
-        dock: top;
-        width: 100%;
-        height: 100%;
-    }
-    CommitModal.visible {
-        display: block;
-    }
-    .modal-open TreeView,
-    .modal-open DetailView {
-        opacity: 0.3;
     }
     """
 
@@ -153,10 +136,8 @@ class TreeApp(App):
         self._tmdb_progress = (0, 0)
         self._searching = False
         self._search_query = ""
-        self._commit_visible = False
 
     def compose(self) -> ComposeResult:
-        yield CommitModal(id="commit-modal")
         yield TreeView(
             self.model,
             self.movie_template,
@@ -363,10 +344,6 @@ class TreeApp(App):
         if self._searching:
             self._finish_search(keep_filter=False)
             return
-        if self._commit_visible:
-            self._hide_commit_modal()
-            self._update_footer()
-            return
         if self._in_detail:
             dv = self.query_one(DetailView)
             if dv.editing:
@@ -392,7 +369,6 @@ class TreeApp(App):
         if tv.staged_count == 0:
             tv.set_status("No staged files to commit")
             return
-        # Build staged file list with destinations
         from tapes.ui.tree_render import compute_dest, select_template
 
         staged = [f for f in self.model.all_files() if f.staged]
@@ -402,32 +378,20 @@ class TreeApp(App):
             dest = compute_dest(node, tmpl)
             staged_files.append((node.path.name, dest))
 
-        modal = self.query_one(CommitModal)
-        modal.update_content(staged_files, self.config.library.operation)
-        self._show_commit_modal()
+        self.push_screen(
+            CommitScreen(staged_files, self.config.library.operation),
+            callback=self._on_commit_result,
+        )
 
-    def _show_commit_modal(self) -> None:
-        """Show the commit confirmation modal and dim background."""
-        self._commit_visible = True
-        modal = self.query_one(CommitModal)
-        modal.add_class("visible")
-        modal.focus()
-        self.add_class("modal-open")
-
-    def _hide_commit_modal(self) -> None:
-        """Hide the commit confirmation modal and restore background."""
-        self._commit_visible = False
-        modal = self.query_one(CommitModal)
-        modal.remove_class("visible")
-        self.remove_class("modal-open")
-        if self._in_detail:
-            self.query_one(DetailView).focus()
+    def _on_commit_result(self, confirmed: bool) -> None:
+        """Handle commit screen dismissal."""
+        if confirmed:
+            self._do_commit()
         else:
-            self.query_one(TreeView).focus()
+            self._update_footer()
 
     def _do_commit(self) -> None:
         """Execute the commit: process staged files and exit."""
-        self._hide_commit_modal()
         staged = [f for f in self.model.all_files() if f.staged]
         pairs = self._compute_file_pairs(staged)
         from tapes.file_ops import process_staged
@@ -509,17 +473,7 @@ class TreeApp(App):
         self._update_footer()
 
     def on_key(self, event: Key) -> None:
-        """Intercept key events during search and commit modal modes."""
-        if self._commit_visible:
-            event.prevent_default()
-            event.stop()
-            if event.character == "y":
-                self._do_commit()
-            elif event.character == "n" or event.key == "escape":
-                self._hide_commit_modal()
-                self._update_footer()
-            return
-
+        """Intercept key events during search mode."""
         if not self._searching:
             return
 

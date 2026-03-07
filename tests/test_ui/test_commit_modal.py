@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from tapes.ui.commit_modal import CommitModal, build_commit_text
+from tapes.ui.commit_modal import build_commit_text
 from tapes.ui.tree_app import TreeApp
 from tapes.ui.tree_model import FileNode, FolderNode, TreeModel
 
@@ -144,48 +144,38 @@ class TestBuildCommitText:
 
 
 class TestCommitModalWidget:
-    """Test the CommitModal container."""
+    """Test build_commit_text."""
 
     def test_default_empty(self) -> None:
-        # CommitModal is a Container; test via build_commit_text directly
         text = build_commit_text([], "copy")
         plain = text.plain
         assert "Copy 0 files to library?" in plain
 
-    def test_instantiation(self) -> None:
-        modal = CommitModal(
-            staged_files=[("movie.mkv", "Movie (2024)/Movie (2024).mkv")],
-            operation="move",
-        )
-        assert modal._operation == "move"
-        assert len(modal._staged_files) == 1
-
 
 # ---------------------------------------------------------------------------
-# TreeApp integration tests
+# CommitScreen tests
 # ---------------------------------------------------------------------------
 
 
-class TestCommitModalIntegration:
-    """Test CommitModal integration into TreeApp."""
+class TestCommitScreen:
+    """Test that CommitScreen is a proper ModalScreen."""
 
-    def test_commit_modal_initially_hidden(self) -> None:
-        app = _make_app()
-        assert app._commit_visible is False
+    def test_is_modal_screen(self) -> None:
+        from textual.screen import ModalScreen
 
-    def test_commit_modal_in_compose(self) -> None:
-        app = _make_app()
-        widgets = list(app.compose())
-        modal_widgets = [w for w in widgets if isinstance(w, CommitModal)]
-        assert len(modal_widgets) == 1
-        assert modal_widgets[0].id == "commit-modal"
+        from tapes.ui.commit_modal import CommitScreen
 
-    def test_commit_binding_registered(self) -> None:
-        """Verify the c binding is present in BINDINGS."""
+        assert issubclass(CommitScreen, ModalScreen)
+
+    def test_has_confirm_and_cancel_bindings(self) -> None:
+        from tapes.ui.commit_modal import CommitScreen
+
+        keys = [b.key for b in CommitScreen.BINDINGS]
+        assert "y" in keys
+        assert "n" in keys
+        assert "escape" in keys
+
+    def test_commit_binding_registered_on_app(self) -> None:
+        """Verify the c binding is present in TreeApp.BINDINGS."""
         keys = [b.key for b in TreeApp.BINDINGS]
         assert "c" in keys
-
-    def test_css_contains_modal_rules(self) -> None:
-        """Verify CSS includes CommitModal rules."""
-        css = TreeApp.CSS
-        assert "CommitModal" in css

@@ -825,22 +825,22 @@ class TestCommitAction:
             await pilot.press("c")
             tv = app.query_one(TreeView)
             assert "No staged" in tv._status_text
+            # No screen pushed
+            assert len(app.screen_stack) == 1
 
     @pytest.mark.asyncio()
     async def test_commit_shows_confirmation(self) -> None:
-        from tapes.ui.commit_modal import CommitModal
+        from tapes.ui.commit_modal import CommitScreen
         from tapes.ui.tree_app import TreeApp
 
         model = _expanded_model()
-        # Stage a file
         model.all_files()[0].staged = True
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
             await pilot.press("c")
-            assert app._commit_visible is True
-            modal = app.query_one(CommitModal)
-            assert "visible" in modal.classes
+            assert len(app.screen_stack) == 2
+            assert isinstance(app.screen, CommitScreen)
 
     @pytest.mark.asyncio()
     async def test_commit_y_confirms_and_exits(self) -> None:
@@ -852,9 +852,9 @@ class TestCommitAction:
 
         async with app.run_test() as pilot:
             await pilot.press("c")
-            assert app._commit_visible is True
+            assert len(app.screen_stack) == 2
             await pilot.press("y")
-            # App should exit with staged files as result
+            # App should exit after commit
             assert app.return_code is not None or app._exit
 
     @pytest.mark.asyncio()
@@ -867,11 +867,10 @@ class TestCommitAction:
 
         async with app.run_test() as pilot:
             await pilot.press("c")
-            assert app._commit_visible is True
+            assert len(app.screen_stack) == 2
             await pilot.press("escape")
-            assert app._commit_visible is False
-            tv = app.query_one(TreeView)
-            assert "staged" in tv._status_text
+            # Back to main screen
+            assert len(app.screen_stack) == 1
 
     @pytest.mark.asyncio()
     async def test_x_toggles_ignored(self) -> None:
