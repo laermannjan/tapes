@@ -43,6 +43,7 @@ class TreeView(Widget):
         self._all_items: list[tuple[FileNode | FolderNode, int]] = []
         self._range_anchor: int | None = None
         self._filter_text: str = ""
+        self._scroll_offset: int = 0
         self._refresh_items()
 
     @property
@@ -80,16 +81,20 @@ class TreeView(Widget):
         lo, hi = rng
         return [self._items[i][0] for i in range(lo, hi + 1)]
 
-    def toggle_staged_range(self) -> None:
-        """Toggle staged on all FileNodes in the selection range."""
+    def _toggle_flag_range(self, attr: str) -> None:
+        """Toggle a boolean flag on all FileNodes in the selection range."""
         nodes = self.selected_nodes()
         file_nodes = [n for n in nodes if isinstance(n, FileNode)]
         if not file_nodes:
             return
-        all_staged = all(f.staged for f in file_nodes)
+        all_set = all(getattr(f, attr) for f in file_nodes)
         for f in file_nodes:
-            f.staged = not all_staged
+            setattr(f, attr, not all_set)
         self.refresh()
+
+    def toggle_staged_range(self) -> None:
+        """Toggle staged on all FileNodes in the selection range."""
+        self._toggle_flag_range("staged")
 
     def toggle_staged_at_cursor(self) -> None:
         """Toggle staged on cursor or range."""
@@ -107,14 +112,7 @@ class TreeView(Widget):
 
     def toggle_ignored_range(self) -> None:
         """Toggle ignored on all FileNodes in the selection range."""
-        nodes = self.selected_nodes()
-        file_nodes = [n for n in nodes if isinstance(n, FileNode)]
-        if not file_nodes:
-            return
-        all_ignored = all(f.ignored for f in file_nodes)
-        for f in file_nodes:
-            f.ignored = not all_ignored
-        self.refresh()
+        self._toggle_flag_range("ignored")
 
     def toggle_ignored_at_cursor(self) -> None:
         """Toggle ignored on cursor or range."""
@@ -147,14 +145,24 @@ class TreeView(Widget):
         else:
             self._items = list(self._all_items)
 
+        self._scroll_offset = 0
+
     def render(self) -> RenderableType:
-        """Render the tree with cursor highlighting."""
+        """Render the visible window of the tree with cursor highlighting."""
         if not self._items:
             return Text("(empty)")
 
+        viewport_height = self.size.height
+        if viewport_height <= 0:
+            viewport_height = len(self._items)
+
+        start = self._scroll_offset
+        end = min(start + viewport_height, len(self._items))
+
         rng = self.selected_range
         lines: list[Text] = []
-        for i, (node, depth) in enumerate(self._items):
+        for i in range(start, end):
+            node, depth = self._items[i]
             effective_depth = 0 if self.flat_mode else depth
             row_str = render_row(
                 node,
@@ -174,8 +182,7 @@ class TreeView(Widget):
                 line.stylize("on dark_blue")
             lines.append(line)
 
-        result = Text("\n").join(lines)
-        return result
+        return Text("\n").join(lines)
 
     def render_tree(self) -> str:
         """Render the full tree to a plain string (no cursor highlighting).
@@ -230,9 +237,31 @@ class TreeView(Widget):
             self.cursor_index = len(self._items) - 1
         self.refresh()
 
+    SCROLLOFF = 3
+
     def watch_cursor_index(self) -> None:
-        """React to cursor changes by refreshing the display."""
+        """React to cursor changes by scrolling and refreshing."""
+        self._scroll_to_cursor()
         self.refresh()
+
+    def _scroll_to_cursor(self) -> None:
+        """Adjust scroll offset so cursor stays visible with scrolloff."""
+        if not self._items:
+            return
+        viewport_height = self.size.height
+        if viewport_height <= 0:
+            return
+
+        scrolloff = min(self.SCROLLOFF, viewport_height // 2)
+        top = self._scroll_offset
+        bottom = top + viewport_height - 1
+
+        if self.cursor_index - scrolloff < top:
+            self._scroll_offset = max(0, self.cursor_index - scrolloff)
+        elif self.cursor_index + scrolloff > bottom:
+            self._scroll_offset = max(
+                0, self.cursor_index + scrolloff - viewport_height + 1
+            )
 
     @property
     def staged_count(self) -> int:
