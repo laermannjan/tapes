@@ -61,6 +61,13 @@ Core
 **Current and authoritative:**
 - `docs/plans/2026-03-06-tui-redesign.md` -- UI/UX design spec (the source of truth)
 - `docs/plans/2026-03-06-tui-redesign-milestones.md` -- implementation milestones
+- `docs/plans/2026-03-07-tui-visual-design.md` -- visual design spec (colors, layout, rendering)
+- `docs/plans/2026-03-08-visual-fixes-remaining.md` -- **active** remaining visual issues and handoff notes
+
+**Mockups and references:**
+- `docs/mockups/color-swatches.html` -- color palette reference (all Claude palettes)
+- `docs/mockups/screenshots/column-layout-mockup.html` -- before/after layout comparison
+- `docs/mockups/screenshots/` -- terminal screenshots (gitignored)
 
 **Legacy (DO NOT use for implementation):**
 - `docs/legacy/` -- old designs from the initial spike and earlier iterations.
@@ -108,11 +115,11 @@ Core
 
 ## Current status
 
-**Pre-alpha. TUI + core pipeline complete (381 tests passing).**
+**Pre-alpha. TUI + core pipeline complete (470 tests passing).**
 
 Implemented: TUI (M1-M16), real TMDB integration (two-stage search),
 similarity/confidence scoring, template selection, broadened scanner,
-file processing on commit, config wiring.
+file processing on commit, config wiring, visual design overhaul.
 
-Next steps: revisit similarity scoring for more sophisticated matching,
-end-to-end manual testing, error handling polish.
+Active work: visual polish iteration (see `docs/plans/2026-03-08-visual-fixes-remaining.md`).
+Remaining: revisit similarity scoring, end-to-end manual testing, error handling.
