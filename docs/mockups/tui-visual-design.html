@@ -90,6 +90,13 @@
     .ba { color: var(--border-active); }
     .cell { background: var(--sel); padding: 0 1px; }
 
+    /* depth gradient for destination paths */
+    .d0 { color: #444444; }  /* root/deepest ancestor — dimmest */
+    .d1 { color: #666666; }  /* grandparent */
+    .d2 { color: #999999; }  /* parent folder */
+    .d3 { color: #cccccc; }  /* filename — normal fg */
+    .d3b { color: #ffffff; font-weight: bold; } /* filename — bold white */
+
     /* modal */
     .term-modal { position: relative; }
     .term-modal .term-inner { opacity: 0.35; }
@@ -119,8 +126,36 @@
 
 <!-- ═══════════════════════════════════════════════════════════════════════════ -->
 <hr>
-<h2>Tree View (cleaned up)</h2>
-<p>Single footer row. Only non-obvious shortcuts. <em>?</em> for full help.</p>
+<h2>Destination Path Rendering</h2>
+<p>
+  TV templates can nest deeply: <em>TV/{title} ({year})/Season {season}/{title} - S{season}E{episode} - {ep_title}.{ext}</em>.
+  With long paths, per-segment coloring gets noisy. The question: what actually helps scan correctness?
+</p>
+
+<h3>Decision: dim path, normal filename stem</h3>
+
+<div class="term">
+  <div class="term-inner" style="min-height: auto; padding: 8px 0;">
+    <div class="pnl" style="border: none;">
+      <div class="pnl-body">
+<div class="r">  <span class="d">template: TV/{title} ({year})/Season {season}/{title} - S{season}E{episode} - {ep_title}.{ext}</span></div>
+<div class="r"></div>
+<div class="r">  <span class="g">✓</span> Breaking.Bad.S01E01.720p.mkv  <span class="d">→ TV/Breaking Bad (2008)/Season 1/</span>Breaking Bad - S01E01 - Pilot<span class="d">.mkv</span></div>
+<div class="r">  <span class="g">✓</span> Breaking.Bad.S01E02.720p.mkv  <span class="d">→ TV/Breaking Bad (2008)/Season 1/</span>Breaking Bad - S01E02 - Cat's in the Bag<span class="d">.mkv</span></div>
+<div class="r">  <span class="y">○</span> Inception.2010.1080p.mkv      <span class="d">→ Movies/Inception (2010)/</span>Inception (2010)<span class="d">.mkv</span></div>
+<div class="r">  <span class="y">○</span> behind_the_scenes.mkv         <span class="d">→</span> <span class="y">?</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="note">
+  Directory path and extension dim. Filename stem in normal text color. The filename
+  is where per-file differences live — episode numbers, titles. The folder hierarchy
+  repeats across files and fades into the background. Unresolved destinations show
+  <strong class="y">?</strong> in yellow.
+</div>
+
 
 <h3>Browsing — tree focused, compact detail preview</h3>
 
@@ -129,12 +164,12 @@
     <div class="pnl on grow">
       <div class="pnl-top ba">┌─<span class="t"> Files </span>───────────────────────────────────────────────────────────────────────────────────┐</div>
       <div class="pnl-body">
-<div class="r"><span class="ba">│</span> <span class="g">✓</span> Breaking.Bad.S01E01.720p.BluRay.x264.mkv    <span class="d">→ Breaking Bad (2008)/S01E01.mkv</span>                <span class="ba">│</span></div>
-<div class="r"><span class="ba">│</span> <span class="g">✓</span> Breaking.Bad.S01E02.720p.BluRay.x264.mkv    <span class="d">→ Breaking Bad (2008)/S01E02.mkv</span>                <span class="ba">│</span></div>
-<div class="r sel"><span class="ba">│</span> <span class="y">○</span> Inception.2010.1080p.BluRay.x264-GROUP.mkv  <span class="d">→ Inception (2010)/Inception (2010).mkv</span>         <span class="ba">│</span></div>
-<div class="r"><span class="ba">│</span> <span class="y">○</span> The.Matrix.1999.720p.mkv                    <span class="d">→ The Matrix (1999)/The Matrix (1999).mkv</span>       <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span> <span class="g">✓</span> Breaking.Bad.S01E01.720p.BluRay.x264.mkv    <span class="d">→ Breaking Bad (2008)/</span>S01E01 - Pilot<span class="d">.mkv</span>      <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span> <span class="g">✓</span> Breaking.Bad.S01E02.720p.BluRay.x264.mkv    <span class="d">→ Breaking Bad (2008)/</span>S01E02 - Cat's in…<span class="d">.mkv</span> <span class="ba">│</span></div>
+<div class="r sel"><span class="ba">│</span> <span class="y">○</span> Inception.2010.1080p.BluRay.x264-GROUP.mkv  <span class="d">→ Inception (2010)/</span>Inception (2010)<span class="d">.mkv</span>       <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span> <span class="y">○</span> The.Matrix.1999.720p.mkv                    <span class="d">→ The Matrix (1999)/</span>The Matrix (1999)<span class="d">.mkv</span>    <span class="ba">│</span></div>
 <div class="r"><span class="ba">│</span> ▼ extras/                                                                                    <span class="ba">│</span></div>
-<div class="r"><span class="ba">│</span>   <span class="y">○</span> behind_the_scenes.mkv                     <span class="d">→ ?</span>                                              <span class="ba">│</span></div>
+<div class="r"><span class="ba">│</span>   <span class="y">○</span> behind_the_scenes.mkv                     <span class="d">→</span> <span class="y">?</span>                                              <span class="ba">│</span></div>
 <div class="r"><span class="ba">│</span>   <span class="d">· featurette.mkv</span>                                                                          <span class="ba">│</span></div>
 <div class="r"><span class="ba">│</span>                                                                                                <span class="ba">│</span></div>
 <div class="r"><span class="ba">│</span>                                                                                                <span class="ba">│</span></div>
@@ -150,7 +185,7 @@
     <div class="pnl sm">
       <div class="pnl-top br">├─<span class="t"> Detail </span>──────────────────────────────────────────────────────────────────────────────────┤</div>
       <div class="pnl-body">
-<div class="r"><span class="br">│</span> <span class="w">Inception.2010.1080p.BluRay.x264-GROUP.mkv</span>  <span class="d">→</span> <span class="d">Inception (2010)/Inception (2010).mkv</span>     <span class="br">│</span></div>
+<div class="r"><span class="br">│</span> <span class="w">Inception.2010.1080p.BluRay.x264-GROUP.mkv</span>  <span class="d">→ Inception (2010)/</span>Inception (2010)<span class="d">.mkv</span>     <span class="br">│</span></div>
 <div class="r"><span class="br">│</span> <span class="d">title:</span> Inception  <span class="d">year:</span> 2010  <span class="d">type:</span> movie  <span class="d">S:</span> ·  <span class="d">E:</span> ·                     <span class="b">TMDB</span> <span class="g">92%</span>  <span class="br">│</span></div>
       </div>
       <div class="pnl-bot br">└──────────────────────────────────────────────────────────────────────────────────────────────────┘</div>

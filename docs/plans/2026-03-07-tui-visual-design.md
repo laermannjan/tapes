@@ -40,7 +40,8 @@ Full-width file list with destinations.
 - `○` (yellow) = unstaged, needs review
 - `·` (dim) = ignored, entire row dimmed
 - `▼`/`▶` = folder expanded/collapsed
-- `→ destination` in dim — secondary info, always visible for glanceability
+- `→` arrow in dim
+- Destination path uses template variable emphasis (see below)
 - Cursor = full-row highlight (reverse/selection background)
 - 2-space indent per depth level
 
@@ -225,7 +226,11 @@ Semantic colors only. No decorative color.
 | Ignored files              | Dim (gray)   |
 | Active panel border        | Cyan         |
 | Inactive panel border      | Dim          |
-| Destination `→ path`       | Dim          |
+| Destination arrow `→`      | Dim          |
+| Dest. directory path       | Dim          |
+| Dest. filename stem        | Normal (fg)  |
+| Dest. extension            | Dim          |
+| Dest. unresolved           | Yellow `?`   |
 | Filename (detail header)   | Bold white   |
 | Result column values       | Bold white   |
 | Source — matches result     | Dim          |
@@ -239,6 +244,30 @@ Semantic colors only. No decorative color.
 | Cursor row                 | Selection bg |
 | Inline edit text           | Cyan         |
 | Keybinding hints           | Cyan         |
+
+---
+
+## Destination Path Rendering
+
+Destinations are built from templates like
+`TV/{title} ({year})/Season {season}/{title} - S{season}E{episode} - {ep_title}.{ext}`.
+
+The directory path and extension are dim. The filename stem is normal text color.
+The filename is where per-file differences live (episode numbers, titles). The
+folder hierarchy repeats across files and fades into the background.
+
+- **Directory path** (everything before the last `/`): dim.
+- **Filename stem** (after the last `/`, before the extension): normal (fg).
+- **Extension**: dim.
+- **Arrow** `→`: dim.
+- **Unresolved destination**: `?` in yellow.
+
+```
+→ TV/Breaking Bad (2008)/Season 1/Breaking Bad - S01E01 - Pilot.mkv
+  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^                                  ← dim (directory)
+                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^    ← normal (filename stem)
+                                                                  ^^^^← dim (extension)
+```
 
 ---
 
