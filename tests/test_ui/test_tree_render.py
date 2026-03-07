@@ -32,13 +32,15 @@ class TestComputeDest:
         result = compute_dest(node, MOVIE_TEMPLATE)
         assert result == "Inception (2010)/Inception (2010).mkv"
 
-    def test_returns_none_when_fields_missing(self) -> None:
+    def test_partial_dest_when_fields_missing(self) -> None:
         node = FileNode(
             path=Path("/movies/Inception.mkv"),
             result={"title": "Inception"},
         )
         result = compute_dest(node, MOVIE_TEMPLATE)
-        assert result is None
+        assert result is not None
+        assert "Inception" in result
+        assert "?" in result
 
     def test_tv_template_with_season_episode(self) -> None:
         node = FileNode(
@@ -68,7 +70,7 @@ class TestRenderFileRow:
             staged=True,
             result={"title": "Inception", "year": 2010},
         )
-        row = render_file_row(node, MOVIE_TEMPLATE)
+        row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
         assert row == "\u2713 Inception.mkv  \u2192  Inception (2010)/Inception (2010).mkv"
 
     def test_unstaged_file(self) -> None:
@@ -77,7 +79,7 @@ class TestRenderFileRow:
             staged=False,
             result={"title": "Inception", "year": 2010},
         )
-        row = render_file_row(node, MOVIE_TEMPLATE)
+        row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
         assert row.startswith("\u25cb ")
 
     def test_ignored_file_space_marker(self) -> None:
@@ -86,23 +88,23 @@ class TestRenderFileRow:
             ignored=True,
             result={"title": "Inception", "year": 2010},
         )
-        row = render_file_row(node, MOVIE_TEMPLATE)
+        row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
         assert row.startswith("  ")  # space marker + space before filename
 
-    def test_missing_dest_shows_question_marks(self) -> None:
+    def test_missing_dest_shows_partial(self) -> None:
         node = FileNode(
             path=Path("/movies/Inception.mkv"),
             result={},
         )
-        row = render_file_row(node, MOVIE_TEMPLATE)
-        assert "???" in row
+        row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
+        assert "?" in row
 
     def test_with_indentation_depth_2(self) -> None:
         node = FileNode(
             path=Path("/movies/Inception.mkv"),
             result={"title": "Inception", "year": 2010},
         )
-        row = render_file_row(node, MOVIE_TEMPLATE, depth=2)
+        row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE, depth=2)
         assert row.startswith("    ")  # 2 * "  " = 4 spaces
 
     def test_flat_mode_no_indentation_relative_path(self) -> None:
@@ -112,7 +114,7 @@ class TestRenderFileRow:
             result={"title": "Inception", "year": 2010},
         )
         row = render_file_row(
-            node, MOVIE_TEMPLATE, depth=3, flat_mode=True, root_path=root
+            node, MOVIE_TEMPLATE, TV_TEMPLATE, depth=3, flat_mode=True, root_path=root
         )
         # Flat mode: no indentation regardless of depth
         assert not row.startswith(" " * 6)
@@ -149,13 +151,13 @@ class TestRenderRow:
             path=Path("/movies/Inception.mkv"),
             result={"title": "Inception", "year": 2010},
         )
-        row = render_row(node, MOVIE_TEMPLATE)
+        row = render_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
         # Should contain the arrow separator from file rendering
         assert "\u2192" in row
 
     def test_dispatches_to_folder(self) -> None:
         node = FolderNode(name="tv", collapsed=True)
-        row = render_row(node, MOVIE_TEMPLATE)
+        row = render_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
         assert row == "\u25b6 tv/"
 
 
@@ -244,9 +246,7 @@ class TestRenderFileRowDualTemplate:
             path=Path("/movies/Inception.mkv"),
             result={"title": "Inception", "year": 2010, "media_type": "movie"},
         )
-        row = render_file_row(
-            node, "", movie_template=MOVIE_TEMPLATE, tv_template=TV_TEMPLATE
-        )
+        row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
         assert "Inception (2010)/Inception (2010).mkv" in row
 
     def test_episode_node_uses_tv_template(self) -> None:
@@ -261,17 +261,6 @@ class TestRenderFileRowDualTemplate:
                 "media_type": "episode",
             },
         )
-        row = render_file_row(
-            node, "", movie_template=MOVIE_TEMPLATE, tv_template=TV_TEMPLATE
-        )
+        row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
         assert "S01E02" in row
         assert "Cat's in the Bag..." in row
-
-    def test_single_template_fallback(self) -> None:
-        """When movie_template/tv_template are not given, uses template param."""
-        node = FileNode(
-            path=Path("/movies/Inception.mkv"),
-            result={"title": "Inception", "year": 2010},
-        )
-        row = render_file_row(node, MOVIE_TEMPLATE)
-        assert "Inception (2010)/Inception (2010).mkv" in row

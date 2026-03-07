@@ -105,10 +105,10 @@ class TestRenderDetailHeader:
         assert "\u2192" in lines[1]
         assert "Breaking Bad (2008)" in lines[1]
 
-    def test_missing_fields_shows_questionmarks(self) -> None:
+    def test_missing_fields_shows_partial(self) -> None:
         node = FileNode(path=Path("test.mkv"), result={})
         lines = render_detail_header(node, TEMPLATE)
-        assert "???" in lines[1]
+        assert "?" in lines[1]
 
 
 # --- render_detail_grid ---
@@ -152,7 +152,7 @@ class TestRenderDetailGrid:
 class TestDetailViewCursor:
     def _make_view(self) -> DetailView:
         node = _make_node()
-        view = DetailView(node, TEMPLATE)
+        view = DetailView(node, TEMPLATE, TEMPLATE)
         # Simulate on_mount
         view._fields = get_display_fields(TEMPLATE)
         return view
@@ -213,7 +213,7 @@ class TestDetailViewCursor:
 class TestDetailViewApply:
     def _make_view(self) -> DetailView:
         node = _make_node()
-        view = DetailView(node, TEMPLATE)
+        view = DetailView(node, TEMPLATE, TEMPLATE)
         view._fields = get_display_fields(TEMPLATE)
         return view
 
@@ -279,7 +279,7 @@ class TestDetailViewApply:
 class TestDetailViewEditing:
     def _make_view(self) -> DetailView:
         node = _make_node()
-        view = DetailView(node, TEMPLATE)
+        view = DetailView(node, TEMPLATE, TEMPLATE)
         view._fields = get_display_fields(TEMPLATE)
         return view
 
@@ -356,7 +356,7 @@ class TestDetailViewEditing:
 class TestDetailViewSetNode:
     def test_set_node_resets_cursor(self) -> None:
         node = _make_node()
-        view = DetailView(node, TEMPLATE)
+        view = DetailView(node, TEMPLATE, TEMPLATE)
         view._fields = get_display_fields(TEMPLATE)
         view.cursor_row = 2
         view.cursor_col = 1
@@ -374,7 +374,7 @@ class TestDetailViewSetNode:
 
     def test_set_node_updates_fields(self) -> None:
         node = _make_node()
-        view = DetailView(node, TEMPLATE)
+        view = DetailView(node, TEMPLATE, TEMPLATE)
         view._fields = []
         view.set_node(node)
         assert len(view._fields) == 4  # title, year, season, episode
@@ -386,7 +386,7 @@ class TestDetailViewSetNode:
 class TestDetailViewApplyAllClear:
     def _make_view(self) -> DetailView:
         node = _make_node()
-        view = DetailView(node, TEMPLATE)
+        view = DetailView(node, TEMPLATE, TEMPLATE)
         view._fields = get_display_fields(TEMPLATE)
         return view
 
@@ -452,7 +452,7 @@ class TestMultiFileDetail:
                 ),
             ],
         )
-        view = DetailView(node1, TEMPLATE)
+        view = DetailView(node1, TEMPLATE, TEMPLATE)
         view._fields = get_display_fields(TEMPLATE)
         view.set_nodes([node1, node2])
         return view, node1, node2
@@ -462,7 +462,7 @@ class TestMultiFileDetail:
         assert view.is_multi is True
 
     def test_single_node_not_multi(self) -> None:
-        view = DetailView(_make_node(), TEMPLATE)
+        view = DetailView(_make_node(), TEMPLATE, TEMPLATE)
         view._fields = get_display_fields(TEMPLATE)
         assert view.is_multi is False
 
@@ -593,9 +593,7 @@ class TestDetailViewTemplateSelection:
             result={"title": "Inception", "year": 2010, "media_type": "movie"},
         )
         view = DetailView(
-            node, MOVIE_TEMPLATE,
-            movie_template=MOVIE_TEMPLATE,
-            tv_template=TV_TEMPLATE,
+            node, MOVIE_TEMPLATE, TV_TEMPLATE,
         )
         view._fields = get_display_fields(view._active_template())
         # Movie template has title, year
@@ -617,9 +615,7 @@ class TestDetailViewTemplateSelection:
             },
         )
         view = DetailView(
-            node, MOVIE_TEMPLATE,
-            movie_template=MOVIE_TEMPLATE,
-            tv_template=TV_TEMPLATE,
+            node, MOVIE_TEMPLATE, TV_TEMPLATE,
         )
         view._fields = get_display_fields(view._active_template())
         assert "season" in view._fields
@@ -643,9 +639,7 @@ class TestDetailViewTemplateSelection:
             },
         )
         view = DetailView(
-            movie_node, MOVIE_TEMPLATE,
-            movie_template=MOVIE_TEMPLATE,
-            tv_template=TV_TEMPLATE,
+            movie_node, MOVIE_TEMPLATE, TV_TEMPLATE,
         )
         view._fields = get_display_fields(view._active_template())
         assert "season" not in view._fields
@@ -654,13 +648,13 @@ class TestDetailViewTemplateSelection:
         assert "season" in view._fields
         assert "episode" in view._fields
 
-    def test_fallback_to_template_when_no_dual_templates(self) -> None:
+    def test_template_selection_uses_media_type(self) -> None:
         node = FileNode(
             path=Path("/tv/show.mkv"),
             result={"title": "Show", "media_type": "episode"},
         )
-        view = DetailView(node, TEMPLATE)
-        assert view._active_template() == TEMPLATE
+        view = DetailView(node, MOVIE_TEMPLATE, TV_TEMPLATE)
+        assert view._active_template() == TV_TEMPLATE
 
 
 try:
@@ -682,7 +676,7 @@ class TestTreeDetailIntegration:
         node = _make_node()
         root = FolderNode(name="root", children=[node])
         model = TreeModel(root=root)
-        app = TreeApp(model=model, template=TEMPLATE)
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
             tv = app.query_one(TreeView)
@@ -736,7 +730,7 @@ class TestMultiFileDetailIntegration:
         )
         root = FolderNode(name="root", children=[node1, node2])
         model = TreeModel(root=root)
-        app = TreeApp(model=model, template=TEMPLATE)
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
             tv = app.query_one(TreeView)

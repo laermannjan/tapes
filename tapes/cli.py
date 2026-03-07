@@ -53,11 +53,10 @@ def import_cmd(
     tv_template = cfg.library.tv_template
     tui = TreeApp(
         model=model,
-        template=movie_template,
-        root_path=resolved,
-        auto_pipeline=True,
         movie_template=movie_template,
         tv_template=tv_template,
+        root_path=resolved,
+        auto_pipeline=True,
         config=cfg,
     )
     tui.run()
@@ -90,10 +89,9 @@ def tree_cmd(
     tv_template = cfg.library.tv_template
     tui = TreeApp(
         model=model,
-        template=movie_template,
-        root_path=resolved,
         movie_template=movie_template,
         tv_template=tv_template,
+        root_path=resolved,
         config=cfg,
     )
     tui.run()

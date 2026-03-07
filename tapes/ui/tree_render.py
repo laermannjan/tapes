@@ -66,31 +66,25 @@ def compute_dest(node: FileNode, template: str) -> str | None:
 
 def render_file_row(
     node: FileNode,
-    template: str,
+    movie_template: str,
+    tv_template: str,
     depth: int = 0,
     flat_mode: bool = False,
     root_path: Path | None = None,
-    *,
-    movie_template: str | None = None,
-    tv_template: str | None = None,
 ) -> str:
     """Render a single file row as a plain string.
 
     Format: ``indent + marker + " " + filename + "  ->  " + dest``
 
-    When *movie_template* and *tv_template* are provided, the template is
-    selected automatically based on ``node.result["media_type"]`` and the
-    *template* parameter is ignored.
+    The template is selected automatically based on
+    ``node.result["media_type"]``.
 
     Markers:
     - ``"\\u2713"`` (checkmark) if staged
     - ``"\\u25cb"`` (circle) if not staged and not ignored
     - ``" "`` (space) if ignored
     """
-    if movie_template is not None and tv_template is not None:
-        effective_template = select_template(node, movie_template, tv_template)
-    else:
-        effective_template = template
+    effective_template = select_template(node, movie_template, tv_template)
 
     indent = "" if flat_mode else "  " * depth
 
@@ -130,24 +124,21 @@ def render_folder_row(node: FolderNode, depth: int = 0) -> str:
 
 def render_row(
     node: FileNode | FolderNode,
-    template: str,
+    movie_template: str,
+    tv_template: str,
     depth: int = 0,
     flat_mode: bool = False,
     root_path: Path | None = None,
-    *,
-    movie_template: str | None = None,
-    tv_template: str | None = None,
 ) -> str:
     """Render a single row, dispatching to file or folder renderer."""
     if isinstance(node, FileNode):
         return render_file_row(
             node,
-            template,
+            movie_template,
+            tv_template,
             depth=depth,
             flat_mode=flat_mode,
             root_path=root_path,
-            movie_template=movie_template,
-            tv_template=tv_template,
         )
     return render_folder_row(node, depth=depth)
 

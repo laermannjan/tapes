@@ -39,15 +39,12 @@ class DetailView(Widget):
     def __init__(
         self,
         node: FileNode,
-        template: str,
-        *,
-        movie_template: str | None = None,
-        tv_template: str | None = None,
+        movie_template: str,
+        tv_template: str,
     ) -> None:
         super().__init__()
         self.node = node
         self._file_nodes: list[FileNode] = [node]
-        self.template = template
         self.movie_template = movie_template
         self.tv_template = tv_template
         self._fields: list[str] = []
@@ -57,14 +54,11 @@ class DetailView(Widget):
     def _active_template(self, node: FileNode | None = None) -> str:
         """Return the template for the given (or primary) node.
 
-        When *movie_template* and *tv_template* are set, selects based on
-        the node's ``media_type``.  Falls back to ``self.template``.
+        Selects based on the node's ``media_type``.
         """
         if node is None:
             node = self.node
-        if self.movie_template is not None and self.tv_template is not None:
-            return select_template(node, self.movie_template, self.tv_template)
-        return self.template
+        return select_template(node, self.movie_template, self.tv_template)
 
     @property
     def is_multi(self) -> bool:

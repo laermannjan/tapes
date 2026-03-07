@@ -25,16 +25,13 @@ class TreeView(Widget):
     def __init__(
         self,
         model: TreeModel,
-        template: str,
+        movie_template: str,
+        tv_template: str,
         flat_mode: bool = False,
         root_path: Path | None = None,
-        *,
-        movie_template: str | None = None,
-        tv_template: str | None = None,
     ) -> None:
         super().__init__()
         self.model = model
-        self.template = template
         self.movie_template = movie_template
         self.tv_template = tv_template
         self.flat_mode = flat_mode
@@ -166,12 +163,11 @@ class TreeView(Widget):
             effective_depth = 0 if self.flat_mode else depth
             row_str = render_row(
                 node,
-                self.template,
+                self.movie_template,
+                self.tv_template,
                 depth=effective_depth,
                 flat_mode=self.flat_mode,
                 root_path=self.root_path,
-                movie_template=self.movie_template,
-                tv_template=self.tv_template,
             )
             line = Text(row_str)
             if isinstance(node, FileNode) and node.ignored:
@@ -194,12 +190,11 @@ class TreeView(Widget):
             effective_depth = 0 if self.flat_mode else depth
             line = render_row(
                 node,
-                self.template,
+                self.movie_template,
+                self.tv_template,
                 depth=effective_depth,
                 flat_mode=self.flat_mode,
                 root_path=self.root_path,
-                movie_template=self.movie_template,
-                tv_template=self.tv_template,
             )
             lines.append(line)
         return "\n".join(lines)

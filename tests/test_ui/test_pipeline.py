@@ -319,9 +319,11 @@ class TestAutoPipelineIntegration:
 
         model = _make_model("Dune.2021.1080p.BluRay.mkv")
         config_obj = _make_config(TOKEN)
+        _tmpl = "{title} ({year}).{ext}"
         app = TreeApp(
             model=model,
-            template="{title} ({year}).{ext}",
+            movie_template=_tmpl,
+            tv_template=_tmpl,
             auto_pipeline=True,
             config=config_obj,
         )
@@ -346,7 +348,8 @@ class TestRefreshQueryIntegration:
         root = FolderNode(name="root", children=[node])
         model = TreeModel(root=root)
         config_obj = _make_config(TOKEN)
-        app = TreeApp(model=model, template="{title} ({year}).{ext}", config=config_obj)
+        _tmpl = "{title} ({year}).{ext}"
+        app = TreeApp(model=model, movie_template=_tmpl, tv_template=_tmpl, config=config_obj)
 
         async with app.run_test() as pilot:
             await pilot.press("r")
@@ -366,7 +369,8 @@ class TestRefreshQueryIntegration:
         root = FolderNode(name="root", children=[node])
         model = TreeModel(root=root)
         config_obj = _make_config(TOKEN)
-        app = TreeApp(model=model, template="{title} ({year}).{ext}", config=config_obj)
+        _tmpl = "{title} ({year}).{ext}"
+        app = TreeApp(model=model, movie_template=_tmpl, tv_template=_tmpl, config=config_obj)
 
         async with app.run_test() as pilot:
             await pilot.press("enter")
@@ -393,7 +397,8 @@ class TestRefreshQueryIntegration:
         root = FolderNode(name="root", children=[node1, node2])
         model = TreeModel(root=root)
         config_obj = _make_config(TOKEN)
-        app = TreeApp(model=model, template="{title} ({year}).{ext}", config=config_obj)
+        _tmpl = "{title} ({year}).{ext}"
+        app = TreeApp(model=model, movie_template=_tmpl, tv_template=_tmpl, config=config_obj)
 
         async with app.run_test() as pilot:
             await pilot.press("v")
@@ -420,7 +425,8 @@ class TestRefreshQueryIntegration:
         root = FolderNode(name="root", children=[node1, node2])
         model = TreeModel(root=root)
         config_obj = _make_config(TOKEN)
-        app = TreeApp(model=model, template="{title} ({year}).{ext}", config=config_obj)
+        _tmpl = "{title} ({year}).{ext}"
+        app = TreeApp(model=model, movie_template=_tmpl, tv_template=_tmpl, config=config_obj)
 
         async with app.run_test() as pilot:
             await pilot.press("v")

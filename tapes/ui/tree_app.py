@@ -58,17 +58,15 @@ class TreeApp(App):
     def __init__(
         self,
         model: TreeModel,
-        template: str,
+        movie_template: str,
+        tv_template: str,
         root_path: Path | None = None,
         auto_pipeline: bool = False,
         *,
-        movie_template: str | None = None,
-        tv_template: str | None = None,
         config: TapesConfig | None = None,
     ) -> None:
         super().__init__()
         self.model = model
-        self.template = template
         self.movie_template = movie_template
         self.tv_template = tv_template
         self.root_path = root_path
@@ -86,17 +84,15 @@ class TreeApp(App):
         yield Header()
         yield TreeView(
             self.model,
-            self.template,
+            self.movie_template,
+            self.tv_template,
             root_path=self.root_path,
-            movie_template=self.movie_template,
-            tv_template=self.tv_template,
         )
         # Hidden until a file is selected; set_node() replaces the placeholder
         yield DetailView(
             FileNode(path=Path("placeholder")),
-            self.template,
-            movie_template=self.movie_template,
-            tv_template=self.tv_template,
+            self.movie_template,
+            self.tv_template,
         )
         yield Static("0 staged / 0 total", id="status")
         yield Footer()
@@ -208,24 +204,20 @@ class TreeApp(App):
         """Compute (source, destination) pairs for staged files."""
         from tapes.ui.tree_render import compute_dest, select_template
 
-        library_root = Path(".")
         cfg = self.config
         pairs: list[tuple[Path, Path]] = []
         for node in staged:
-            if self.movie_template and self.tv_template:
-                tmpl = select_template(
-                    node, self.movie_template, self.tv_template
-                )
-                # Choose library sub-root based on media_type
-                media_type = node.result.get("media_type")
-                if media_type == "episode" and cfg.library.tv:
-                    library_root = Path(cfg.library.tv)
-                elif cfg.library.movies:
-                    library_root = Path(cfg.library.movies)
-                else:
-                    library_root = Path(".")
+            tmpl = select_template(
+                node, self.movie_template, self.tv_template
+            )
+            # Choose library sub-root based on media_type
+            media_type = node.result.get("media_type")
+            if media_type == "episode" and cfg.library.tv:
+                library_root = Path(cfg.library.tv)
+            elif cfg.library.movies:
+                library_root = Path(cfg.library.movies)
             else:
-                tmpl = self.template
+                library_root = Path(".")
             dest_rel = compute_dest(node, tmpl)
             if dest_rel is not None:
                 pairs.append((node.path, library_root / dest_rel))

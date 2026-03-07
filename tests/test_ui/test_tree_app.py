@@ -52,11 +52,14 @@ def _simple_model() -> TreeModel:
     return TreeModel(root=root)
 
 
+TEMPLATE = "{title} ({year}).{ext}"
+
+
 def _make_view(model: TreeModel | None = None) -> TreeView:
     """Create a TreeView without mounting it (for unit testing methods)."""
     if model is None:
         model = _simple_model()
-    return TreeView(model=model, template="{title} ({year}).{ext}")
+    return TreeView(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
 
 # ---------------------------------------------------------------------------
@@ -443,7 +446,7 @@ class TestTreeAppKeys:
     async def test_j_moves_cursor_down(self, model: TreeModel, template: str) -> None:
         from tapes.ui.tree_app import TreeApp
 
-        app = TreeApp(model=model, template=template)
+        app = TreeApp(model=model, movie_template=template, tv_template=template)
         async with app.run_test() as pilot:
             tv = app.query_one(TreeView)
             assert tv.cursor_index == 0
@@ -454,7 +457,7 @@ class TestTreeAppKeys:
     async def test_k_moves_cursor_up(self, model: TreeModel, template: str) -> None:
         from tapes.ui.tree_app import TreeApp
 
-        app = TreeApp(model=model, template=template)
+        app = TreeApp(model=model, movie_template=template, tv_template=template)
         async with app.run_test() as pilot:
             tv = app.query_one(TreeView)
             await pilot.press("j")
@@ -467,7 +470,7 @@ class TestTreeAppKeys:
     ) -> None:
         from tapes.ui.tree_app import TreeApp
 
-        app = TreeApp(model=model, template=template)
+        app = TreeApp(model=model, movie_template=template, tv_template=template)
         async with app.run_test() as pilot:
             tv = app.query_one(TreeView)
             await pilot.press("down")
@@ -479,7 +482,7 @@ class TestTreeAppKeys:
     ) -> None:
         from tapes.ui.tree_app import TreeApp
 
-        app = TreeApp(model=model, template=template)
+        app = TreeApp(model=model, movie_template=template, tv_template=template)
         async with app.run_test() as pilot:
             tv = app.query_one(TreeView)
             await pilot.press("down")
@@ -492,7 +495,7 @@ class TestTreeAppKeys:
     ) -> None:
         from tapes.ui.tree_app import TreeApp
 
-        app = TreeApp(model=model, template=template)
+        app = TreeApp(model=model, movie_template=template, tv_template=template)
         async with app.run_test() as pilot:
             tv = app.query_one(TreeView)
             assert tv.item_count == 3
@@ -504,7 +507,7 @@ class TestTreeAppKeys:
     async def test_v_enters_range_mode(self, model: TreeModel, template: str) -> None:
         from tapes.ui.tree_app import TreeApp
 
-        app = TreeApp(model=model, template=template)
+        app = TreeApp(model=model, movie_template=template, tv_template=template)
         async with app.run_test() as pilot:
             tv = app.query_one(TreeView)
             await pilot.press("v")
@@ -517,7 +520,7 @@ class TestTreeAppKeys:
     ) -> None:
         from tapes.ui.tree_app import TreeApp
 
-        app = TreeApp(model=model, template=template)
+        app = TreeApp(model=model, movie_template=template, tv_template=template)
         async with app.run_test() as pilot:
             tv = app.query_one(TreeView)
             await pilot.press("v")
@@ -531,7 +534,7 @@ class TestTreeAppKeys:
     ) -> None:
         from tapes.ui.tree_app import TreeApp
 
-        app = TreeApp(model=model, template=template)
+        app = TreeApp(model=model, movie_template=template, tv_template=template)
         async with app.run_test() as pilot:
             tv = app.query_one(TreeView)
             # Move to top.mkv (index 2)
@@ -550,7 +553,7 @@ class TestTreeAppKeys:
         from tapes.ui.tree_app import TreeApp
         from textual.widgets import Static
 
-        app = TreeApp(model=model, template=template)
+        app = TreeApp(model=model, movie_template=template, tv_template=template)
         async with app.run_test() as pilot:
             # Move to top.mkv and stage it
             await pilot.press("j")
@@ -567,7 +570,7 @@ class TestTreeAppKeys:
 
         # Use expanded model so files are visible
         expanded = _expanded_model()
-        app = TreeApp(model=expanded, template=template)
+        app = TreeApp(model=expanded, movie_template=template, tv_template=template)
         async with app.run_test() as pilot:
             tv = app.query_one(TreeView)
             # Move to file_a (idx 1)
@@ -586,7 +589,7 @@ class TestTreeAppKeys:
     async def test_q_quits(self, model: TreeModel, template: str) -> None:
         from tapes.ui.tree_app import TreeApp
 
-        app = TreeApp(model=model, template=template)
+        app = TreeApp(model=model, movie_template=template, tv_template=template)
         async with app.run_test() as pilot:
             await pilot.press("q")
             # app should exit; if we get here without hanging, it worked
@@ -695,7 +698,7 @@ class TestUndoIntegration:
         )
         root = FolderNode(name="root", children=[node])
         model = TreeModel(root=root)
-        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
             # Enter detail view
@@ -723,7 +726,7 @@ class TestUndoIntegration:
         )
         root = FolderNode(name="root", children=[node])
         model = TreeModel(root=root)
-        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
             # Press u without any changes - should not crash
@@ -814,7 +817,7 @@ class TestCommitAction:
         from tapes.ui.tree_app import TreeApp
 
         model = _simple_model()
-        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
             await pilot.press("c")
@@ -830,7 +833,7 @@ class TestCommitAction:
         model = _expanded_model()
         # Stage a file
         model.all_files()[0].staged = True
-        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
             await pilot.press("c")
@@ -846,7 +849,7 @@ class TestCommitAction:
 
         model = _expanded_model()
         model.all_files()[0].staged = True
-        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
             await pilot.press("c")
@@ -863,7 +866,7 @@ class TestCommitAction:
 
         model = _expanded_model()
         model.all_files()[0].staged = True
-        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
             await pilot.press("c")
@@ -878,7 +881,7 @@ class TestCommitAction:
         from tapes.ui.tree_app import TreeApp
 
         model = _expanded_model()
-        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
             tv = app.query_one(TreeView)
@@ -897,7 +900,7 @@ class TestCommitAction:
         from tapes.ui.tree_app import TreeApp
 
         model = _expanded_model()
-        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
             # Move to file and ignore it
@@ -950,7 +953,8 @@ class TestFlatTreeToggle:
         model = _expanded_model()
         view = TreeView(
             model=model,
-            template="{title} ({year}).{ext}",
+            movie_template=TEMPLATE,
+            tv_template=TEMPLATE,
             root_path=Path("/root"),
         )
         view.toggle_flat_mode()
@@ -997,7 +1001,7 @@ class TestFlatTreeToggleAsync:
         from tapes.ui.tree_app import TreeApp
 
         model = _expanded_model()
-        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
             tv = app.query_one(TreeView)
@@ -1075,7 +1079,7 @@ class TestAcceptBestAsync:
         )
         root = FolderNode(name="root", children=[node])
         model = TreeModel(root=root)
-        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
             await pilot.press("a")
@@ -1102,7 +1106,7 @@ class TestAcceptBestAsync:
         )
         root = FolderNode(name="root", children=[node1, node2])
         model = TreeModel(root=root)
-        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
             # Select range over both files
@@ -1125,7 +1129,7 @@ class TestAcceptBestAsync:
         )
         root = FolderNode(name="root", children=[node])
         model = TreeModel(root=root)
-        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
             # Enter detail view
@@ -1238,7 +1242,7 @@ class TestSearchModeAsync:
         from tapes.ui.tree_app import TreeApp
 
         model = _expanded_model()
-        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
             await pilot.press("slash")
@@ -1249,7 +1253,7 @@ class TestSearchModeAsync:
         from tapes.ui.tree_app import TreeApp
 
         model = _expanded_model()
-        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
             tv = app.query_one(TreeView)
@@ -1263,7 +1267,7 @@ class TestSearchModeAsync:
         from tapes.ui.tree_app import TreeApp
 
         model = _expanded_model()
-        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
             tv = app.query_one(TreeView)
@@ -1280,7 +1284,7 @@ class TestSearchModeAsync:
         from tapes.ui.tree_app import TreeApp
 
         model = _expanded_model()
-        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
             tv = app.query_one(TreeView)
@@ -1296,7 +1300,7 @@ class TestSearchModeAsync:
         from tapes.ui.tree_app import TreeApp
 
         model = _expanded_model()
-        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
             tv = app.query_one(TreeView)
@@ -1316,7 +1320,7 @@ class TestSearchModeAsync:
         )
         root = FolderNode(name="root", children=[node])
         model = TreeModel(root=root)
-        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
             # Enter detail view
