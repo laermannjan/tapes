@@ -177,7 +177,11 @@ def refresh_tmdb_source(
 
 
 def _populate_node_guessit(node: FileNode, extract_metadata_fn: Callable[[str], Any]) -> None:
-    """Extract metadata from filename via guessit and set as result + source."""
+    """Extract metadata from filename via guessit and set as result (base layer).
+
+    The filename extraction is the base layer, not a source. It populates
+    ``node.result`` directly. Sources are reserved for TMDB matches only.
+    """
     meta = extract_metadata_fn(node.path.name)
     filename_fields: dict = {}
     if meta.title:
@@ -196,8 +200,7 @@ def _populate_node_guessit(node: FileNode, extract_metadata_fn: Callable[[str], 
             filename_fields[k] = v
 
     node.result = dict(filename_fields)
-    filename_source = Source(name="from filename", fields=filename_fields)
-    node.sources = [filename_source]
+    node.sources = []
 
 
 def _query_tmdb_for_node(

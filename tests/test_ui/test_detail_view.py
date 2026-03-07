@@ -517,7 +517,7 @@ class TestMultiFileDetail:
     def test_header_is_bold_white(self) -> None:
         view, _, _ = self._make_multi_view()
         header = view._render_multi_header()
-        assert header[0].style == "bold white"
+        assert header[0].style == "bold"
 
     def test_header_shows_various_destinations(self) -> None:
         view, _, _ = self._make_multi_view()

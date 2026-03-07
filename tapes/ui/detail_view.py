@@ -119,19 +119,22 @@ class DetailView(Widget):
             return self.node.result
         return compute_shared_fields(self._file_nodes)
 
-    def _border_style(self) -> str:
-        """Return the Rich style string for the border."""
-        return "cyan" if self.active else "dim"
+    BORDER_TITLE = "Detail"
 
-    def watch_active(self) -> None:
-        """React to active state changes."""
+    def watch_active(self, value: bool) -> None:
+        """React to active state changes by toggling CSS classes."""
+        if value:
+            self.add_class("-active")
+            self.remove_class("-inactive")
+        else:
+            self.add_class("-inactive")
+            self.remove_class("-active")
         self.refresh()
 
     def render(self) -> RenderableType:
-        """Build Rich Text with cursor highlighting, wrapped in box-drawing borders."""
+        """Build Rich Text content (borders handled by Textual CSS)."""
         w = self.size.width
-        border_style = self._border_style()
-        inner_width = max(0, w - 2)
+        inner_width = max(0, w - 2)  # account for CSS border + padding
 
         is_expanded = self.has_class("expanded")
 
@@ -140,51 +143,7 @@ class DetailView(Widget):
         else:
             content = self._render_compact_content()
 
-        # Now wrap in borders
-        # Top border: shares border with tree above
-        title = " Detail "
-        top_fill = max(0, w - 2 - len(title))
-        top_line = Text()
-        top_line.append(
-            f"\u251c\u2500{title}" + "\u2500" * top_fill + "\u2524",
-            style=border_style,
-        )
-
-        # Bottom border
-        bot_line = Text()
-        bot_line.append(
-            "\u2514" + "\u2500" * max(0, w - 2) + "\u2518",
-            style=border_style,
-        )
-
-        # Wrap content lines in side borders
-        bordered: list[Text] = [top_line]
-        for cline in content:
-            line = Text()
-            line.append("\u2502", style=border_style)
-            # Pad content to inner_width using plain_text length
-            plain_len = len(cline.plain)
-            if plain_len < inner_width:
-                padded = Text()
-                padded.append_text(cline)
-                padded.append(" " * (inner_width - plain_len))
-                line.append_text(padded)
-            else:
-                line.append_text(cline)
-            line.append("\u2502", style=border_style)
-            bordered.append(line)
-
-        # Fill remaining height with blank bordered rows
-        content_height = max(0, self.size.height - 2)
-        while len(bordered) - 1 < content_height:
-            blank = Text()
-            blank.append("\u2502", style=border_style)
-            blank.append(" " * inner_width)
-            blank.append("\u2502", style=border_style)
-            bordered.append(blank)
-
-        bordered.append(bot_line)
-        return Text("\n").join(bordered)
+        return Text("\n").join(content)
 
     def _render_compact_content(self) -> list[Text]:
         """Render 2-line compact preview for the hovered node."""
@@ -219,7 +178,7 @@ class DetailView(Widget):
                 content.append(Text(hl))
 
         # Separator
-        content.append(Text("\u2576" + "\u2500" * min(78, inner_width) + "\u2574"))
+        content.append(Text("\u2500" * inner_width, style="dim"))
 
         # Grid header row
         content.append(self._render_grid_header())
@@ -229,17 +188,14 @@ class DetailView(Widget):
             content.append(self._render_field_row(row_idx, field_name))
 
         # Bottom separator
-        content.append(Text("\u2576" + "\u2500" * min(78, inner_width) + "\u2574"))
-
-        # Help line
-        content.append(Text(" enter: apply/edit   shift-enter: apply all   esc: back"))
+        content.append(Text("\u2500" * inner_width, style="dim"))
 
         return content
 
     def _render_multi_header(self) -> list[Text]:
         """Render header for multi-file view."""
         count = len(self._file_nodes)
-        header = Text(f" {count} files selected", style="bold white")
+        header = Text(f" {count} files selected", style="bold")
 
         # Compute destinations
         dests: set[str] = set()
@@ -263,7 +219,7 @@ class DetailView(Widget):
 
         # Result column header
         result_text = col("result")
-        style = "reverse" if self.cursor_row == -1 else ""
+        style = "on #264f78" if self.cursor_row == -1 else ""
         parts.append((result_text, style))
 
         # Separator
@@ -318,9 +274,9 @@ class DetailView(Widget):
         else:
             result_val = display_val(result_raw)
             result_text = col(result_val)
-            style = "bold white"
+            style = "bold"
             if self.cursor_row == row_idx:
-                style = "reverse"
+                style = "on #264f78"
             parts.append((result_text, style))
 
         # Separator
@@ -339,7 +295,7 @@ class DetailView(Widget):
             else:
                 base_style = diff_style(result_raw, src_raw)
             if self.cursor_row == row_idx:
-                base_style = "reverse"
+                base_style = "on #264f78"
             parts.append((col_text, base_style))
         else:
             parts.append((col("  \u00b7"), "dim"))

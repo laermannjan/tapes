@@ -1,4 +1,4 @@
-"""Tests for box-drawing border rendering in TreeView and DetailView."""
+"""Tests for TreeView and DetailView rendering (CSS borders, no manual box-drawing)."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -54,80 +54,76 @@ def _render_plain(widget, width: int = 80, height: int = 20) -> str:
     return rendered.plain
 
 
-# --- TreeView border tests ---
+# --- TreeView rendering tests ---
 
 
-class TestTreeViewBorders:
-    def test_tree_border_top_contains_title(self) -> None:
-        """Verify 'Files' appears in the first line of TreeView rendered output."""
+class TestTreeViewRendering:
+    def test_tree_render_contains_content(self) -> None:
+        """Verify TreeView render output contains file content (no manual borders)."""
         view = _make_tree_view()
         plain = _render_plain(view)
-        first_line = plain.split("\n")[0]
-        assert "Files" in first_line
+        # Should contain the filename, not box-drawing chars at line start
+        assert "Inception" in plain
 
-    def test_tree_border_active_vs_inactive(self) -> None:
-        """Toggle active and verify the border style changes (cyan vs dim)."""
+    def test_tree_render_no_manual_borders(self) -> None:
+        """Verify no manual box-drawing characters in rendered output."""
         view = _make_tree_view()
-        fake_size = SimpleNamespace(width=80, height=20)
-        with patch.object(type(view), "size", new_callable=lambda: PropertyMock(return_value=fake_size)):
-            # Active state (default)
-            view.active = True
-            rendered_active = view.render()
-            top_line_active = rendered_active.split("\n")[0]
+        plain = _render_plain(view)
+        for char in "\u250c\u2510\u2514\u2518\u2502":
+            assert char not in plain
 
-            # Inactive state
-            view.active = False
-            rendered_inactive = view.render()
-            top_line_inactive = rendered_inactive.split("\n")[0]
+    def test_tree_has_border_title(self) -> None:
+        """TreeView should have BORDER_TITLE set to 'Files'."""
+        view = _make_tree_view()
+        assert view.BORDER_TITLE == "Files"
 
-        # Both should have the same plain text
-        assert top_line_active.plain == top_line_inactive.plain
-        # But different styles: active uses cyan, inactive uses dim
-        # Check spans on the top line
-        active_styles = {span.style for span in top_line_active._spans}
-        inactive_styles = {span.style for span in top_line_inactive._spans}
-        assert "cyan" in active_styles or any("cyan" in str(s) for s in active_styles)
-        assert "dim" in inactive_styles or any("dim" in str(s) for s in inactive_styles)
-
-    def test_tree_bottom_border_shows_status(self) -> None:
-        """Call set_status('2 staged') and verify it appears in the bottom line."""
+    def test_tree_set_status_updates_subtitle(self) -> None:
+        """set_status should update border_subtitle."""
         view = _make_tree_view()
         view.set_status("2 staged")
-        plain = _render_plain(view)
-        last_line = plain.split("\n")[-1]
-        assert "2 staged" in last_line
+        assert view.border_subtitle == "2 staged"
+
+    def test_tree_active_toggles_css_classes(self) -> None:
+        """Toggling active should add/remove CSS classes."""
+        view = _make_tree_view()
+        view.active = True
+        assert view.has_class("-active")
+        assert not view.has_class("-inactive")
+        view.active = False
+        assert view.has_class("-inactive")
+        assert not view.has_class("-active")
 
 
-# --- DetailView border tests ---
+# --- DetailView rendering tests ---
 
 
-class TestDetailViewBorders:
-    def test_detail_border_top_contains_title(self) -> None:
-        """Verify 'Detail' appears in the first line of DetailView rendered output."""
+class TestDetailViewRendering:
+    def test_detail_render_no_manual_borders(self) -> None:
+        """Verify no manual box-drawing border characters in rendered output."""
         view = _make_detail_view()
         plain = _render_plain(view)
-        first_line = plain.split("\n")[0]
-        assert "Detail" in first_line
+        for char in "\u250c\u2510\u2514\u2518\u251c\u2524":
+            assert char not in plain
 
-    def test_detail_border_active_vs_inactive(self) -> None:
-        """Toggle active and verify the border style changes (cyan vs dim)."""
+    def test_detail_has_border_title(self) -> None:
+        """DetailView should have BORDER_TITLE set to 'Detail'."""
         view = _make_detail_view()
-        fake_size = SimpleNamespace(width=80, height=30)
-        with patch.object(type(view), "size", new_callable=lambda: PropertyMock(return_value=fake_size)):
-            # Active state
-            view.active = True
-            rendered_active = view.render()
-            top_line_active = rendered_active.split("\n")[0]
+        assert view.BORDER_TITLE == "Detail"
 
-            # Inactive state
-            view.active = False
-            rendered_inactive = view.render()
-            top_line_inactive = rendered_inactive.split("\n")[0]
+    def test_detail_active_toggles_css_classes(self) -> None:
+        """Toggling active should add/remove CSS classes."""
+        view = _make_detail_view()
+        view.active = True
+        assert view.has_class("-active")
+        assert not view.has_class("-inactive")
+        view.active = False
+        assert view.has_class("-inactive")
+        assert not view.has_class("-active")
 
-        # Same plain text content
-        assert top_line_active.plain == top_line_inactive.plain
-        # Different styles
-        active_styles = {span.style for span in top_line_active._spans}
-        inactive_styles = {span.style for span in top_line_inactive._spans}
-        assert "cyan" in active_styles or any("cyan" in str(s) for s in active_styles)
-        assert "dim" in inactive_styles or any("dim" in str(s) for s in inactive_styles)
+    def test_detail_no_help_line_in_expanded(self) -> None:
+        """Expanded detail should not contain the help shortcut line."""
+        view = _make_detail_view()
+        view.add_class("expanded")
+        plain = _render_plain(view, height=30)
+        assert "enter: apply/edit" not in plain
+        assert "shift-enter: apply all" not in plain

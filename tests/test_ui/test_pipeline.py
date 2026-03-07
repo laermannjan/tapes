@@ -87,13 +87,14 @@ def mock_tmdb():
 
 
 class TestRunAutoPipeline:
-    def test_populates_result_and_filename_source(self, mock_tmdb) -> None:
+    def test_populates_result_no_filename_source(self, mock_tmdb) -> None:
         model = _make_model("Dune.2021.1080p.BluRay.mkv")
         run_auto_pipeline(model, token=TOKEN)
         node = model.all_files()[0]
         assert node.result.get("title") is not None
-        assert len(node.sources) >= 1
-        assert node.sources[0].name == "from filename"
+        # Filename extraction is the base layer, not a source
+        filename_sources = [s for s in node.sources if s.name == "from filename"]
+        assert len(filename_sources) == 0
 
     def test_confident_match_auto_stages(self, mock_tmdb) -> None:
         model = _make_model("Dune.2021.1080p.BluRay.mkv")
@@ -120,12 +121,11 @@ class TestRunAutoPipeline:
         assert node.result["year"] == 2008
         assert node.staged is True
 
-    def test_no_tmdb_match_only_filename_source(self, mock_tmdb) -> None:
+    def test_no_tmdb_match_no_sources(self, mock_tmdb) -> None:
         model = _make_model("Unknown.Movie.2024.mkv")
         run_auto_pipeline(model, token=TOKEN)
         node = model.all_files()[0]
-        assert len(node.sources) == 1
-        assert node.sources[0].name == "from filename"
+        assert len(node.sources) == 0
         assert node.staged is False
 
     def test_multiple_files_processed(self, mock_tmdb) -> None:
@@ -140,15 +140,17 @@ class TestRunAutoPipeline:
         assert files[1].staged is True   # Arrival
         assert files[2].staged is False  # Unknown
 
-    def test_filename_source_fields_from_guessit(self, mock_tmdb) -> None:
+    def test_guessit_populates_result_directly(self, mock_tmdb) -> None:
         model = _make_model("Breaking.Bad.S01E01.720p.BluRay.x264.mkv")
         run_auto_pipeline(model, token=TOKEN)
         node = model.all_files()[0]
-        src = node.sources[0]
-        assert src.name == "from filename"
-        assert src.fields.get("title") == "Breaking Bad"
-        assert src.fields.get("season") == 1
-        assert src.fields.get("episode") == 1
+        # guessit populates result directly (base layer), not as a source
+        assert node.result.get("title") == "Breaking Bad"
+        assert node.result.get("season") == 1
+        assert node.result.get("episode") == 1
+        # No "from filename" source
+        filename_sources = [s for s in node.sources if s.name == "from filename"]
+        assert len(filename_sources) == 0
 
     def test_tmdb_episode_data_merged(self, mock_tmdb) -> None:
         model = _make_model("Breaking.Bad.S01E01.mkv")
@@ -167,12 +169,11 @@ class TestRunAutoPipeline:
         assert node.staged is True
 
     def test_no_token_skips_tmdb(self) -> None:
-        """Without a token, only guessit runs -- no TMDB sources."""
+        """Without a token, only guessit runs -- no sources at all."""
         model = _make_model("Dune.2021.mkv")
         run_auto_pipeline(model, token="")
         node = model.all_files()[0]
-        assert len(node.sources) == 1
-        assert node.sources[0].name == "from filename"
+        assert len(node.sources) == 0
         assert node.staged is False
 
 
@@ -226,7 +227,7 @@ class TestRefreshTmdbSource:
         node = FileNode(
             path=Path("/media/Dune.mkv"),
             result={"title": "Dune"},
-            sources=[Source(name="from filename", fields={"title": "Dune"})],
+            sources=[],
         )
         refresh_tmdb_source(node, token=TOKEN)
         tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
@@ -238,7 +239,6 @@ class TestRefreshTmdbSource:
             path=Path("/media/Dune.mkv"),
             result={"title": "Dune"},
             sources=[
-                Source(name="from filename", fields={"title": "Dune"}),
                 Source(name="TMDB #1", fields={"title": "Old"}, confidence=0.5),
             ],
         )
@@ -248,25 +248,11 @@ class TestRefreshTmdbSource:
         assert tmdb_sources[0].fields["title"] == "Dune"
         assert tmdb_sources[0].confidence == 1.0
 
-    def test_keeps_filename_source(self, mock_tmdb) -> None:
-        node = FileNode(
-            path=Path("/media/Dune.mkv"),
-            result={"title": "Dune"},
-            sources=[
-                Source(name="from filename", fields={"title": "Dune"}),
-                Source(name="TMDB #1", fields={"title": "Old"}, confidence=0.5),
-            ],
-        )
-        refresh_tmdb_source(node, token=TOKEN)
-        filename_sources = [s for s in node.sources if s.name == "from filename"]
-        assert len(filename_sources) == 1
-
     def test_no_match_removes_tmdb_source(self, mock_tmdb) -> None:
         node = FileNode(
             path=Path("/media/Unknown.mkv"),
             result={"title": "Nonexistent"},
             sources=[
-                Source(name="from filename", fields={"title": "Nonexistent"}),
                 Source(name="TMDB #1", fields={"title": "Old"}, confidence=0.5),
             ],
         )
@@ -278,7 +264,7 @@ class TestRefreshTmdbSource:
         node = FileNode(
             path=Path("/media/Dune.mkv"),
             result={"title": "Dune"},
-            sources=[Source(name="from filename", fields={"title": "Dune"})],
+            sources=[],
         )
         refresh_tmdb_source(node, token=TOKEN)
         assert node.result.get("year") == 2021
@@ -287,7 +273,7 @@ class TestRefreshTmdbSource:
         node = FileNode(
             path=Path("/media/test.mkv"),
             result={"title": "Breaking Bad"},
-            sources=[Source(name="from filename", fields={"title": "Breaking Bad"})],
+            sources=[],
         )
         refresh_tmdb_source(node, token=TOKEN)
         assert node.result.get("year") == 2008
@@ -296,7 +282,7 @@ class TestRefreshTmdbSource:
         node = FileNode(
             path=Path("/media/Dune.mkv"),
             result={"title": "Dune"},
-            sources=[Source(name="from filename", fields={"title": "Dune"})],
+            sources=[],
         )
         refresh_tmdb_source(node, token="")
         tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
@@ -343,7 +329,7 @@ class TestRefreshQueryIntegration:
         node = FileNode(
             path=Path("/media/Dune.mkv"),
             result={"title": "Dune"},
-            sources=[Source(name="from filename", fields={"title": "Dune"})],
+            sources=[],
         )
         root = FolderNode(name="root", children=[node])
         model = TreeModel(root=root)
@@ -364,7 +350,7 @@ class TestRefreshQueryIntegration:
         node = FileNode(
             path=Path("/media/Arrival.mkv"),
             result={"title": "Arrival"},
-            sources=[Source(name="from filename", fields={"title": "Arrival"})],
+            sources=[],
         )
         root = FolderNode(name="root", children=[node])
         model = TreeModel(root=root)
@@ -387,12 +373,12 @@ class TestRefreshQueryIntegration:
         node1 = FileNode(
             path=Path("/media/Dune.mkv"),
             result={"title": "Dune"},
-            sources=[Source(name="from filename", fields={"title": "Dune"})],
+            sources=[],
         )
         node2 = FileNode(
             path=Path("/media/Arrival.mkv"),
             result={"title": "Arrival"},
-            sources=[Source(name="from filename", fields={"title": "Arrival"})],
+            sources=[],
         )
         root = FolderNode(name="root", children=[node1, node2])
         model = TreeModel(root=root)
@@ -415,12 +401,12 @@ class TestRefreshQueryIntegration:
         node1 = FileNode(
             path=Path("/media/Dune.mkv"),
             result={"title": "Dune"},
-            sources=[Source(name="from filename", fields={"title": "Dune"})],
+            sources=[],
         )
         node2 = FileNode(
             path=Path("/media/Arrival.mkv"),
             result={"title": "Arrival"},
-            sources=[Source(name="from filename", fields={"title": "Arrival"})],
+            sources=[],
         )
         root = FolderNode(name="root", children=[node1, node2])
         model = TreeModel(root=root)

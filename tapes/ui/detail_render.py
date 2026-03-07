@@ -135,7 +135,7 @@ def render_compact_preview(node: FileNode, template: str) -> Text:
     """
     # Line 1: filename -> destination
     line1 = Text()
-    line1.append(f" {node.path.name}", style="bold white")
+    line1.append(f" {node.path.name}", style="bold")
     line1.append("  ")
     line1.append("\u2192 ", style="dim")
     dest = compute_dest(node, template)
@@ -189,7 +189,7 @@ def render_folder_preview(folder: FolderNode) -> Text:
     Line 2: "N files . N unstaged . N ignored" (dim), omitting zero counts.
     """
     line1 = Text()
-    line1.append(f" {folder.name}/", style="bold white")
+    line1.append(f" {folder.name}/", style="bold")
 
     files = collect_files(folder)
     total = len(files)

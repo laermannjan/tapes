@@ -252,13 +252,18 @@ class TestTreeViewRender:
         assert "empty" in str(result)
 
     def test_render_highlights_cursor_row(self) -> None:
+        from types import SimpleNamespace
+        from unittest.mock import PropertyMock, patch
+
         view = _make_view()
-        result = view.render()
-        # The render method applies "reverse" style to the cursor row.
-        # Output includes top border + 3 content rows + bottom border = 5 lines.
+        fake_size = SimpleNamespace(width=80, height=20)
+        with patch.object(type(view), "size", new_callable=lambda: PropertyMock(return_value=fake_size)):
+            result = view.render()
+        # The render method applies "on #264f78" style to the cursor row.
+        # Output includes content rows only (no manual borders).
         plain = result.plain
         lines = plain.split("\n")
-        assert len(lines) == 5  # top border + 3 items + bottom border
+        assert len(lines) == 3  # 3 content items (no borders)
 
 
 # ---------------------------------------------------------------------------
@@ -403,12 +408,17 @@ class TestRangeSelection:
         assert not view.in_range_mode
 
     def test_render_highlights_range(self) -> None:
+        from types import SimpleNamespace
+        from unittest.mock import PropertyMock, patch
+
         model = _expanded_model()
         view = _make_view(model)
         view.start_range_select()  # anchor at 0
         view.move_cursor(2)  # cursor at 2
-        result = view.render()
-        # The cursor row (idx 2) has "reverse", range rows (idx 0, 1) have styling
+        fake_size = SimpleNamespace(width=80, height=20)
+        with patch.object(type(view), "size", new_callable=lambda: PropertyMock(return_value=fake_size)):
+            result = view.render()
+        # The cursor row (idx 2) has "on #264f78", range rows (idx 0, 1) have "on #1a3a52"
         # We verify that the Text object has spans applied
         assert len(result._spans) > 0  # noqa: SLF001
 

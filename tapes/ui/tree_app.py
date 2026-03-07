@@ -91,17 +91,31 @@ class TreeApp(App):
     ]
 
     CSS = """
+    Screen {
+        background: transparent;
+    }
     TreeView {
         height: 3fr;
+        border: round cyan;
+        padding: 0 1;
+    }
+    TreeView.-inactive {
+        border: round $surface-lighten-1;
     }
     TreeView.compressed {
         height: 7;
     }
     DetailView {
         height: 5;
+        border: round $surface-lighten-1;
+        padding: 0 1;
+    }
+    DetailView.-active {
+        border: round cyan;
     }
     DetailView.expanded {
-        height: 1fr;
+        height: auto;
+        max-height: 50%;
     }
     StatusFooter {
         dock: bottom;

@@ -146,76 +146,34 @@ class TreeView(Widget):
 
         self._scroll_offset = 0
 
+    BORDER_TITLE = "Files"
+
     def set_status(self, text: str) -> None:
         """Set the status text displayed in the bottom border."""
         self._status_text = text
+        self.border_subtitle = text
         self.refresh()
-
-    def _border_style(self) -> str:
-        """Return the Rich style string for the border."""
-        return "cyan" if self.active else "dim"
 
     def render(self) -> RenderableType:
         """Render the visible window of the tree with cursor highlighting."""
         w = self.size.width
-        border_style = self._border_style()
-
-        # Top border: ┌─ Files ─...─┐
-        title = " Files "
-        top_fill = max(0, w - 2 - len(title))
-        top_line = Text()
-        top_line.append(f"\u250c\u2500{title}" + "\u2500" * top_fill + "\u2510", style=border_style)
-
-        # Bottom border: ├── status ──┤  or  └─...─┘
-        if self._status_text:
-            status_str = f" {self._status_text} "
-            bot_fill = max(0, w - 2 - len(status_str))
-            bot_left = bot_fill // 2
-            bot_right = bot_fill - bot_left
-            bot_line = Text()
-            bot_line.append(
-                "\u251c" + "\u2500" * bot_left + status_str + "\u2500" * bot_right + "\u2524",
-                style=border_style,
-            )
-        else:
-            bot_line = Text()
-            bot_line.append("\u2514" + "\u2500" * max(0, w - 2) + "\u2518", style=border_style)
-
-        # Content area height = total height - 2 (top + bottom borders)
-        content_height = max(0, self.size.height - 2)
+        inner_width = max(0, w - 2)  # account for CSS border + padding
 
         if not self._items:
-            empty_text = "(empty)"
-            pad = max(0, w - 2 - len(empty_text))
-            content_line = Text()
-            content_line.append("\u2502", style=border_style)
-            content_line.append(empty_text + " " * pad)
-            content_line.append("\u2502", style=border_style)
-            content_lines = [content_line]
-            # Fill remaining content area
-            for _ in range(content_height - 1):
-                blank = Text()
-                blank.append("\u2502", style=border_style)
-                blank.append(" " * max(0, w - 2))
-                blank.append("\u2502", style=border_style)
-                content_lines.append(blank)
-            return Text("\n").join([top_line] + content_lines + [bot_line])
+            return Text("(empty)", style="dim")
 
-        # Adjust scroll offset for content area
-        viewport_height = content_height
-        if viewport_height <= 0:
-            viewport_height = len(self._items)
+        # Viewport height = widget height minus CSS border (2 lines)
+        viewport_height = max(1, self.size.height - 2)
 
         start = self._scroll_offset
         end = min(start + viewport_height, len(self._items))
 
         rng = self.selected_range
         content_lines: list[Text] = []
-        inner_width = max(0, w - 2)
         for i in range(start, end):
             node, depth = self._items[i]
             effective_depth = 0 if self.flat_mode else depth
-            row_result = render_row(
+            row_text = render_row(
                 node,
                 self.movie_template,
                 self.tv_template,
@@ -223,7 +181,6 @@ class TreeView(Widget):
                 flat_mode=self.flat_mode,
                 root_path=self.root_path,
             )
-            row_text = row_result
 
             # Pad or truncate to fit inner width
             plain_len = len(row_text.plain)
@@ -235,25 +192,13 @@ class TreeView(Widget):
             if isinstance(node, FileNode) and node.ignored:
                 row_text.stylize("dim")
             if i == self.cursor_index:
-                row_text.stylize("reverse")
+                row_text.stylize("on #264f78")
             elif rng and rng[0] <= i <= rng[1]:
-                row_text.stylize("on dark_blue")
+                row_text.stylize("on #1a3a52")
 
-            line = Text()
-            line.append("\u2502", style=border_style)
-            line.append_text(row_text)
-            line.append("\u2502", style=border_style)
-            content_lines.append(line)
+            content_lines.append(row_text)
 
-        # Fill remaining content area with blank bordered rows
-        for _ in range(viewport_height - len(content_lines)):
-            blank = Text()
-            blank.append("\u2502", style=border_style)
-            blank.append(" " * inner_width)
-            blank.append("\u2502", style=border_style)
-            content_lines.append(blank)
-
-        return Text("\n").join([top_line] + content_lines + [bot_line])
+        return Text("\n").join(content_lines)
 
     def render_tree(self) -> str:
         """Render the full tree to a plain string (no cursor highlighting).
@@ -309,8 +254,14 @@ class TreeView(Widget):
 
     SCROLLOFF = 3
 
-    def watch_active(self) -> None:
-        """React to active state changes."""
+    def watch_active(self, value: bool) -> None:
+        """React to active state changes by toggling CSS classes."""
+        if value:
+            self.add_class("-active")
+            self.remove_class("-inactive")
+        else:
+            self.add_class("-inactive")
+            self.remove_class("-active")
         self.refresh()
 
     def watch_cursor_index(self) -> None:
@@ -322,7 +273,7 @@ class TreeView(Widget):
         """Adjust scroll offset so cursor stays visible with scrolloff."""
         if not self._items:
             return
-        viewport_height = self.size.height - 2  # account for top/bottom borders
+        viewport_height = self.size.height - 2  # account for CSS border
         if viewport_height <= 0:
             return
 
