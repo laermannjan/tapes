@@ -14,3 +14,4 @@ tapes.toml
 .worktrees/
 *.DS_Store
 test_media/
+downloads/
