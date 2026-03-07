@@ -16,11 +16,12 @@ def run_auto_pipeline(
     2. Query mock TMDB -> add "TMDB #1" source
     3. If TMDB confidence >= threshold, apply TMDB fields to result and auto-stage
     """
+    from tapes.config import DEFAULT_AUTO_ACCEPT_THRESHOLD
     from tapes.metadata import extract_metadata
-    from tapes.ui.query import CONFIDENCE_THRESHOLD, mock_tmdb_lookup
+    from tapes.ui.query import mock_tmdb_lookup
 
     if confidence_threshold is None:
-        confidence_threshold = CONFIDENCE_THRESHOLD
+        confidence_threshold = DEFAULT_AUTO_ACCEPT_THRESHOLD
 
     for node in model.all_files():
         _populate_node(node, confidence_threshold, extract_metadata, mock_tmdb_lookup)
@@ -35,10 +36,11 @@ def refresh_tmdb_source(
     Removes existing TMDB sources, adds new one if found.
     Auto-accepts if confidence >= threshold.
     """
-    from tapes.ui.query import CONFIDENCE_THRESHOLD, mock_tmdb_lookup
+    from tapes.config import DEFAULT_AUTO_ACCEPT_THRESHOLD
+    from tapes.ui.query import mock_tmdb_lookup
 
     if confidence_threshold is None:
-        confidence_threshold = CONFIDENCE_THRESHOLD
+        confidence_threshold = DEFAULT_AUTO_ACCEPT_THRESHOLD
 
     title = str(node.result.get("title", ""))
     episode = node.result.get("episode")

@@ -12,8 +12,12 @@ class ScanConfig(BaseModel):
     pass
 
 
+DEFAULT_AUTO_ACCEPT_THRESHOLD: float = 0.85
+
+
 class MetadataConfig(BaseModel):
     tmdb_token: str = ""
+    auto_accept_threshold: float = DEFAULT_AUTO_ACCEPT_THRESHOLD
 
 
 class LibraryConfig(BaseModel):

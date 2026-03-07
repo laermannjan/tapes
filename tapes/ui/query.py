@@ -22,6 +22,7 @@ _BB_EPISODES: dict[int, dict[str, Any]] = {
     3: {"episode_title": "...And the Bag's in the River"},
 }
 
+# Deprecated: use config.metadata.auto_accept_threshold instead.
 CONFIDENCE_THRESHOLD = 0.9
 
 
