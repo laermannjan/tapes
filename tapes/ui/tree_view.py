@@ -35,7 +35,9 @@ class TreeView(Widget):
         self.flat_mode = flat_mode
         self.root_path = root_path
         self._items: list[tuple[FileNode | FolderNode, int]] = []
+        self._all_items: list[tuple[FileNode | FolderNode, int]] = []
         self._range_anchor: int | None = None
+        self._filter_text: str = ""
         self._refresh_items()
 
     @property
@@ -127,9 +129,14 @@ class TreeView(Widget):
         """Rebuild the flattened item list from the model."""
         if self.flat_mode:
             # In flat mode, show only files (no folders), all at depth 0
-            self._items = [(f, 0) for f in self.model.all_files()]
+            self._all_items = [(f, 0) for f in self.model.all_files()]
         else:
-            self._items = flatten_with_depth(self.model)
+            self._all_items = flatten_with_depth(self.model)
+
+        if self._filter_text:
+            self._apply_filter()
+        else:
+            self._items = list(self._all_items)
 
     def render(self) -> RenderableType:
         """Render the tree with cursor highlighting."""
@@ -247,6 +254,70 @@ class TreeView(Widget):
                 else:
                     self.cursor_index = 0
         self.refresh()
+
+    @property
+    def filter_text(self) -> str:
+        """The current filter text."""
+        return self._filter_text
+
+    def set_filter(self, text: str) -> None:
+        """Filter displayed items to FileNodes whose filename contains text (case-insensitive).
+
+        Folders containing matching files are auto-expanded and shown.
+        """
+        self._filter_text = text
+        self._refresh_items()
+        # Clamp cursor
+        if self._items:
+            if self.cursor_index >= len(self._items):
+                self.cursor_index = 0
+        else:
+            self.cursor_index = 0
+        self.refresh()
+
+    def clear_filter(self) -> None:
+        """Remove filter and restore the full tree."""
+        self._filter_text = ""
+        self._refresh_items()
+        if self._items and self.cursor_index >= len(self._items):
+            self.cursor_index = len(self._items) - 1
+        self.refresh()
+
+    def _apply_filter(self) -> None:
+        """Apply the current filter text to narrow _items."""
+        query = self._filter_text.lower()
+        # Find matching file nodes
+        matching_files: set[int] = set()
+        for i, (node, _depth) in enumerate(self._all_items):
+            if isinstance(node, FileNode) and query in node.path.name.lower():
+                matching_files.add(i)
+
+        if self.flat_mode:
+            # In flat mode, just show matching files
+            self._items = [
+                (node, depth)
+                for i, (node, depth) in enumerate(self._all_items)
+                if i in matching_files
+            ]
+        else:
+            # In tree mode, show matching files and their parent folders
+            # A folder is shown if any descendant file matches
+            keep: set[int] = set(matching_files)
+            for file_idx in matching_files:
+                # Walk backwards to find parent folders
+                file_depth = self._all_items[file_idx][1]
+                for j in range(file_idx - 1, -1, -1):
+                    node_j, depth_j = self._all_items[j]
+                    if isinstance(node_j, FolderNode) and depth_j < file_depth:
+                        keep.add(j)
+                        file_depth = depth_j
+                    if depth_j == 0 and isinstance(node_j, FolderNode):
+                        break
+            self._items = [
+                (node, depth)
+                for i, (node, depth) in enumerate(self._all_items)
+                if i in keep
+            ]
 
     @property
     def ignored_count(self) -> int:

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
+from textual.events import Key
 from textual.widgets import Footer, Header, Static
 
 from tapes.ui.detail_view import DetailView
@@ -38,6 +39,7 @@ class TreeApp(App):
         Binding("a", "accept_best", "Accept"),
         Binding("r", "refresh_query", "Refresh"),
         Binding("grave_accent", "toggle_flat", "Flat/Tree"),
+        Binding("slash", "start_search", "Search"),
     ]
 
     CSS = """
@@ -67,6 +69,8 @@ class TreeApp(App):
         self._undo = UndoManager()
         self._confirming_commit = False
         self._auto_pipeline = auto_pipeline
+        self._searching = False
+        self._search_query = ""
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -188,6 +192,9 @@ class TreeApp(App):
         self.query_one(TreeView).start_range_select()
 
     def action_cancel(self) -> None:
+        if self._searching:
+            self._finish_search(keep_filter=False)
+            return
         if self._confirming_commit:
             self._confirming_commit = False
             self._update_footer()
@@ -272,6 +279,56 @@ class TreeApp(App):
                 accept_best_source(node)
         tv.refresh()
         self._update_footer()
+
+    def action_start_search(self) -> None:
+        if self._in_detail:
+            return
+        self._searching = True
+        self._search_query = ""
+        self._update_search_status()
+
+    def _update_search_status(self) -> None:
+        """Update the status bar to show the search query."""
+        status = self.query_one("#status", Static)
+        status.update(f"/{self._search_query}")
+
+    def _finish_search(self, keep_filter: bool) -> None:
+        """Exit search mode. If keep_filter is False, clear the filter."""
+        self._searching = False
+        if not keep_filter:
+            self._search_query = ""
+            self.query_one(TreeView).clear_filter()
+        self._update_footer()
+
+    def on_key(self, event: Key) -> None:
+        """Intercept key events during search mode."""
+        if not self._searching:
+            return
+
+        if event.key == "escape":
+            event.prevent_default()
+            event.stop()
+            self._finish_search(keep_filter=False)
+        elif event.key == "enter":
+            event.prevent_default()
+            event.stop()
+            self._finish_search(keep_filter=True)
+        elif event.key == "backspace":
+            event.prevent_default()
+            event.stop()
+            self._search_query = self._search_query[:-1]
+            self.query_one(TreeView).set_filter(self._search_query)
+            self._update_search_status()
+        elif event.character and event.is_printable:
+            event.prevent_default()
+            event.stop()
+            self._search_query += event.character
+            self.query_one(TreeView).set_filter(self._search_query)
+            self._update_search_status()
+        else:
+            # For non-printable keys (like arrows), prevent normal bindings
+            event.prevent_default()
+            event.stop()
 
     def action_toggle_flat(self) -> None:
         if self._in_detail:

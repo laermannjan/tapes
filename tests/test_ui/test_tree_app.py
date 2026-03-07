@@ -1111,3 +1111,182 @@ class TestAcceptBestAsync:
             await pilot.press("a")
             # Should be no-op in detail view
             assert node.result["title"] == "Old"
+
+
+# ---------------------------------------------------------------------------
+# Filter / search unit tests (M14)
+# ---------------------------------------------------------------------------
+
+
+class TestTreeViewFilter:
+    def test_set_filter_narrows_items(self) -> None:
+        model = _expanded_model()
+        view = _make_view(model)
+        assert view.item_count == 5  # folderA, file_a, folderB, file_b, top
+        view.set_filter("file_a")
+        # Should show folderA and file_a.mkv
+        assert view.item_count == 2
+        nodes = [n for n, _d in view._items]
+        assert isinstance(nodes[0], FolderNode)
+        assert nodes[0].name == "folderA"
+        assert isinstance(nodes[1], FileNode)
+        assert nodes[1].path.name == "file_a.mkv"
+
+    def test_set_filter_case_insensitive(self) -> None:
+        model = _expanded_model()
+        view = _make_view(model)
+        view.set_filter("FILE_A")
+        assert view.item_count == 2
+        file_nodes = [n for n, _d in view._items if isinstance(n, FileNode)]
+        assert len(file_nodes) == 1
+        assert file_nodes[0].path.name == "file_a.mkv"
+
+    def test_clear_filter_restores_all(self) -> None:
+        model = _expanded_model()
+        view = _make_view(model)
+        original_count = view.item_count
+        view.set_filter("file_a")
+        assert view.item_count < original_count
+        view.clear_filter()
+        assert view.item_count == original_count
+
+    def test_filter_no_match_shows_empty(self) -> None:
+        model = _expanded_model()
+        view = _make_view(model)
+        view.set_filter("nonexistent_file")
+        assert view.item_count == 0
+
+    def test_filter_matches_multiple_files(self) -> None:
+        model = _expanded_model()
+        view = _make_view(model)
+        view.set_filter("file_")
+        file_nodes = [n for n, _d in view._items if isinstance(n, FileNode)]
+        assert len(file_nodes) == 2
+
+    def test_filter_in_flat_mode(self) -> None:
+        model = _expanded_model()
+        view = _make_view(model)
+        view.toggle_flat_mode()
+        view.set_filter("top")
+        assert view.item_count == 1
+        node = view._items[0][0]
+        assert isinstance(node, FileNode)
+        assert node.path.name == "top.mkv"
+
+    def test_filter_text_property(self) -> None:
+        view = _make_view()
+        assert view.filter_text == ""
+        view.set_filter("test")
+        assert view.filter_text == "test"
+        view.clear_filter()
+        assert view.filter_text == ""
+
+    def test_filter_clamps_cursor(self) -> None:
+        model = _expanded_model()
+        view = _make_view(model)
+        view.move_cursor(4)  # cursor at last item
+        view.set_filter("top")
+        # Should clamp cursor to valid range
+        assert view.cursor_index == 0
+
+    def test_filter_with_partial_match(self) -> None:
+        model = _expanded_model()
+        view = _make_view(model)
+        view.set_filter(".mkv")
+        file_nodes = [n for n, _d in view._items if isinstance(n, FileNode)]
+        assert len(file_nodes) == 3  # all files match
+
+
+@pytest.mark.skipif(not HAS_PILOT, reason="textual pilot not available")
+class TestSearchModeAsync:
+    @pytest.mark.asyncio()
+    async def test_slash_enters_search_mode(self) -> None:
+        from tapes.ui.tree_app import TreeApp
+
+        model = _expanded_model()
+        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+
+        async with app.run_test() as pilot:
+            await pilot.press("slash")
+            assert app._searching is True
+
+    @pytest.mark.asyncio()
+    async def test_typing_filters_items(self) -> None:
+        from tapes.ui.tree_app import TreeApp
+
+        model = _expanded_model()
+        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+
+        async with app.run_test() as pilot:
+            tv = app.query_one(TreeView)
+            await pilot.press("slash")
+            await pilot.press("t", "o", "p")
+            assert app._search_query == "top"
+            assert tv.item_count == 1
+
+    @pytest.mark.asyncio()
+    async def test_escape_clears_filter(self) -> None:
+        from tapes.ui.tree_app import TreeApp
+
+        model = _expanded_model()
+        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+
+        async with app.run_test() as pilot:
+            tv = app.query_one(TreeView)
+            original_count = tv.item_count
+            await pilot.press("slash")
+            await pilot.press("t", "o", "p")
+            assert tv.item_count == 1
+            await pilot.press("escape")
+            assert app._searching is False
+            assert tv.item_count == original_count
+
+    @pytest.mark.asyncio()
+    async def test_enter_keeps_filter(self) -> None:
+        from tapes.ui.tree_app import TreeApp
+
+        model = _expanded_model()
+        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+
+        async with app.run_test() as pilot:
+            tv = app.query_one(TreeView)
+            await pilot.press("slash")
+            await pilot.press("t", "o", "p")
+            await pilot.press("enter")
+            assert app._searching is False
+            # Filter remains active
+            assert tv.item_count == 1
+
+    @pytest.mark.asyncio()
+    async def test_backspace_removes_last_char(self) -> None:
+        from tapes.ui.tree_app import TreeApp
+
+        model = _expanded_model()
+        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+
+        async with app.run_test() as pilot:
+            tv = app.query_one(TreeView)
+            await pilot.press("slash")
+            await pilot.press("t", "o", "p")
+            assert app._search_query == "top"
+            await pilot.press("backspace")
+            assert app._search_query == "to"
+
+    @pytest.mark.asyncio()
+    async def test_search_noop_in_detail(self) -> None:
+        from tapes.ui.tree_app import TreeApp
+
+        node = FileNode(
+            path=Path("/media/test.mkv"),
+            result={"title": "Test"},
+        )
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
+        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+
+        async with app.run_test() as pilot:
+            # Enter detail view
+            await pilot.press("enter")
+            assert app._in_detail is True
+            await pilot.press("slash")
+            assert app._searching is False
