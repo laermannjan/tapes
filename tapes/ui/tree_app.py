@@ -6,7 +6,7 @@ from pathlib import Path
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.events import Key
-from textual.widgets import Footer, Static
+from textual.widgets import Footer
 
 from tapes.config import TapesConfig
 from tapes.fields import MEDIA_TYPE, MEDIA_TYPE_EPISODE
@@ -98,7 +98,6 @@ class TreeApp(App):
             self.movie_template,
             self.tv_template,
         )
-        yield Static("0 staged / 0 total", id="status")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -146,8 +145,11 @@ class TreeApp(App):
         detail = self.query_one(DetailView)
         detail.set_node(node)
         detail.on_before_mutate = self._snapshot_before_mutate
-        self.query_one(TreeView).add_class("compressed")
+        tv = self.query_one(TreeView)
+        tv.add_class("compressed")
+        tv.active = False
         detail.add_class("expanded")
+        detail.active = True
         detail.focus()
 
     def _show_detail_multi(self, nodes: list[FileNode]) -> None:
@@ -156,8 +158,11 @@ class TreeApp(App):
         detail = self.query_one(DetailView)
         detail.set_nodes(nodes)
         detail.on_before_mutate = self._snapshot_before_mutate
-        self.query_one(TreeView).add_class("compressed")
+        tv = self.query_one(TreeView)
+        tv.add_class("compressed")
+        tv.active = False
         detail.add_class("expanded")
+        detail.active = True
         detail.focus()
 
     def _snapshot_before_mutate(self, nodes: list[FileNode]) -> None:
@@ -169,8 +174,10 @@ class TreeApp(App):
         self._in_detail = False
         detail = self.query_one(DetailView)
         detail.remove_class("expanded")
+        detail.active = False
         tv = self.query_one(TreeView)
         tv.remove_class("compressed")
+        tv.active = True
         tv.focus()
         tv.refresh()
         self._update_footer()
@@ -299,13 +306,11 @@ class TreeApp(App):
             return
         tv = self.query_one(TreeView)
         if tv.staged_count == 0:
-            status = self.query_one("#status", Static)
-            status.update("No staged files to commit")
+            tv.set_status("No staged files to commit")
             return
         self._confirming_commit = True
-        status = self.query_one("#status", Static)
         count = tv.staged_count
-        status.update(
+        tv.set_status(
             f"{count} file{'s' if count != 1 else ''} staged. "
             "Press enter to confirm, esc to cancel."
         )
@@ -369,8 +374,7 @@ class TreeApp(App):
 
     def _update_search_status(self) -> None:
         """Update the status bar to show the search query."""
-        status = self.query_one("#status", Static)
-        status.update(f"/{self._search_query}")
+        self.query_one(TreeView).set_status(f"/{self._search_query}")
 
     def _finish_search(self, keep_filter: bool) -> None:
         """Exit search mode. If keep_filter is False, clear the filter."""
@@ -455,7 +459,6 @@ class TreeApp(App):
 
     def _update_footer(self) -> None:
         tv = self.query_one(TreeView)
-        status = self.query_one("#status", Static)
         ignored = tv.ignored_count
         parts = [f"{tv.staged_count} staged"]
         if ignored:
@@ -464,4 +467,4 @@ class TreeApp(App):
         if self._tmdb_querying:
             done, total = self._tmdb_progress
             parts.append(f"TMDB {done}/{total}")
-        status.update(" / ".join(parts))
+        tv.set_status(" / ".join(parts))

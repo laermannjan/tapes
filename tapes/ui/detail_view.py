@@ -36,6 +36,7 @@ class DetailView(Widget):
     cursor_row: reactive[int] = reactive(0)   # -1 = header, 0+ = fields
     cursor_col: reactive[int] = reactive(0)   # 0 = result, 1+ = sources
     editing: reactive[bool] = reactive(False)
+    active: reactive[bool] = reactive(False)
 
     def __init__(
         self,
@@ -101,9 +102,22 @@ class DetailView(Widget):
             return self.node.result
         return compute_shared_fields(self._file_nodes)
 
+    def _border_style(self) -> str:
+        """Return the Rich style string for the border."""
+        return "cyan" if self.active else "dim"
+
+    def watch_active(self) -> None:
+        """React to active state changes."""
+        self.refresh()
+
     def render(self) -> RenderableType:
-        """Build Rich Text with cursor highlighting."""
-        lines: list[Text] = []
+        """Build Rich Text with cursor highlighting, wrapped in box-drawing borders."""
+        w = self.size.width
+        border_style = self._border_style()
+        inner_width = max(0, w - 2)
+
+        # Build content lines (without borders)
+        content: list[Text] = []
 
         # Header: filename + destination (or multi-file summary)
         if self.is_multi:
@@ -111,25 +125,69 @@ class DetailView(Widget):
         else:
             header_lines = render_detail_header(self.node, self._active_template())
         for hl in header_lines:
-            lines.append(Text(hl))
+            content.append(Text(hl))
 
         # Separator
-        lines.append(Text("\u2576" + "\u2500" * 78 + "\u2574"))
+        content.append(Text("\u2576" + "\u2500" * min(78, inner_width) + "\u2574"))
 
         # Grid header row
-        lines.append(self._render_grid_header())
+        content.append(self._render_grid_header())
 
         # Field rows
         for row_idx, field_name in enumerate(self._fields):
-            lines.append(self._render_field_row(row_idx, field_name))
+            content.append(self._render_field_row(row_idx, field_name))
 
         # Bottom separator
-        lines.append(Text("\u2576" + "\u2500" * 78 + "\u2574"))
+        content.append(Text("\u2576" + "\u2500" * min(78, inner_width) + "\u2574"))
 
         # Help line
-        lines.append(Text(" enter: apply/edit   shift-enter: apply all   esc: back"))
+        content.append(Text(" enter: apply/edit   shift-enter: apply all   esc: back"))
 
-        return Text("\n").join(lines)
+        # Now wrap in borders
+        # Top border: ├─ Detail ─...─┤ (shares border with tree above)
+        title = " Detail "
+        top_fill = max(0, w - 2 - len(title))
+        top_line = Text()
+        top_line.append(
+            f"\u251c\u2500{title}" + "\u2500" * top_fill + "\u2524",
+            style=border_style,
+        )
+
+        # Bottom border: └─...─┘
+        bot_line = Text()
+        bot_line.append(
+            "\u2514" + "\u2500" * max(0, w - 2) + "\u2518",
+            style=border_style,
+        )
+
+        # Wrap content lines in side borders
+        bordered: list[Text] = [top_line]
+        for cline in content:
+            line = Text()
+            line.append("\u2502", style=border_style)
+            # Pad content to inner_width using plain_text length
+            plain_len = len(cline.plain)
+            if plain_len < inner_width:
+                padded = Text()
+                padded.append_text(cline)
+                padded.append(" " * (inner_width - plain_len))
+                line.append_text(padded)
+            else:
+                line.append_text(cline)
+            line.append("\u2502", style=border_style)
+            bordered.append(line)
+
+        # Fill remaining height with blank bordered rows
+        content_height = max(0, self.size.height - 2)
+        while len(bordered) - 1 < content_height:  # -1 for top_line already in bordered
+            blank = Text()
+            blank.append("\u2502", style=border_style)
+            blank.append(" " * inner_width)
+            blank.append("\u2502", style=border_style)
+            bordered.append(blank)
+
+        bordered.append(bot_line)
+        return Text("\n").join(bordered)
 
     def _render_multi_header(self) -> list[str]:
         """Render header for multi-file view."""

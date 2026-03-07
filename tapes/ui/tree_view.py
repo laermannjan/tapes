@@ -21,6 +21,7 @@ class TreeView(Widget):
     can_focus = True
 
     cursor_index: reactive[int] = reactive(0)
+    active: reactive[bool] = reactive(True)
 
     def __init__(
         self,
@@ -41,6 +42,7 @@ class TreeView(Widget):
         self._range_anchor: int | None = None
         self._filter_text: str = ""
         self._scroll_offset: int = 0
+        self._status_text: str = ""
         self._refresh_items()
 
     @property
@@ -144,12 +146,63 @@ class TreeView(Widget):
 
         self._scroll_offset = 0
 
+    def set_status(self, text: str) -> None:
+        """Set the status text displayed in the bottom border."""
+        self._status_text = text
+        self.refresh()
+
+    def _border_style(self) -> str:
+        """Return the Rich style string for the border."""
+        return "cyan" if self.active else "dim"
+
     def render(self) -> RenderableType:
         """Render the visible window of the tree with cursor highlighting."""
-        if not self._items:
-            return Text("(empty)")
+        w = self.size.width
+        border_style = self._border_style()
 
-        viewport_height = self.size.height
+        # Top border: ┌─ Files ─...─┐
+        title = " Files "
+        top_fill = max(0, w - 2 - len(title))
+        top_line = Text()
+        top_line.append(f"\u250c\u2500{title}" + "\u2500" * top_fill + "\u2510", style=border_style)
+
+        # Bottom border: ├── status ──┤  or  └─...─┘
+        if self._status_text:
+            status_str = f" {self._status_text} "
+            bot_fill = max(0, w - 2 - len(status_str))
+            bot_left = bot_fill // 2
+            bot_right = bot_fill - bot_left
+            bot_line = Text()
+            bot_line.append(
+                "\u251c" + "\u2500" * bot_left + status_str + "\u2500" * bot_right + "\u2524",
+                style=border_style,
+            )
+        else:
+            bot_line = Text()
+            bot_line.append("\u2514" + "\u2500" * max(0, w - 2) + "\u2518", style=border_style)
+
+        # Content area height = total height - 2 (top + bottom borders)
+        content_height = max(0, self.size.height - 2)
+
+        if not self._items:
+            empty_text = "(empty)"
+            pad = max(0, w - 2 - len(empty_text))
+            content_line = Text()
+            content_line.append("\u2502", style=border_style)
+            content_line.append(empty_text + " " * pad)
+            content_line.append("\u2502", style=border_style)
+            content_lines = [content_line]
+            # Fill remaining content area
+            for _ in range(content_height - 1):
+                blank = Text()
+                blank.append("\u2502", style=border_style)
+                blank.append(" " * max(0, w - 2))
+                blank.append("\u2502", style=border_style)
+                content_lines.append(blank)
+            return Text("\n").join([top_line] + content_lines + [bot_line])
+
+        # Adjust scroll offset for content area
+        viewport_height = content_height
         if viewport_height <= 0:
             viewport_height = len(self._items)
 
@@ -157,7 +210,8 @@ class TreeView(Widget):
         end = min(start + viewport_height, len(self._items))
 
         rng = self.selected_range
-        lines: list[Text] = []
+        content_lines: list[Text] = []
+        inner_width = max(0, w - 2)
         for i in range(start, end):
             node, depth = self._items[i]
             effective_depth = 0 if self.flat_mode else depth
@@ -169,16 +223,35 @@ class TreeView(Widget):
                 flat_mode=self.flat_mode,
                 root_path=self.root_path,
             )
-            line = Text(row_str)
-            if isinstance(node, FileNode) and node.ignored:
-                line.stylize("dim")
-            if i == self.cursor_index:
-                line.stylize("reverse")
-            elif rng and rng[0] <= i <= rng[1]:
-                line.stylize("on dark_blue")
-            lines.append(line)
+            # Pad or truncate to fit inner width
+            if len(row_str) > inner_width:
+                row_str = row_str[:inner_width]
+            else:
+                row_str = row_str + " " * (inner_width - len(row_str))
 
-        return Text("\n").join(lines)
+            row_text = Text(row_str)
+            if isinstance(node, FileNode) and node.ignored:
+                row_text.stylize("dim")
+            if i == self.cursor_index:
+                row_text.stylize("reverse")
+            elif rng and rng[0] <= i <= rng[1]:
+                row_text.stylize("on dark_blue")
+
+            line = Text()
+            line.append("\u2502", style=border_style)
+            line.append_text(row_text)
+            line.append("\u2502", style=border_style)
+            content_lines.append(line)
+
+        # Fill remaining content area with blank bordered rows
+        for _ in range(viewport_height - len(content_lines)):
+            blank = Text()
+            blank.append("\u2502", style=border_style)
+            blank.append(" " * inner_width)
+            blank.append("\u2502", style=border_style)
+            content_lines.append(blank)
+
+        return Text("\n").join([top_line] + content_lines + [bot_line])
 
     def render_tree(self) -> str:
         """Render the full tree to a plain string (no cursor highlighting).
@@ -234,6 +307,10 @@ class TreeView(Widget):
 
     SCROLLOFF = 3
 
+    def watch_active(self) -> None:
+        """React to active state changes."""
+        self.refresh()
+
     def watch_cursor_index(self) -> None:
         """React to cursor changes by scrolling and refreshing."""
         self._scroll_to_cursor()
@@ -243,7 +320,7 @@ class TreeView(Widget):
         """Adjust scroll offset so cursor stays visible with scrolloff."""
         if not self._items:
             return
-        viewport_height = self.size.height
+        viewport_height = self.size.height - 2  # account for top/bottom borders
         if viewport_height <= 0:
             return
 

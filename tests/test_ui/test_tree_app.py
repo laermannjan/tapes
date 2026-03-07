@@ -255,10 +255,10 @@ class TestTreeViewRender:
         view = _make_view()
         result = view.render()
         # The render method applies "reverse" style to the cursor row.
-        # We check that the Text object contains styled spans.
+        # Output includes top border + 3 content rows + bottom border = 5 lines.
         plain = result.plain
         lines = plain.split("\n")
-        assert len(lines) == 3
+        assert len(lines) == 5  # top border + 3 items + bottom border
 
 
 # ---------------------------------------------------------------------------
@@ -551,7 +551,6 @@ class TestTreeAppKeys:
         self, model: TreeModel, template: str
     ) -> None:
         from tapes.ui.tree_app import TreeApp
-        from textual.widgets import Static
 
         app = TreeApp(model=model, movie_template=template, tv_template=template)
         async with app.run_test() as pilot:
@@ -559,8 +558,8 @@ class TestTreeAppKeys:
             await pilot.press("j")
             await pilot.press("j")
             await pilot.press("space")
-            status = app.query_one("#status", Static)
-            assert "1 staged" in status.renderable  # type: ignore[operator]
+            tv = app.query_one(TreeView)
+            assert "1 staged" in tv._status_text
 
     @pytest.mark.asyncio()
     async def test_space_in_range_stages_range(
@@ -812,8 +811,6 @@ class TestIgnoreToggle:
 class TestCommitAction:
     @pytest.mark.asyncio()
     async def test_commit_blocked_when_no_staged(self) -> None:
-        from textual.widgets import Static
-
         from tapes.ui.tree_app import TreeApp
 
         model = _simple_model()
@@ -821,13 +818,11 @@ class TestCommitAction:
 
         async with app.run_test() as pilot:
             await pilot.press("c")
-            status = app.query_one("#status", Static)
-            assert "No staged" in status.renderable  # type: ignore[operator]
+            tv = app.query_one(TreeView)
+            assert "No staged" in tv._status_text
 
     @pytest.mark.asyncio()
     async def test_commit_shows_confirmation(self) -> None:
-        from textual.widgets import Static
-
         from tapes.ui.tree_app import TreeApp
 
         model = _expanded_model()
@@ -838,10 +833,9 @@ class TestCommitAction:
         async with app.run_test() as pilot:
             await pilot.press("c")
             assert app._confirming_commit is True
-            status = app.query_one("#status", Static)
-            rendered = str(status.renderable)
-            assert "1 file staged" in rendered
-            assert "enter to confirm" in rendered
+            tv = app.query_one(TreeView)
+            assert "1 file staged" in tv._status_text
+            assert "enter to confirm" in tv._status_text
 
     @pytest.mark.asyncio()
     async def test_commit_enter_confirms_and_exits(self) -> None:
@@ -860,8 +854,6 @@ class TestCommitAction:
 
     @pytest.mark.asyncio()
     async def test_commit_escape_cancels(self) -> None:
-        from textual.widgets import Static
-
         from tapes.ui.tree_app import TreeApp
 
         model = _expanded_model()
@@ -873,8 +865,8 @@ class TestCommitAction:
             assert app._confirming_commit is True
             await pilot.press("escape")
             assert app._confirming_commit is False
-            status = app.query_one("#status", Static)
-            assert "staged" in status.renderable  # type: ignore[operator]
+            tv = app.query_one(TreeView)
+            assert "staged" in tv._status_text
 
     @pytest.mark.asyncio()
     async def test_x_toggles_ignored(self) -> None:
@@ -895,8 +887,6 @@ class TestCommitAction:
 
     @pytest.mark.asyncio()
     async def test_footer_shows_ignored_count(self) -> None:
-        from textual.widgets import Static
-
         from tapes.ui.tree_app import TreeApp
 
         model = _expanded_model()
@@ -906,8 +896,8 @@ class TestCommitAction:
             # Move to file and ignore it
             await pilot.press("j")
             await pilot.press("x")
-            status = app.query_one("#status", Static)
-            assert "1 ignored" in status.renderable  # type: ignore[operator]
+            tv = app.query_one(TreeView)
+            assert "1 ignored" in tv._status_text
 
 
 # ---------------------------------------------------------------------------
