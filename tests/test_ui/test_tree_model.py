@@ -61,7 +61,7 @@ class TestFileNode:
 class TestFolderNode:
     def test_defaults(self) -> None:
         f = FolderNode(name="Movies")
-        assert f.collapsed is True
+        assert f.collapsed is False
         assert f.children == []
 
     def test_with_children(self) -> None:
@@ -291,12 +291,12 @@ class TestBuildTree:
         model = build_tree(files, tmp_path)
         assert model.root.name == tmp_path.name
 
-    def test_folders_default_collapsed(self, tmp_path: Path) -> None:
+    def test_folders_default_expanded(self, tmp_path: Path) -> None:
         files = [tmp_path / "sub" / "a.mkv"]
         model = build_tree(files, tmp_path)
         sub = model.root.children[0]
         assert isinstance(sub, FolderNode)
-        assert sub.collapsed is True
+        assert sub.collapsed is False
 
     def test_file_defaults(self, tmp_path: Path) -> None:
         files = [tmp_path / "a.mkv"]
