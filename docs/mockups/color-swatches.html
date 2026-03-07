@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html><head><style>
+body { font-family: system-ui; background: #1a1815; color: #e8e6e3; padding: 40px; max-width: 1100px; }
+.row { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+.swatch { width: 140px; }
+.color { width: 140px; height: 80px; border-radius: 10px; border: 1px solid #444; }
+.label { margin-top: 6px; font-size: 12px; line-height: 1.4; }
+.hex { color: #888; font-family: monospace; font-size: 11px; }
+h1 { margin-bottom: 8px; }
+h2 { color: #C15F3C; border-bottom: 1px solid #333; padding-bottom: 6px; margin-top: 36px; margin-bottom: 12px; font-size: 18px; }
+h3 { color: #B1ADA1; margin-top: 20px; margin-bottom: 8px; font-size: 14px; }
+hr { border: none; border-top: 1px solid #333; margin: 40px 0; }
+</style></head><body>
+
+<h1>Claude Color Reference</h1>
+<p style="color:#888; margin-bottom:0;">User-provided + brand + Claude Code terminal colors</p>
+
+<!-- ===== USER-PROVIDED ===== -->
+<h2>User-Provided Palette</h2>
+
+<h3>Brand Orange</h3>
+<div class="row">
+  <div class="swatch"><div class="color" style="background:#C15F3C"></div><div class="label">Claude Orange<br><span class="hex">#C15F3C</span></div></div>
+  <div class="swatch"><div class="color" style="background:#A14A2F"></div><div class="label">Dark Orange<br><span class="hex">#A14A2F</span></div></div>
+</div>
+
+<h3>Backgrounds (Dark)</h3>
+<div class="row">
+  <div class="swatch"><div class="color" style="background:#2b2a27"></div><div class="label">Background Dark 1<br><span class="hex">#2b2a27</span></div></div>
+  <div class="swatch"><div class="color" style="background:#1a1815"></div><div class="label">Background Dark 2<br><span class="hex">#1a1815</span></div></div>
+  <div class="swatch"><div class="color" style="background:#201d18"></div><div class="label">Sidebar Dark<br><span class="hex">#201d18</span></div></div>
+</div>
+
+<h3>Backgrounds (Light)</h3>
+<div class="row">
+  <div class="swatch"><div class="color" style="background:#F5F5F0; border-color:#ccc;"></div><div class="label">Background Light 1<br><span class="hex">#F5F5F0</span></div></div>
+  <div class="swatch"><div class="color" style="background:#faf9f5; border-color:#ccc;"></div><div class="label">Background Light 2<br><span class="hex">#faf9f5</span></div></div>
+  <div class="swatch"><div class="color" style="background:#F4F3EE; border-color:#ccc;"></div><div class="label">Pampas<br><span class="hex">#F4F3EE</span></div></div>
+</div>
+
+<h3>Text</h3>
+<div class="row">
+  <div class="swatch"><div class="color" style="background:#1a1a18"></div><div class="label">Text (on light bg)<br><span class="hex">#1a1a18</span></div></div>
+  <div class="swatch"><div class="color" style="background:#eeeeee"></div><div class="label">Text (on dark bg) 1<br><span class="hex">#eeeeee</span></div></div>
+  <div class="swatch"><div class="color" style="background:#e8e6e3"></div><div class="label">Text (on dark bg) 2<br><span class="hex">#e8e6e3</span></div></div>
+</div>
+
+<hr>
+
+<!-- ===== BRAND ===== -->
+<h2>Official Claude Brand</h2>
+
+<div class="row">
+  <div class="swatch"><div class="color" style="background:#C15F3C"></div><div class="label">Crail (primary)<br><span class="hex">#C15F3C</span></div></div>
+  <div class="swatch"><div class="color" style="background:#da7756"></div><div class="label">Terra Cotta<br><span class="hex">#da7756</span></div></div>
+  <div class="swatch"><div class="color" style="background:#D97757"></div><div class="label">Brand Coral<br><span class="hex">#D97757</span></div></div>
+  <div class="swatch"><div class="color" style="background:#bd5d3a"></div><div class="label">Chat Buttons<br><span class="hex">#bd5d3a</span></div></div>
+  <div class="swatch"><div class="color" style="background:#B1ADA1"></div><div class="label">Cloudy (greige)<br><span class="hex">#B1ADA1</span></div></div>
+  <div class="swatch"><div class="color" style="background:#F4F3EE; border-color:#ccc;"></div><div class="label">Pampas (off-white)<br><span class="hex">#F4F3EE</span></div></div>
+  <div class="swatch"><div class="color" style="background:#eeece2; border-color:#ccc;"></div><div class="label">Website Background<br><span class="hex">#eeece2</span></div></div>
+  <div class="swatch"><div class="color" style="background:#3d3929"></div><div class="label">Website Text<br><span class="hex">#3d3929</span></div></div>
+</div>
+
+<hr>
+
+<!-- ===== CLAUDE CODE TERMINAL ===== -->
+<h2>Claude Code Terminal (Zed-inspired dark theme)</h2>
+<p style="color:#666; font-size:12px; margin-top:-8px;">From <a href="https://github.com/ericbuess/claude-code-inspired-dark" style="color:#6796C0;">ericbuess/claude-code-inspired-dark</a></p>
+
+<h3>Editor Backgrounds</h3>
+<div class="row">
+  <div class="swatch"><div class="color" style="background:#3b414d"></div><div class="label">Editor Background<br><span class="hex">#3b414d</span></div></div>
+  <div class="swatch"><div class="color" style="background:#2f343e"></div><div class="label">Editor Surface<br><span class="hex">#2f343e</span></div></div>
+  <div class="swatch"><div class="color" style="background:#282c33"></div><div class="label">Editor Code Area<br><span class="hex">#282c33</span></div></div>
+  <div class="swatch"><div class="color" style="background:#363c46"></div><div class="label">Hover State<br><span class="hex">#363c46</span></div></div>
+  <div class="swatch"><div class="color" style="background:#454a56"></div><div class="label">Active State<br><span class="hex">#454a56</span></div></div>
+</div>
+
+<h3>Accents / UI</h3>
+<div class="row">
+  <div class="swatch"><div class="color" style="background:#4e44ff"></div><div class="label">Primary Accent<br><span class="hex">#4e44ff</span></div></div>
+  <div class="swatch"><div class="color" style="background:#3b2aff"></div><div class="label">Primary Hover<br><span class="hex">#3b2aff</span></div></div>
+  <div class="swatch"><div class="color" style="background:#47679e"></div><div class="label">Focus Border<br><span class="hex">#47679e</span></div></div>
+  <div class="swatch"><div class="color" style="background:#293b5b"></div><div class="label">Selected<br><span class="hex">#293b5b</span></div></div>
+  <div class="swatch"><div class="color" style="background:#74ade8"></div><div class="label">Text Accent<br><span class="hex">#74ade8</span></div></div>
+</div>
+
+<h3>Borders</h3>
+<div class="row">
+  <div class="swatch"><div class="color" style="background:#e6e6e6; border-color:#ccc;"></div><div class="label">Border Light<br><span class="hex">#e6e6e6</span></div></div>
+  <div class="swatch"><div class="color" style="background:#ebebeb; border-color:#ccc;"></div><div class="label">Border<br><span class="hex">#ebebeb</span></div></div>
+  <div class="swatch"><div class="color" style="background:#d9d9d9; border-color:#ccc;"></div><div class="label">Border Hover<br><span class="hex">#d9d9d9</span></div></div>
+</div>
+
+<h3>Text</h3>
+<div class="row">
+  <div class="swatch"><div class="color" style="background:#acb2be"></div><div class="label">Editor Foreground<br><span class="hex">#acb2be</span></div></div>
+  <div class="swatch"><div class="color" style="background:#666666"></div><div class="label">Muted Text<br><span class="hex">#666666</span></div></div>
+</div>
+
+<h3>Syntax Colors</h3>
+<div class="row">
+  <div class="swatch"><div class="color" style="background:#a1c181"></div><div class="label">Strings (green)<br><span class="hex">#a1c181</span></div></div>
+  <div class="swatch"><div class="color" style="background:#bf956a"></div><div class="label">Numbers/regex<br><span class="hex">#bf956a</span></div></div>
+  <div class="swatch"><div class="color" style="background:#b477cf"></div><div class="label">Keywords (purple)<br><span class="hex">#b477cf</span></div></div>
+  <div class="swatch"><div class="color" style="background:#6eb4bf"></div><div class="label">Operators/types (teal)<br><span class="hex">#6eb4bf</span></div></div>
+  <div class="swatch"><div class="color" style="background:#d07277"></div><div class="label">Deleted/error (red)<br><span class="hex">#d07277</span></div></div>
+  <div class="swatch"><div class="color" style="background:#dec184"></div><div class="label">Modified/warn (gold)<br><span class="hex">#dec184</span></div></div>
+</div>
+
+<hr>
+
+<!-- ===== GRADIENT ===== -->
+<h2>Claude Gradient Palette</h2>
+<p style="color:#666; font-size:12px; margin-top:-8px;">Warm peach-to-lavender progression</p>
+<div class="row">
+  <div class="swatch"><div class="color" style="background:#f4c28e; border-color:#ccc;"></div><div class="label">Warm Tan<br><span class="hex">#f4c28e</span></div></div>
+  <div class="swatch"><div class="color" style="background:#f4c7a8; border-color:#ccc;"></div><div class="label">Peach<br><span class="hex">#f4c7a8</span></div></div>
+  <div class="swatch"><div class="color" style="background:#f4ccc2; border-color:#ccc;"></div><div class="label">Blush<br><span class="hex">#f4ccc2</span></div></div>
+  <div class="swatch"><div class="color" style="background:#f4d1dc; border-color:#ccc;"></div><div class="label">Rose<br><span class="hex">#f4d1dc</span></div></div>
+  <div class="swatch"><div class="color" style="background:#f4d6f6; border-color:#ccc;"></div><div class="label">Lavender<br><span class="hex">#f4d6f6</span></div></div>
+</div>
+
+<hr>
+
+<!-- ===== VSCode THEME ===== -->
+<h2>VSCode Claude Theme Palette</h2>
+<p style="color:#666; font-size:12px; margin-top:-8px;">Vibrant, high-contrast variant</p>
+
+<div class="row">
+  <div class="swatch"><div class="color" style="background:#E07A47"></div><div class="label">Crail (accent)<br><span class="hex">#E07A47</span></div></div>
+  <div class="swatch"><div class="color" style="background:#7AB8FF"></div><div class="label">Blue (types)<br><span class="hex">#7AB8FF</span></div></div>
+  <div class="swatch"><div class="color" style="background:#86E89A"></div><div class="label">Green (strings)<br><span class="hex">#86E89A</span></div></div>
+  <div class="swatch"><div class="color" style="background:#C79BFF"></div><div class="label">Purple (keywords)<br><span class="hex">#C79BFF</span></div></div>
+  <div class="swatch"><div class="color" style="background:#FF7A7A"></div><div class="label">Red (errors)<br><span class="hex">#FF7A7A</span></div></div>
+  <div class="swatch"><div class="color" style="background:#FFDF61"></div><div class="label">Yellow (constants)<br><span class="hex">#FFDF61</span></div></div>
+</div>
+
+<h3>How these would look in Tapes</h3>
+
+<!-- Tapes mockup with VSCode theme colors -->
+<div style="background:#1a1815; border:1px solid #E07A47; border-radius:8px; padding:0; width:700px; font-family:'SF Mono','Fira Code','Cascadia Code',monospace; font-size:13px; overflow:hidden;">
+
+  <!-- Title bar -->
+  <div style="border-bottom:1px solid #E07A47; padding:2px 12px; color:#E07A47; font-size:11px;">Files</div>
+
+  <!-- Tree view -->
+  <div style="padding:8px 12px;">
+    <div><span style="color:#666;">&#x25bc;</span> <span style="color:#e8e6e3;">Movies/</span></div>
+    <div style="padding:2px 0 2px 16px; background:#293b5b; border-radius:3px; margin:1px -4px; padding-left:20px;">
+      <span style="color:#E07A47;">&#x25cb;</span> <span style="color:#e8e6e3;">Inception.2010.BluRay.mkv</span>
+      <span style="color:#555;">  &#x2192;  </span><span style="color:#666;">Inception (2010)/</span><span style="color:#e8e6e3;">Inception (2010)</span><span style="color:#666;">.mkv</span>
+    </div>
+    <div style="padding-left:16px;">
+      <span style="color:#86E89A;">&#x2713;</span> <span style="color:#e8e6e3;">The.Matrix.1999.mkv</span>
+      <span style="color:#555;">  &#x2192;  </span><span style="color:#666;">The Matrix (1999)/</span><span style="color:#e8e6e3;">The Matrix (1999)</span><span style="color:#666;">.mkv</span>
+    </div>
+    <div style="padding-left:16px;">
+      <span style="color:#666;">&#x00b7;</span> <span style="color:#555;">sample.txt</span>
+    </div>
+    <div><span style="color:#666;">&#x25bc;</span> <span style="color:#e8e6e3;">TV/</span></div>
+    <div style="padding-left:16px;">
+      <span style="color:#86E89A;">&#x2713;</span> <span style="color:#e8e6e3;">breaking.bad.s01e01.mkv</span>
+      <span style="color:#555;">  &#x2192;  </span><span style="color:#666;">Breaking Bad/S01E01 - </span><span style="color:#e8e6e3;">Pilot</span><span style="color:#666;">.mkv</span>
+    </div>
+    <div style="padding-left:16px;">
+      <span style="color:#E07A47;">&#x25cb;</span> <span style="color:#e8e6e3;">breaking.bad.s01e02.mkv</span>
+      <span style="color:#555;">  &#x2192;  </span><span style="color:#666;">Breaking Bad/S01E02 - </span><span style="color:#E07A47;">?</span><span style="color:#666;">.mkv</span>
+    </div>
+  </div>
+
+  <!-- Detail view (inactive) -->
+  <div style="border-top:1px solid #555; padding:2px 12px; color:#888; font-size:11px;">Detail</div>
+  <div style="padding:6px 12px; font-size:12px;">
+    <div>
+      <span style="color:#e8e6e3; font-weight:600;">Inception.2010.BluRay.mkv</span>
+      <span style="color:#555;">  &#x2192; </span><span style="color:#666;">Inception (2010)/</span><span style="color:#e8e6e3;">Inception (2010)</span><span style="color:#666;">.mkv</span>
+    </div>
+    <div style="color:#666; font-size:11px; margin-top:2px;">
+      title: <span style="color:#e8e6e3;">Inception</span>
+      &nbsp;&nbsp;year: <span style="color:#e8e6e3;">2010</span>
+      &nbsp;&nbsp;type: <span style="color:#e8e6e3;">movie</span>
+      &nbsp;&nbsp;S: <span style="color:#666;">&#x00b7;</span>
+      &nbsp;&nbsp;E: <span style="color:#666;">&#x00b7;</span>
+      &nbsp;&nbsp;<span style="color:#7AB8FF;">TMDB</span> <span style="color:#86E89A;">92%</span>
+    </div>
+  </div>
+</div>
+
+<div style="height:16px;"></div>
+
+<!-- Detail expanded mockup -->
+<div style="background:#1a1815; border:1px solid #555; border-radius:8px; padding:0; width:700px; font-family:'SF Mono','Fira Code','Cascadia Code',monospace; font-size:13px; overflow:hidden;">
+
+  <!-- Title bar -->
+  <div style="border-bottom:1px solid #555; padding:2px 12px; color:#888; font-size:11px;">Files</div>
+
+  <!-- Compressed tree -->
+  <div style="padding:6px 12px; color:#666; font-size:12px;">
+    <div><span style="color:#555;">&#x25bc;</span> Movies/</div>
+    <div style="padding-left:16px; background:#293b5b; border-radius:3px; margin:1px -4px; padding:2px 4px 2px 20px;">
+      <span style="color:#E07A47;">&#x25cb;</span> <span style="color:#e8e6e3;">Inception.2010.BluRay.mkv</span>
+    </div>
+  </div>
+
+  <!-- Detail view (active) -->
+  <div style="border-top:1px solid #E07A47; padding:2px 12px; color:#E07A47; font-size:11px;">Detail</div>
+  <div style="padding:8px 12px; font-size:12px;">
+    <!-- Header -->
+    <div style="color:#e8e6e3; font-weight:600;">Inception.2010.BluRay.mkv</div>
+    <div style="color:#666; margin-bottom:6px;">&#x2192; <span style="color:#666;">Inception (2010)/</span><span style="color:#e8e6e3;">Inception (2010)</span><span style="color:#666;">.mkv</span></div>
+
+    <!-- Separator -->
+    <div style="color:#444; margin:4px 0;">&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;</div>
+
+    <!-- Grid header -->
+    <div>
+      <span style="color:#666; display:inline-block; width:110px;"></span>
+      <span style="color:#e8e6e3; display:inline-block; width:220px;">result</span>
+      <span style="color:#444;">&#x2503;</span>
+      <span style="color:#7AB8FF;">  TMDB #1</span>
+      <span style="color:#86E89A;"> (92%)</span>
+      <span style="color:#666;">  [1/2]</span>
+    </div>
+
+    <!-- Field rows -->
+    <div>
+      <span style="color:#666; display:inline-block; width:110px;"> title</span>
+      <span style="color:#e8e6e3; display:inline-block; width:220px;">Inception</span>
+      <span style="color:#444;">&#x2503;</span>
+      <span style="color:#666;">  Inception</span>
+    </div>
+    <div style="background:#293b5b; border-radius:3px; margin:1px -4px; padding:1px 4px;">
+      <span style="color:#888; display:inline-block; width:110px;"> year</span>
+      <span style="color:#e8e6e3; display:inline-block; width:220px;">2010</span>
+      <span style="color:#444;">&#x2503;</span>
+      <span style="color:#666;">  2010</span>
+    </div>
+    <div>
+      <span style="color:#666; display:inline-block; width:110px;"> media_type</span>
+      <span style="color:#e8e6e3; display:inline-block; width:220px;">movie</span>
+      <span style="color:#444;">&#x2503;</span>
+      <span style="color:#666;">  movie</span>
+    </div>
+    <div>
+      <span style="color:#666; display:inline-block; width:110px;"> season</span>
+      <span style="color:#666; display:inline-block; width:220px;">&#x00b7;</span>
+      <span style="color:#444;">&#x2503;</span>
+      <span style="color:#86E89A;">  1</span>
+    </div>
+    <div>
+      <span style="color:#666; display:inline-block; width:110px;"> episode</span>
+      <span style="color:#666; display:inline-block; width:220px;">&#x00b7;</span>
+      <span style="color:#444;">&#x2503;</span>
+      <span style="color:#86E89A;">  5</span>
+    </div>
+    <div>
+      <span style="color:#666; display:inline-block; width:110px;"> tmdb_id</span>
+      <span style="color:#e8e6e3; display:inline-block; width:220px;">27205</span>
+      <span style="color:#444;">&#x2503;</span>
+      <span style="color:#E07A47;">  12345</span>
+    </div>
+
+    <!-- Separator -->
+    <div style="color:#444; margin:4px 0;">&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;</div>
+  </div>
+</div>
+
+<div style="height:16px;"></div>
+
+<!-- Footer bar mockup -->
+<div style="background:#1a1815; width:700px; font-family:'SF Mono','Fira Code','Cascadia Code',monospace; font-size:12px; padding:4px 12px;">
+  <span style="color:#E07A47;">space</span><span style="color:#888;"> stage  </span>
+  <span style="color:#E07A47;">enter</span><span style="color:#888;"> detail  </span>
+  <span style="color:#E07A47;">a</span><span style="color:#888;"> accept  </span>
+  <span style="color:#E07A47;">c</span><span style="color:#888;"> commit  </span>
+  <span style="color:#E07A47;">?</span><span style="color:#888;"> help</span>
+</div>
+
+<div style="height:24px;"></div>
+
+<!-- Color mapping table -->
+<h3>Color mapping for Tapes TUI</h3>
+<table style="font-size:12px; border-collapse:collapse; width:700px;">
+  <tr style="border-bottom:1px solid #333;">
+    <td style="padding:6px 12px; color:#888; width:200px;">Element</td>
+    <td style="padding:6px 12px; color:#888; width:120px;">Color</td>
+    <td style="padding:6px 12px; color:#888;">Usage</td>
+  </tr>
+  <tr><td style="padding:4px 12px;"><span style="color:#E07A47;">&#x25a0;</span> Crail</td><td style="padding:4px 12px; font-family:monospace; color:#888;">#E07A47</td><td style="padding:4px 12px; color:#888;">Unstaged marker, active border, ? placeholders, diff "differs", keybinding hints, medium confidence</td></tr>
+  <tr><td style="padding:4px 12px;"><span style="color:#86E89A;">&#x25a0;</span> Green</td><td style="padding:4px 12px; font-family:monospace; color:#888;">#86E89A</td><td style="padding:4px 12px; color:#888;">Staged marker, diff "fills empty", high confidence</td></tr>
+  <tr><td style="padding:4px 12px;"><span style="color:#7AB8FF;">&#x25a0;</span> Blue</td><td style="padding:4px 12px; font-family:monospace; color:#888;">#7AB8FF</td><td style="padding:4px 12px; color:#888;">Source name (TMDB #1), active border title</td></tr>
+  <tr><td style="padding:4px 12px;"><span style="color:#FF7A7A;">&#x25a0;</span> Red</td><td style="padding:4px 12px; font-family:monospace; color:#888;">#FF7A7A</td><td style="padding:4px 12px; color:#888;">Low confidence, errors</td></tr>
+  <tr><td style="padding:4px 12px;"><span style="color:#C79BFF;">&#x25a0;</span> Purple</td><td style="padding:4px 12px; font-family:monospace; color:#888;">#C79BFF</td><td style="padding:4px 12px; color:#888;">(reserved)</td></tr>
+  <tr><td style="padding:4px 12px;"><span style="color:#FFDF61;">&#x25a0;</span> Yellow</td><td style="padding:4px 12px; font-family:monospace; color:#888;">#FFDF61</td><td style="padding:4px 12px; color:#888;">(reserved)</td></tr>
+  <tr><td style="padding:4px 12px;"><span style="color:#666;">&#x25a0;</span> Dim</td><td style="padding:4px 12px; font-family:monospace; color:#888;">#666 / dim</td><td style="padding:4px 12px; color:#888;">Labels, muted text, ignored, separators, matching source values</td></tr>
+  <tr><td style="padding:4px 12px;"><span style="color:#555;">&#x25a0;</span> Inactive border</td><td style="padding:4px 12px; font-family:monospace; color:#888;">#555555</td><td style="padding:4px 12px; color:#888;">Unfocused panel border</td></tr>
+  <tr><td style="padding:4px 12px; background:#293b5b; border-radius:3px;">&#x25a0; Selection</td><td style="padding:4px 12px; font-family:monospace; color:#888;">#293b5b</td><td style="padding:4px 12px; color:#888;">Cursor highlight background</td></tr>
+</table>
+
+<hr>
+
+<!-- ===== IN CONTEXT (original palettes) ===== -->
+<h2>Side-by-side: Current vs VSCode Theme</h2>
+<div style="display:flex; gap:24px; flex-wrap:wrap; margin-top:16px;">
+
+  <div style="background:#2b2a27; padding:24px; border-radius:12px; width:320px;">
+    <div style="color:#888; font-weight:600; margin-bottom:12px;">Current Tapes colors</div>
+    <div style="margin-top:4px;">
+      <span style="color:#E8734A;">&#x25cb;</span> <span style="color:#e8e6e3;">unstaged</span>
+      &nbsp;&nbsp;
+      <span style="color:#7daea3;">&#x2713;</span> <span style="color:#e8e6e3;">staged</span>
+      &nbsp;&nbsp;
+      <span style="color:#666;">&#x00b7;</span> <span style="color:#555;">ignored</span>
+    </div>
+    <div style="margin-top:6px; font-size:12px;">
+      Border: <span style="color:#6796C0;">&#x2500;&#x2500;&#x2500;&#x2500;</span>
+      &nbsp; Source: <span style="color:#6796C0;">TMDB #1</span>
+    </div>
+    <div style="margin-top:6px; font-size:12px;">
+      Diff: <span style="color:#666;">match</span>
+      &nbsp;<span style="color:#7daea3;">fills</span>
+      &nbsp;<span style="color:#E8734A;">differs</span>
+    </div>
+    <div style="margin-top:6px; font-size:12px;">
+      Conf: <span style="color:#7daea3;">92%</span>
+      &nbsp;<span style="color:#E8734A;">65%</span>
+      &nbsp;<span style="color:#ea6962;">30%</span>
+    </div>
+  </div>
+
+  <div style="background:#2b2a27; padding:24px; border-radius:12px; width:320px;">
+    <div style="color:#888; font-weight:600; margin-bottom:12px;">VSCode Theme colors</div>
+    <div style="margin-top:4px;">
+      <span style="color:#E07A47;">&#x25cb;</span> <span style="color:#e8e6e3;">unstaged</span>
+      &nbsp;&nbsp;
+      <span style="color:#86E89A;">&#x2713;</span> <span style="color:#e8e6e3;">staged</span>
+      &nbsp;&nbsp;
+      <span style="color:#666;">&#x00b7;</span> <span style="color:#555;">ignored</span>
+    </div>
+    <div style="margin-top:6px; font-size:12px;">
+      Border: <span style="color:#7AB8FF;">&#x2500;&#x2500;&#x2500;&#x2500;</span>
+      &nbsp; Source: <span style="color:#7AB8FF;">TMDB #1</span>
+    </div>
+    <div style="margin-top:6px; font-size:12px;">
+      Diff: <span style="color:#666;">match</span>
+      &nbsp;<span style="color:#86E89A;">fills</span>
+      &nbsp;<span style="color:#E07A47;">differs</span>
+    </div>
+    <div style="margin-top:6px; font-size:12px;">
+      Conf: <span style="color:#86E89A;">92%</span>
+      &nbsp;<span style="color:#E07A47;">65%</span>
+      &nbsp;<span style="color:#FF7A7A;">30%</span>
+    </div>
+  </div>
+
+</div>
+
+</body></html>

@@ -94,29 +94,29 @@ def diff_style(result_val: Any, source_val: Any) -> str:
 
     - ``"dim"`` if source is None (missing) or matches the result.
     - ``"green"`` if source fills an empty result slot.
-    - ``"#E8734A"`` (ember) if source differs from a non-empty result.
+    - ``"#E07A47"`` (ember) if source differs from a non-empty result.
     """
     if source_val is None:
         return "dim"
     if result_val is None or result_val == "":
-        return "#7daea3"
+        return "#86E89A"
     if str(result_val) == str(source_val):
         return "dim"
-    return "#E8734A"
+    return "#E07A47"
 
 
 def confidence_style(confidence: float) -> str:
     """Return a Rich style for a confidence percentage.
 
-    - ``"#7daea3"`` (soft green) for >= 80%.
-    - ``"#E8734A"`` (ember) for 50-79%.
-    - ``"#ea6962"`` (soft red) for < 50%.
+    - ``"#86E89A"`` (soft green) for >= 80%.
+    - ``"#E07A47"`` (ember) for 50-79%.
+    - ``"#FF7A7A"`` (soft red) for < 50%.
     """
     if confidence >= 0.8:
-        return "#7daea3"
+        return "#86E89A"
     if confidence >= 0.5:
-        return "#E8734A"
-    return "#ea6962"
+        return "#E07A47"
+    return "#FF7A7A"
 
 
 def col(text: str) -> str:
@@ -172,7 +172,7 @@ def render_compact_preview(node: FileNode, template: str) -> Text:
         conf_str = f"{best_conf:.0%}"
         # Right-align: add spacing
         line2.append("  ")
-        line2.append("TMDB ", style="#6796C0")
+        line2.append("TMDB ", style="#7AB8FF")
         line2.append(conf_str, style=confidence_style(best_conf))
 
     result_text = Text()

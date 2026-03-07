@@ -43,6 +43,7 @@ class TreeView(Widget):
         self._filter_text: str = ""
         self._scroll_offset: int = 0
         self._status_text: str = ""
+        self._arrow_col: int = 40
         self._refresh_items()
 
     @property
@@ -144,7 +145,36 @@ class TreeView(Widget):
         else:
             self._items = list(self._all_items)
 
+        self._arrow_col = self._compute_arrow_col()
         self._scroll_offset = 0
+
+    def _compute_arrow_col(self) -> int:
+        """Compute the column position where the arrow/destination starts.
+
+        Scans all visible file rows, finds the widest
+        (indent + marker + filename), adds padding, and caps at half
+        the widget width.
+        """
+        max_width = 0
+        for node, depth in self._items:
+            if not isinstance(node, FileNode):
+                continue
+            effective_depth = 0 if self.flat_mode else depth
+            indent_len = effective_depth * 2
+            if self.flat_mode and self.root_path is not None:
+                try:
+                    filename = str(node.path.relative_to(self.root_path))
+                except ValueError:
+                    filename = node.path.name
+            else:
+                filename = node.path.name
+            # 2 = marker char + space
+            width = indent_len + 2 + len(filename)
+            if width > max_width:
+                max_width = width
+        inner_width = max(0, self.size.width - 4)  # border + padding
+        max_allowed = inner_width // 2
+        return min(max_width + 3, max_allowed)
 
     BORDER_TITLE = "Files"
 
@@ -169,6 +199,7 @@ class TreeView(Widget):
         end = min(start + viewport_height, len(self._items))
 
         rng = self.selected_range
+        arrow_col = self._arrow_col
         content_lines: list[Text] = []
         for i in range(start, end):
             node, depth = self._items[i]
@@ -180,6 +211,7 @@ class TreeView(Widget):
                 depth=effective_depth,
                 flat_mode=self.flat_mode,
                 root_path=self.root_path,
+                arrow_col=arrow_col,
             )
 
             # Pad or truncate to fit inner width

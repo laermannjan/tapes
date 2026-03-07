@@ -123,7 +123,7 @@ def _append_with_yellow_placeholders(text: Text, s: str, base_style: str) -> Non
             # Collect consecutive ?
             while j < len(s) and s[j] == "?":
                 j += 1
-            text.append(s[i:j], style="#E8734A")
+            text.append(s[i:j], style="#E07A47")
         else:
             # Collect non-? characters
             while j < len(s) and s[j] != "?":
@@ -139,13 +139,14 @@ def render_file_row(
     depth: int = 0,
     flat_mode: bool = False,
     root_path: Path | None = None,
+    arrow_col: int | None = None,
 ) -> Text:
     """Render a single file row as a Rich :class:`Text` object.
 
-    Format: ``indent + marker + " " + filename + "  ->  " + dest``
+    Format: ``indent + marker + " " + filename + padding + " \u2192 " + dest``
 
-    The template is selected automatically based on
-    ``node.result["media_type"]``.
+    When *arrow_col* is given, the filename area is padded so the arrow
+    starts at that column position, creating aligned two-column output.
 
     Markers (with color):
     - ``"\\u2713"`` (checkmark, green) if staged
@@ -162,11 +163,11 @@ def render_file_row(
         row.append(indent)
 
     if node.staged:
-        row.append("\u2713", style="#7daea3")
+        row.append("\u2713", style="#86E89A")
     elif node.ignored:
         row.append("\u00b7", style="dim")
     else:
-        row.append("\u25cb", style="#E8734A")
+        row.append("\u25cb", style="#E07A47")
 
     row.append(" ")
 
@@ -179,7 +180,15 @@ def render_file_row(
         filename = node.path.name
 
     row.append(filename)
-    row.append("  \u2192  ", style="dim")
+
+    # Pad to arrow column if specified
+    if arrow_col is not None:
+        current_len = len(row.plain)
+        if current_len < arrow_col:
+            row.append(" " * (arrow_col - current_len))
+        row.append("\u2192 ", style="dim")
+    else:
+        row.append("  \u2192  ", style="dim")
 
     dest = compute_dest(node, effective_template)
     row.append_text(render_dest(dest))
@@ -208,6 +217,7 @@ def render_row(
     depth: int = 0,
     flat_mode: bool = False,
     root_path: Path | None = None,
+    arrow_col: int | None = None,
 ) -> Text:
     """Render a single row, dispatching to file or folder renderer.
 
@@ -221,6 +231,7 @@ def render_row(
             depth=depth,
             flat_mode=flat_mode,
             root_path=root_path,
+            arrow_col=arrow_col,
         )
     return render_folder_row(node, depth=depth)
 

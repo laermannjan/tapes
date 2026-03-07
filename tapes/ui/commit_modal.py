@@ -84,7 +84,7 @@ def build_commit_text(
         # File line: checkmark + filename
         file_line = Text()
         file_line.append("  ")
-        file_line.append("\u2713", style="#7daea3")
+        file_line.append("\u2713", style="#86E89A")
         file_line.append(" ")
         # Truncate filename if too long
         max_name = _WIDTH - 4  # 2 indent + checkmark + space
@@ -116,9 +116,9 @@ def build_commit_text(
     # Footer with keybinding hints
     hint = Text()
     hint.append("  ")
-    hint.append("y", style="#6796C0")
+    hint.append("y", style="#7AB8FF")
     hint.append(" confirm    ")
-    hint.append("n", style="#6796C0")
+    hint.append("n", style="#7AB8FF")
     hint.append(" cancel")
     result.append_text(_border_line_text(hint))
     result.append("\n")

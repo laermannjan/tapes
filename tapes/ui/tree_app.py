@@ -37,7 +37,7 @@ class StatusFooter(Static):
 
     def render(self) -> RenderableType:
         """Build styled keybinding hints based on current mode."""
-        cyan = "#6796C0"
+        cyan = "#7AB8FF"
         if self.mode == "detail":
             return Text.assemble(
                 " ",
@@ -91,15 +91,9 @@ class TreeApp(App):
     ]
 
     CSS = """
-    Screen {
-        background: transparent;
-        border: none;
-        margin: 0;
-        padding: 0;
-    }
     TreeView {
-        height: 3fr;
-        border: round #6796C0;
+        height: 1fr;
+        border: round #7AB8FF;
         padding: 0 1;
     }
     TreeView.-inactive {
@@ -114,16 +108,14 @@ class TreeApp(App):
         padding: 0 1;
     }
     DetailView.-active {
-        border: round #6796C0;
+        border: round #7AB8FF;
     }
     DetailView.expanded {
-        height: auto;
-        max-height: 50%;
+        height: 14;
     }
     StatusFooter {
         dock: bottom;
         height: 1;
-        background: transparent;
     }
     HelpOverlay {
         display: none;
@@ -190,6 +182,14 @@ class TreeApp(App):
         yield StatusFooter(id="footer")
 
     def on_mount(self) -> None:
+        # Use ANSI theme for true terminal background transparency.
+        # Only set at mount time — headless test runners lack a real
+        # terminal so the default dark theme is safer there.
+        try:
+            self.theme = "textual-ansi"
+        except Exception:
+            pass
+
         if self._auto_pipeline:
             from tapes.ui.pipeline import run_guessit_pass
 

@@ -249,7 +249,7 @@ class DetailView(Widget):
             idx = self.source_index
             src = sources[idx]
             src_header = Text()
-            src_header.append(f"  {src.name}", style="#6796C0")
+            src_header.append(f"  {src.name}", style="#7AB8FF")
             if src.confidence:
                 conf_text = f" ({src.confidence:.0%})"
                 src_header.append(conf_text, style=confidence_style(src.confidence))
