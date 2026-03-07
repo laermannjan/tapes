@@ -175,7 +175,6 @@ class TestCommitModalIntegration:
     def test_commit_modal_initially_hidden(self) -> None:
         app = _make_app()
         assert app._commit_visible is False
-        assert app._confirming_commit is False
 
     def test_commit_modal_in_compose(self) -> None:
         app = _make_app()

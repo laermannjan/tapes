@@ -147,7 +147,6 @@ class TreeApp(App):
         self.config = config or TapesConfig()
         self._in_detail = False
         self._undo = UndoManager()
-        self._confirming_commit = False
         self._auto_pipeline = auto_pipeline
         self._tmdb_querying = False
         self._tmdb_progress = (0, 0)
@@ -421,7 +420,6 @@ class TreeApp(App):
 
     def _show_commit_modal(self) -> None:
         """Show the commit confirmation modal and dim background."""
-        self._confirming_commit = True
         self._commit_visible = True
         modal = self.query_one(CommitModal)
         modal.add_class("visible")
@@ -430,7 +428,6 @@ class TreeApp(App):
 
     def _hide_commit_modal(self) -> None:
         """Hide the commit confirmation modal and restore background."""
-        self._confirming_commit = False
         self._commit_visible = False
         modal = self.query_one(CommitModal)
         modal.remove_class("visible")
