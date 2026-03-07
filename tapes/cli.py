@@ -71,10 +71,10 @@ def tree_cmd(
     ),
 ) -> None:
     """Launch the tree TUI (dev command)."""
-    from tapes.metadata import extract_metadata
     from tapes.scanner import scan
     from tapes.ui.tree_app import TreeApp
     from tapes.ui.tree_model import build_tree
+    from tapes.ui.pipeline import run_guessit_pass
 
     cfg = load_config(config_file) if config_file else TapesConfig()
     resolved = path.resolve()
@@ -84,25 +84,7 @@ def tree_cmd(
         return
 
     model = build_tree(files, resolved)
-
-    # Populate result from guessit metadata
-    for file_node in model.all_files():
-        meta = extract_metadata(file_node.path.name)
-        result: dict[str, object] = {}
-        if meta.title:
-            result["title"] = meta.title
-        if meta.year is not None:
-            result["year"] = meta.year
-        if meta.season is not None:
-            result["season"] = meta.season
-        if meta.episode is not None:
-            result["episode"] = meta.episode
-        if meta.media_type:
-            result["media_type"] = meta.media_type
-        for k, v in meta.raw.items():
-            if v is not None:
-                result[k] = v
-        file_node.result = result
+    run_guessit_pass(model)
 
     movie_template = cfg.library.movie_template
     tv_template = cfg.library.tv_template
