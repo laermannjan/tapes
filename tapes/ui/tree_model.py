@@ -237,7 +237,8 @@ def compute_shared_fields(nodes: list[FileNode]) -> dict[str, Any]:
     """Compute shared result fields across multiple file nodes.
 
     Fields present in all nodes with identical values are kept as-is.
-    Fields with differing values become ``"(various)"``.
+    Fields with differing values become ``"(N values)"`` where N is the
+    count of distinct values.
     Fields present in at least one node but not all still appear.
     """
     if not nodes:
@@ -262,6 +263,7 @@ def compute_shared_fields(nodes: list[FileNode]) -> dict[str, Any]:
         if all(v == first for v in values):
             result[key] = first
         else:
-            result[key] = "(various)"
+            n_unique = len(set(str(v) for v in values))
+            result[key] = f"({n_unique} values)"
 
     return result

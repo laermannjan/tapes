@@ -82,6 +82,13 @@ def render_detail_grid(
     return lines
 
 
+def is_multi_value(val: Any) -> bool:
+    """Return True if the value is a multi-value marker like '(N values)'."""
+    if not isinstance(val, str):
+        return False
+    return val.startswith("(") and val.endswith(" values)")
+
+
 def diff_style(result_val: Any, source_val: Any) -> str:
     """Return a Rich style for a source value relative to the result.
 

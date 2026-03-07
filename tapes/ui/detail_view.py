@@ -17,6 +17,7 @@ from tapes.ui.detail_render import (
     diff_style,
     display_val,
     get_display_fields,
+    is_multi_value,
     render_compact_preview,
     render_detail_header,
     render_folder_preview,
@@ -56,7 +57,13 @@ class DetailView(Widget):
         self._fields: list[str] = []
         self._edit_value: str = ""
         self.on_before_mutate: Callable[[list[FileNode]], None] | None = None
+        self.on_editing_changed: Callable[[bool], None] | None = None
         self._preview_node: FileNode | FolderNode | None = None
+
+    def watch_editing(self, value: bool) -> None:
+        """Notify parent when editing state changes."""
+        if self.on_editing_changed is not None:
+            self.on_editing_changed(value)
 
     def _active_template(self, node: FileNode | None = None) -> str:
         """Return the template for the given (or primary) node.
@@ -89,7 +96,7 @@ class DetailView(Widget):
         """Switch to multiple file nodes for multi-file detail view.
 
         The first node is used as the primary for sources display.
-        Result column shows shared values, '(various)' for differing.
+        Result column shows shared values, '(N values)' for differing.
         """
         if not nodes:
             return
@@ -205,11 +212,11 @@ class DetailView(Widget):
 
         # Header: filename + destination (or multi-file summary)
         if self.is_multi:
-            header_lines = self._render_multi_header()
+            for hl in self._render_multi_header():
+                content.append(hl)
         else:
-            header_lines = render_detail_header(self.node, self._active_template())
-        for hl in header_lines:
-            content.append(Text(hl))
+            for hl in render_detail_header(self.node, self._active_template()):
+                content.append(Text(hl))
 
         # Separator
         content.append(Text("\u2576" + "\u2500" * min(78, inner_width) + "\u2574"))
@@ -229,10 +236,10 @@ class DetailView(Widget):
 
         return content
 
-    def _render_multi_header(self) -> list[str]:
+    def _render_multi_header(self) -> list[Text]:
         """Render header for multi-file view."""
         count = len(self._file_nodes)
-        header = f" {count} files selected"
+        header = Text(f" {count} files selected", style="bold white")
 
         # Compute destinations
         dests: set[str] = set()
@@ -241,11 +248,11 @@ class DetailView(Widget):
             dests.add(d or "???")
 
         if len(dests) == 1:
-            dest_str = f" \u2192 {dests.pop()}"
+            dest_line = Text(f" \u2192 {dests.pop()}")
         else:
-            dest_str = " \u2192 (various destinations)"
+            dest_line = Text(" \u2192 (various destinations)")
 
-        return [header, dest_str]
+        return [header, dest_line]
 
     def _render_grid_header(self) -> Text:
         """Render the column header row with optional cursor highlight."""
@@ -326,7 +333,11 @@ class DetailView(Widget):
             src_raw = src.fields.get(field_name)
             src_val = display_val(src_raw)
             col_text = col(f"  {src_val}")
-            base_style = diff_style(result_raw, src_raw)
+            # No diff highlighting when result is a multi-value marker
+            if is_multi_value(result_raw):
+                base_style = "dim"
+            else:
+                base_style = diff_style(result_raw, src_raw)
             if self.cursor_row == row_idx:
                 base_style = "reverse"
             parts.append((col_text, base_style))
@@ -430,7 +441,7 @@ class DetailView(Widget):
         field_name = self._fields[self.cursor_row]
         shared = self._shared_result()
         current = shared.get(field_name)
-        if current == "(various)":
+        if is_multi_value(current):
             self._edit_value = ""
         else:
             self._edit_value = str(current) if current is not None else ""

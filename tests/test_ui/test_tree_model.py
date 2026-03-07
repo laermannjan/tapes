@@ -332,7 +332,7 @@ class TestComputeSharedFields:
             FileNode(path=Path("/b.mkv"), result={"title": "Bar", "year": 2020}),
         ]
         shared = compute_shared_fields(nodes)
-        assert shared["title"] == "(various)"
+        assert shared["title"] == "(2 values)"
         assert shared["year"] == 2020
 
     def test_field_in_some_not_all(self) -> None:
@@ -353,7 +353,7 @@ class TestComputeSharedFields:
         ]
         shared = compute_shared_fields(nodes)
         assert shared["title"] == "Foo"
-        assert shared["season"] == "(various)"
+        assert shared["season"] == "(2 values)"
 
     def test_empty_list(self) -> None:
         assert compute_shared_fields([]) == {}

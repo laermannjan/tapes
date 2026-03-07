@@ -8,6 +8,7 @@ import pytest
 from tapes.ui.detail_render import (
     display_val,
     get_display_fields,
+    is_multi_value,
     render_detail_grid,
     render_detail_header,
 )
@@ -500,7 +501,7 @@ class TestMultiFileDetail:
         assert shared["title"] == "Breaking Bad"
         assert shared["year"] == 2008
         assert shared["season"] == 1
-        assert shared["episode"] == "(various)"
+        assert shared["episode"] == "(2 values)"
 
     def test_shows_shared_values(self) -> None:
         view, _, _ = self._make_multi_view()
@@ -511,12 +512,17 @@ class TestMultiFileDetail:
     def test_header_shows_count(self) -> None:
         view, _, _ = self._make_multi_view()
         header = view._render_multi_header()
-        assert "2 files selected" in header[0]
+        assert "2 files selected" in header[0].plain
+
+    def test_header_is_bold_white(self) -> None:
+        view, _, _ = self._make_multi_view()
+        header = view._render_multi_header()
+        assert header[0].style == "bold white"
 
     def test_header_shows_various_destinations(self) -> None:
         view, _, _ = self._make_multi_view()
         header = view._render_multi_header()
-        assert "(various destinations)" in header[1]
+        assert "(various destinations)" in header[1].plain
 
     def test_editing_applies_to_all_nodes(self) -> None:
         view, node1, node2 = self._make_multi_view()
@@ -565,7 +571,7 @@ class TestMultiFileDetail:
 
     def test_edit_various_field_starts_empty(self) -> None:
         view, _, _ = self._make_multi_view()
-        # episode is (various)
+        # episode is (2 values) -- multi-value marker
         view.cursor_row = 3  # episode
         view._start_edit()
         assert view._edit_value == ""
@@ -597,6 +603,44 @@ class TestMultiFileDetail:
         # season and episode not in TMDB source, should be cleared
         assert "season" not in node1.result
         assert "season" not in node2.result
+
+    def test_multi_value_count_reflects_distinct_values(self) -> None:
+        node1 = FileNode(
+            path=Path("/a.mkv"),
+            result={"title": "A", "year": 2020},
+        )
+        node2 = FileNode(
+            path=Path("/b.mkv"),
+            result={"title": "B", "year": 2020},
+        )
+        node3 = FileNode(
+            path=Path("/c.mkv"),
+            result={"title": "C", "year": 2020},
+        )
+        view = DetailView(node1, TEMPLATE, TEMPLATE)
+        view._fields = get_display_fields(TEMPLATE)
+        view.set_nodes([node1, node2, node3])
+        shared = view._shared_result()
+        assert shared["title"] == "(3 values)"
+        assert shared["year"] == 2020
+
+
+# --- is_multi_value ---
+
+
+class TestIsMultiValue:
+    def test_multi_value_marker(self) -> None:
+        assert is_multi_value("(2 values)") is True
+        assert is_multi_value("(10 values)") is True
+
+    def test_not_multi_value(self) -> None:
+        assert is_multi_value("Breaking Bad") is False
+        assert is_multi_value(None) is False
+        assert is_multi_value(42) is False
+        assert is_multi_value("") is False
+
+    def test_various_is_not_multi_value(self) -> None:
+        assert is_multi_value("(various)") is False
 
 
 # --- Async integration: tree -> detail -> back ---
