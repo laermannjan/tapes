@@ -10,6 +10,7 @@ from tapes.ui.tree_render import (
     render_file_row,
     render_folder_row,
     render_row,
+    select_template,
 )
 
 MOVIE_TEMPLATE = "{title} ({year})/{title} ({year}).{ext}"
@@ -199,3 +200,78 @@ class TestFlattenWithDepth:
         # Only the folder itself, not its child
         assert len(items) == 1
         assert items[0] == (inner_folder, 0)
+
+
+# --- select_template ---
+
+
+class TestSelectTemplate:
+    def test_episode_returns_tv_template(self) -> None:
+        node = FileNode(
+            path=Path("/tv/show.mkv"),
+            result={"media_type": "episode"},
+        )
+        assert select_template(node, MOVIE_TEMPLATE, TV_TEMPLATE) == TV_TEMPLATE
+
+    def test_movie_returns_movie_template(self) -> None:
+        node = FileNode(
+            path=Path("/movies/film.mkv"),
+            result={"media_type": "movie"},
+        )
+        assert select_template(node, MOVIE_TEMPLATE, TV_TEMPLATE) == MOVIE_TEMPLATE
+
+    def test_unknown_media_type_defaults_to_movie(self) -> None:
+        node = FileNode(
+            path=Path("/other/file.mkv"),
+            result={"media_type": "other"},
+        )
+        assert select_template(node, MOVIE_TEMPLATE, TV_TEMPLATE) == MOVIE_TEMPLATE
+
+    def test_missing_media_type_defaults_to_movie(self) -> None:
+        node = FileNode(
+            path=Path("/other/file.mkv"),
+            result={},
+        )
+        assert select_template(node, MOVIE_TEMPLATE, TV_TEMPLATE) == MOVIE_TEMPLATE
+
+
+# --- render_file_row with dual templates ---
+
+
+class TestRenderFileRowDualTemplate:
+    def test_movie_node_uses_movie_template(self) -> None:
+        node = FileNode(
+            path=Path("/movies/Inception.mkv"),
+            result={"title": "Inception", "year": 2010, "media_type": "movie"},
+        )
+        row = render_file_row(
+            node, "", movie_template=MOVIE_TEMPLATE, tv_template=TV_TEMPLATE
+        )
+        assert "Inception (2010)/Inception (2010).mkv" in row
+
+    def test_episode_node_uses_tv_template(self) -> None:
+        node = FileNode(
+            path=Path("/tv/show.s01e02.mkv"),
+            result={
+                "title": "Breaking Bad",
+                "year": 2008,
+                "season": 1,
+                "episode": 2,
+                "episode_title": "Cat's in the Bag...",
+                "media_type": "episode",
+            },
+        )
+        row = render_file_row(
+            node, "", movie_template=MOVIE_TEMPLATE, tv_template=TV_TEMPLATE
+        )
+        assert "S01E02" in row
+        assert "Cat's in the Bag..." in row
+
+    def test_single_template_fallback(self) -> None:
+        """When movie_template/tv_template are not given, uses template param."""
+        node = FileNode(
+            path=Path("/movies/Inception.mkv"),
+            result={"title": "Inception", "year": 2010},
+        )
+        row = render_file_row(node, MOVIE_TEMPLATE)
+        assert "Inception (2010)/Inception (2010).mkv" in row

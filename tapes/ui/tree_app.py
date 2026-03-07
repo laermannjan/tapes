@@ -60,10 +60,15 @@ class TreeApp(App):
         template: str,
         root_path: Path | None = None,
         auto_pipeline: bool = False,
+        *,
+        movie_template: str | None = None,
+        tv_template: str | None = None,
     ) -> None:
         super().__init__()
         self.model = model
         self.template = template
+        self.movie_template = movie_template
+        self.tv_template = tv_template
         self.root_path = root_path
         self._in_detail = False
         self._undo = UndoManager()
@@ -78,11 +83,15 @@ class TreeApp(App):
             self.model,
             self.template,
             root_path=self.root_path,
+            movie_template=self.movie_template,
+            tv_template=self.tv_template,
         )
         # Hidden until a file is selected; set_node() replaces the placeholder
         yield DetailView(
             FileNode(path=Path("placeholder")),
             self.template,
+            movie_template=self.movie_template,
+            tv_template=self.tv_template,
         )
         yield Static("0 staged / 0 total", id="status")
         yield Footer()

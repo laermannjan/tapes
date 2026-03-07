@@ -17,7 +17,7 @@ from tapes.ui.detail_render import (
     render_detail_header,
 )
 from tapes.ui.tree_model import FileNode, compute_shared_fields
-from tapes.ui.tree_render import compute_dest
+from tapes.ui.tree_render import compute_dest, select_template
 
 if TYPE_CHECKING:
     from rich.console import RenderableType
@@ -36,14 +36,35 @@ class DetailView(Widget):
     cursor_col: reactive[int] = reactive(0)   # 0 = result, 1+ = sources
     editing: reactive[bool] = reactive(False)
 
-    def __init__(self, node: FileNode, template: str) -> None:
+    def __init__(
+        self,
+        node: FileNode,
+        template: str,
+        *,
+        movie_template: str | None = None,
+        tv_template: str | None = None,
+    ) -> None:
         super().__init__()
         self.node = node
         self._file_nodes: list[FileNode] = [node]
         self.template = template
+        self.movie_template = movie_template
+        self.tv_template = tv_template
         self._fields: list[str] = []
         self._edit_value: str = ""
         self.on_before_mutate: Callable[[list[FileNode]], None] | None = None
+
+    def _active_template(self, node: FileNode | None = None) -> str:
+        """Return the template for the given (or primary) node.
+
+        When *movie_template* and *tv_template* are set, selects based on
+        the node's ``media_type``.  Falls back to ``self.template``.
+        """
+        if node is None:
+            node = self.node
+        if self.movie_template is not None and self.tv_template is not None:
+            return select_template(node, self.movie_template, self.tv_template)
+        return self.template
 
     @property
     def is_multi(self) -> bool:
@@ -51,7 +72,7 @@ class DetailView(Widget):
         return len(self._file_nodes) > 1
 
     def on_mount(self) -> None:
-        self._fields = get_display_fields(self.template)
+        self._fields = get_display_fields(self._active_template())
 
     def set_node(self, node: FileNode) -> None:
         """Switch to a new file node, resetting cursor and edit state."""
@@ -59,7 +80,7 @@ class DetailView(Widget):
         self._file_nodes = [node]
         self.cursor_row = 0
         self.cursor_col = 0
-        self._fields = get_display_fields(self.template)
+        self._fields = get_display_fields(self._active_template(node))
         self.editing = False
         self.refresh()
 
@@ -75,7 +96,7 @@ class DetailView(Widget):
         self.node = nodes[0]
         self.cursor_row = 0
         self.cursor_col = 0
-        self._fields = get_display_fields(self.template)
+        self._fields = get_display_fields(self._active_template(self.node))
         self.editing = False
         self.refresh()
 
@@ -93,7 +114,7 @@ class DetailView(Widget):
         if self.is_multi:
             header_lines = self._render_multi_header()
         else:
-            header_lines = render_detail_header(self.node, self.template)
+            header_lines = render_detail_header(self.node, self._active_template())
         for hl in header_lines:
             lines.append(Text(hl))
 
@@ -123,7 +144,7 @@ class DetailView(Widget):
         # Compute destinations
         dests: set[str] = set()
         for n in self._file_nodes:
-            d = compute_dest(n, self.template)
+            d = compute_dest(n, self._active_template(n))
             dests.add(d or "???")
 
         if len(dests) == 1:

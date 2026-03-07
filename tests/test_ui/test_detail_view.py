@@ -577,6 +577,92 @@ class TestMultiFileDetail:
 # --- Async integration: tree -> detail -> back ---
 
 
+MOVIE_TEMPLATE = "{title} ({year})/{title} ({year}).{ext}"
+TV_TEMPLATE = (
+    "{title} ({year})/Season {season:02d}/"
+    "{title} - S{season:02d}E{episode:02d} - {episode_title}.{ext}"
+)
+
+
+class TestDetailViewTemplateSelection:
+    """Tests for media_type-based template selection in DetailView."""
+
+    def test_movie_node_uses_movie_template_fields(self) -> None:
+        node = FileNode(
+            path=Path("/movies/Inception.mkv"),
+            result={"title": "Inception", "year": 2010, "media_type": "movie"},
+        )
+        view = DetailView(
+            node, MOVIE_TEMPLATE,
+            movie_template=MOVIE_TEMPLATE,
+            tv_template=TV_TEMPLATE,
+        )
+        view._fields = get_display_fields(view._active_template())
+        # Movie template has title, year
+        assert "title" in view._fields
+        assert "year" in view._fields
+        assert "season" not in view._fields
+        assert "episode" not in view._fields
+
+    def test_episode_node_uses_tv_template_fields(self) -> None:
+        node = FileNode(
+            path=Path("/tv/show.s01e01.mkv"),
+            result={
+                "title": "Breaking Bad",
+                "year": 2008,
+                "season": 1,
+                "episode": 1,
+                "episode_title": "Pilot",
+                "media_type": "episode",
+            },
+        )
+        view = DetailView(
+            node, MOVIE_TEMPLATE,
+            movie_template=MOVIE_TEMPLATE,
+            tv_template=TV_TEMPLATE,
+        )
+        view._fields = get_display_fields(view._active_template())
+        assert "season" in view._fields
+        assert "episode" in view._fields
+        assert "episode_title" in view._fields
+
+    def test_set_node_updates_fields_for_new_media_type(self) -> None:
+        movie_node = FileNode(
+            path=Path("/movies/Inception.mkv"),
+            result={"title": "Inception", "year": 2010, "media_type": "movie"},
+        )
+        tv_node = FileNode(
+            path=Path("/tv/show.s01e01.mkv"),
+            result={
+                "title": "Show",
+                "year": 2020,
+                "season": 1,
+                "episode": 1,
+                "episode_title": "Pilot",
+                "media_type": "episode",
+            },
+        )
+        view = DetailView(
+            movie_node, MOVIE_TEMPLATE,
+            movie_template=MOVIE_TEMPLATE,
+            tv_template=TV_TEMPLATE,
+        )
+        view._fields = get_display_fields(view._active_template())
+        assert "season" not in view._fields
+
+        view.set_node(tv_node)
+        assert "season" in view._fields
+        assert "episode" in view._fields
+
+    def test_fallback_to_template_when_no_dual_templates(self) -> None:
+        node = FileNode(
+            path=Path("/tv/show.mkv"),
+            result={"title": "Show", "media_type": "episode"},
+        )
+        view = DetailView(node, TEMPLATE)
+        assert view._active_template() == TEMPLATE
+
+
 try:
     from textual.pilot import Pilot  # noqa: F401
 

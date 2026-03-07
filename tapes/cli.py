@@ -49,12 +49,15 @@ def import_cmd(
         return
 
     model = build_tree(files, resolved)
-    template = cfg.library.movie_template
+    movie_template = cfg.library.movie_template
+    tv_template = cfg.library.tv_template
     tui = TreeApp(
         model=model,
-        template=template,
+        template=movie_template,
         root_path=resolved,
         auto_pipeline=True,
+        movie_template=movie_template,
+        tv_template=tv_template,
     )
     tui.run()
 
@@ -100,6 +103,13 @@ def tree_cmd(
                 result[k] = v
         file_node.result = result
 
-    template = cfg.library.movie_template
-    tui = TreeApp(model=model, template=template, root_path=resolved)
+    movie_template = cfg.library.movie_template
+    tv_template = cfg.library.tv_template
+    tui = TreeApp(
+        model=model,
+        template=movie_template,
+        root_path=resolved,
+        movie_template=movie_template,
+        tv_template=tv_template,
+    )
     tui.run()

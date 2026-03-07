@@ -18,6 +18,20 @@ def template_field_names(template: str) -> list[str]:
     )
 
 
+def select_template(
+    node: FileNode, movie_template: str, tv_template: str
+) -> str:
+    """Select the appropriate template based on the node's media_type.
+
+    Returns ``tv_template`` if ``media_type`` is ``"episode"``,
+    otherwise ``movie_template``.
+    """
+    media_type = node.result.get("media_type")
+    if media_type == "episode":
+        return tv_template
+    return movie_template
+
+
 def compute_dest(node: FileNode, template: str) -> str | None:
     """Compute the destination path for a file node using a template.
 
@@ -40,16 +54,28 @@ def render_file_row(
     depth: int = 0,
     flat_mode: bool = False,
     root_path: Path | None = None,
+    *,
+    movie_template: str | None = None,
+    tv_template: str | None = None,
 ) -> str:
     """Render a single file row as a plain string.
 
     Format: ``indent + marker + " " + filename + "  ->  " + dest``
+
+    When *movie_template* and *tv_template* are provided, the template is
+    selected automatically based on ``node.result["media_type"]`` and the
+    *template* parameter is ignored.
 
     Markers:
     - ``"\\u2713"`` (checkmark) if staged
     - ``"\\u25cb"`` (circle) if not staged and not ignored
     - ``" "`` (space) if ignored
     """
+    if movie_template is not None and tv_template is not None:
+        effective_template = select_template(node, movie_template, tv_template)
+    else:
+        effective_template = template
+
     indent = "" if flat_mode else "  " * depth
 
     if node.staged:
@@ -67,7 +93,7 @@ def render_file_row(
     else:
         filename = node.path.name
 
-    dest = compute_dest(node, template) or "???"
+    dest = compute_dest(node, effective_template) or "???"
 
     return f"{indent}{marker} {filename}  \u2192  {dest}"
 
@@ -92,11 +118,20 @@ def render_row(
     depth: int = 0,
     flat_mode: bool = False,
     root_path: Path | None = None,
+    *,
+    movie_template: str | None = None,
+    tv_template: str | None = None,
 ) -> str:
     """Render a single row, dispatching to file or folder renderer."""
     if isinstance(node, FileNode):
         return render_file_row(
-            node, template, depth=depth, flat_mode=flat_mode, root_path=root_path
+            node,
+            template,
+            depth=depth,
+            flat_mode=flat_mode,
+            root_path=root_path,
+            movie_template=movie_template,
+            tv_template=tv_template,
         )
     return render_folder_row(node, depth=depth)
 
