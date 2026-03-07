@@ -1189,6 +1189,17 @@ class TestTreeViewFilter:
         # Should clamp cursor to valid range
         assert view.cursor_index == 0
 
+    def test_filter_finds_files_in_collapsed_folders(self) -> None:
+        model = _simple_model()  # all folders collapsed
+        view = _make_view(model)
+        # In collapsed state, only folders and top.mkv are visible
+        assert view.item_count == 3
+        # Filter should find file_a even though folderA is collapsed
+        view.set_filter("file_a")
+        file_nodes = [n for n, _d in view._items if isinstance(n, FileNode)]
+        assert len(file_nodes) == 1
+        assert file_nodes[0].path.name == "file_a.mkv"
+
     def test_filter_with_partial_match(self) -> None:
         model = _expanded_model()
         view = _make_view(model)

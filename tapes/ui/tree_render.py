@@ -124,3 +124,28 @@ def _flatten_children_with_depth(
         result.append((child, depth))
         if isinstance(child, FolderNode) and not child.collapsed:
             _flatten_children_with_depth(child, result, depth + 1)
+
+
+def flatten_all_with_depth(
+    model: TreeModel,
+) -> list[tuple[FileNode | FolderNode, int]]:
+    """Flatten the tree ignoring collapsed state, returning (node, depth) pairs.
+
+    Used for search/filter which needs to see all files regardless of
+    folder collapse state.
+    """
+    result: list[tuple[FileNode | FolderNode, int]] = []
+    _flatten_all_children(model.root, result, depth=0)
+    return result
+
+
+def _flatten_all_children(
+    folder: FolderNode,
+    result: list[tuple[FileNode | FolderNode, int]],
+    depth: int,
+) -> None:
+    """Recursively flatten ALL children, ignoring collapsed state."""
+    for child in folder.children:
+        result.append((child, depth))
+        if isinstance(child, FolderNode):
+            _flatten_all_children(child, result, depth + 1)

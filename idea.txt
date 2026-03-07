@@ -1,8 +1,50 @@
+ i want you to help me build the "frontend" for this media organizer and brainstorm about how the ui should look and feel.
+  i would like this to be a fast iterative process where you create mockups that we discuss, critique and improve on iteratively.
+  tapes is an interactive cli. it's design language should be very clearly inspired by claude code: minimal chrome, monochrome (grey) primary
+  colors. white text and black background. use dimming and often. white text to draw attention to important parts. use colors sparsely to convey
+  meaning (like claude code uses different colors for the different permission modes: red=bypass, cyan=plan, purple=auto-accept). we need a clear
+   color language.
+
+  this iteration might diviate very strongly from the code that is already in this repo. and conflict with the rest of the documentation. let's
+  start fresh.
+
+  the goal of tapes tis to organize messy collections of media files:
+  1. the user points tapes towards a directory
+  2. tapes finds all vidoe files in that directory and recurces down to the leaves.
+  3. for each video file, tapes finds files that start with the stem of the video file: e.g. for Dune.2021.x265.mkv matches
+  Dune.2021.x265-forced.en.srt. these "companion" files are either in the same directory, or in a child directory of its containing directory.
+  4. tapes extracts metadata, e.g. `media_type=("movie" or "episode")`, `title`, `year`, `cd`, `season`, `episode`, `episode_title` and
+  potentially in the future more fields (like codec, container, hdr, etc.) (initially via the python tool `guessit`.
+  5. tapes presents visually easily parsable, interactive, navigatable, editable list of the scan and extraction results. one file per row.
+  the key information is the mapping from filepath+name (relative to the path tapes was pointed at) to the extracted metadata.
+  it should be a two column layout: left filepath+name, right metadata. good padding, paths left-aligned. metadata is actually also column
+  organized. each field has its own column. use subtle separators if need be.
+  6. rows are ordered depending on the metadata that was extracted: title > year > season. some or all of these field might be unknown.
+  7. files of media type "movie" that share the same title + year form a visual group. so do files of media_type episode that share title + year
+  + episode_title. these groups need to visually separated. use empty lines an or other visual separators like horizontal bars.
+  8. the user can manipulate that list with certain actions.
+  8.1. the user has a block cursor that initiates on the most top left metadata field.
+  8.2. the user can navigate with arrow keys to jump between fields and rows.
+  8.3. the user can enter select a metadata field by pressing v when the cursor is on it. the user can also hold v and press up/down arrows to
+  select that field for all the row he navigates over.
+  8.4. the user can edit a metadata field by pressing e. when there is no active selection, the user edits the field the cursor is currently
+  hovering over. when there is a selection the user edits all selected fields simultaneously.
+  8.5. the user escapes a mode - such as select or edit - by pressing esc.
+  8.6. the user can instruct tapes to reorganize the list by pressing r. when no edits where done, this results in no visual change. when fields
+  were edited, the list is reorganized according to the rules laid out in 6. and 7.
+  9. the user can run a query against a metadata database (tmdb) with shortcut q. for each item (row) a query against that metadata database's
   api is run with the appropriate search parameters filled by the current values in that rows metadata fields. for rows that share all the query
   parameters we only need to run the query once and populate results to all sharing rows.
   9.1. query might return no, one, or multiple matches. we only care about the one top results. and we extract some of the crucial metadata: year, title, season, episode,
   episode_title if they are available. if it's a match we're confident in (avg. similarity of the fields with their respective query results)
   we replace the fields with the query result. if we're not confident enough (below a threshold) we inform the user by highlighting the unconfident row and 
+  it's query result conceptually like so:
+            (filename)                                (media_type) | (title)       | (year)  | (seasons) | (episode) | (episode_title)
+  brbe/BreakBad/BreakBad.s01e01.mkv                   episode      | BreakBad      | unknown | 1         | 1         | unknown
+   ⎿ (match)                                                       | Breaking Bad  | 2008    | 1         | 1         | Pilot
+
+  when the query returned no result for a row. that row should also be highlighted with a warning color and a `⎿ (no match)`
+  9.2. when the user's cursor is on the row of the match they can press enter to accept or backspace/delete to reject.
   9.3. for groups that the query params (title + year + season + episode), we only run one query and only show the resulting match/no match under the 
   first row of that block. accepting/rejecting the match does so for the entire bock. when accepting the entire block is updated accordingly.
   so if in the above example there would also be companion srt files and we accepted the match, those companion files would also have their metadata 
@@ -10,3 +52,17 @@
   
   10. the user can enter a process mode from normal mode, the metadata field columns are then replaced by the path where the file would be copied or moved to.
   that path is relative to a preconfigured library root. the path is generated based on a preconfigured template that is populated with the current metadata field values.
+  additionally the mode (copy, move, link, hardlink) will be shown
+  it should look something like this:
+
+
+  copy   brbe/BreakBad/BreakBad.s01e01.mkv                   ./Breaking Bad (2008)/Season 01/Breaking Bad - S01E01 - Pilot.mkv
+
+  10.1 in this mode the user can only accept and process the files as shown or escape and go back to the metadata normal mode. when entering this mode
+  while there are still matches open that we could not auto-accept because we're uncertain, the user should be given the option to either: accept all and enter process mode, reject all and enter process mode, cancel and stay in normal mode.
+
+
+    The description above mixes ui/ux ideas and how the tool works.
+    I now want you to clarify any open questions and confirm that you have understood my vision and that i didn't gloss over anything, or that there are contradiction / problems in my vision.
+    let's iterate quickly on this and discuss over html mockups. some questions are better answered by showing me differnt options as mockup and let me see and discuss what i like or not about them.
+

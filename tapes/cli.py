@@ -44,14 +44,7 @@ def import_cmd(
     if dry_run:
         cfg.dry_run = True
 
-    groups = run_pipeline(path, config=cfg)
-
-    if not groups:
-        console.print("No video files found.")
-        return
-
     if not no_tui:
-        from tapes.metadata import extract_metadata
         from tapes.scanner import scan
         from tapes.ui.tree_app import TreeApp
         from tapes.ui.tree_model import build_tree
@@ -73,6 +66,10 @@ def import_cmd(
         tui.run()
         return
 
+    groups = run_pipeline(path, config=cfg)
+    if not groups:
+        console.print("No video files found.")
+        return
     _print_scan(path.resolve(), groups)
 
 

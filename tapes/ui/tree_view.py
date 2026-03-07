@@ -9,7 +9,7 @@ from textual.reactive import reactive
 from textual.widget import Widget
 
 from tapes.ui.tree_model import FileNode, FolderNode, TreeModel
-from tapes.ui.tree_render import flatten_with_depth, render_row
+from tapes.ui.tree_render import flatten_all_with_depth, flatten_with_depth, render_row
 
 if TYPE_CHECKING:
     from rich.console import RenderableType
@@ -130,6 +130,10 @@ class TreeView(Widget):
         if self.flat_mode:
             # In flat mode, show only files (no folders), all at depth 0
             self._all_items = [(f, 0) for f in self.model.all_files()]
+        elif self._filter_text:
+            # When filtering, flatten all items regardless of collapsed state
+            # so files inside collapsed folders can be found
+            self._all_items = flatten_all_with_depth(self.model)
         else:
             self._all_items = flatten_with_depth(self.model)
 
