@@ -1,8 +1,18 @@
 """File operations: copy, move, link with dry-run support."""
 from __future__ import annotations
 
+import hashlib
 import shutil
 from pathlib import Path
+
+
+def _sha256(path: Path) -> str:
+    """Compute SHA-256 hex digest of a file."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def process_file(
@@ -35,14 +45,14 @@ def process_file(
         shutil.copy2(src, dest)
         return f"Copied {src} -> {dest}"
     elif operation == "move":
+        src_hash = _sha256(src)
         shutil.copy2(src, dest)
-        if dest.stat().st_size == src.stat().st_size:
+        if _sha256(dest) == src_hash:
             src.unlink()
         else:
             dest.unlink()
             raise OSError(
-                f"Size mismatch after copy: {src} ({src.stat().st_size}) "
-                f"vs {dest} (removed)"
+                f"SHA-256 mismatch after copy: {src} -> {dest} (dest removed)"
             )
         return f"Moved {src} -> {dest}"
     elif operation == "link":
