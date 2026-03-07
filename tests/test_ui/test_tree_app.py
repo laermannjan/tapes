@@ -699,3 +699,164 @@ class TestUndoIntegration:
             # Press u without any changes - should not crash
             await pilot.press("u")
             assert node.result["title"] == "Original"
+
+
+# ---------------------------------------------------------------------------
+# Ignore toggle unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestIgnoreToggle:
+    def test_toggle_ignored_on_file(self) -> None:
+        view = _make_view(_expanded_model())
+        view.move_cursor(1)  # file_a.mkv
+        node = view.cursor_node()
+        assert isinstance(node, FileNode)
+        assert not node.ignored
+        view.toggle_ignored_at_cursor()
+        assert node.ignored
+        view.toggle_ignored_at_cursor()
+        assert not node.ignored
+
+    def test_toggle_ignored_on_folder(self) -> None:
+        model = _expanded_model()
+        view = _make_view(model)
+        # Cursor on folderA
+        node = view.cursor_node()
+        assert isinstance(node, FolderNode)
+        view.toggle_ignored_at_cursor()
+        file_a = model.all_files()[0]
+        assert file_a.ignored
+        # Toggle again to un-ignore
+        view.toggle_ignored_at_cursor()
+        assert not file_a.ignored
+
+    def test_toggle_ignored_range(self) -> None:
+        model = _expanded_model()
+        view = _make_view(model)
+        view.move_cursor(1)  # file_a.mkv
+        view.start_range_select()
+        view.move_cursor(2)  # cursor at 3, range covers 1-3
+        view.toggle_ignored_at_cursor()
+        assert not view.in_range_mode
+        files = model.all_files()
+        assert files[0].ignored  # file_a
+        assert files[1].ignored  # file_b
+
+    def test_ignored_file_renders_with_space_marker(self) -> None:
+        model = _expanded_model()
+        view = _make_view(model)
+        files = model.all_files()
+        files[0].ignored = True
+        output = view.render_tree()
+        lines = output.split("\n")
+        # file_a is at index 1 in flattened view
+        file_a_line = lines[1]
+        # Ignored file uses space as marker (indent + space + space + filename)
+        # Should NOT have checkmark or circle
+        assert "\u2713" not in file_a_line
+        assert "\u25cb" not in file_a_line
+        # The marker is a space, so after indent we get "  " + space_marker + " " + filename
+        # Verify the line contains the filename but no other markers
+        assert "file_a.mkv" in file_a_line
+
+    def test_ignored_count(self) -> None:
+        model = _expanded_model()
+        view = _make_view(model)
+        assert view.ignored_count == 0
+        model.all_files()[0].ignored = True
+        assert view.ignored_count == 1
+        model.all_files()[1].ignored = True
+        assert view.ignored_count == 2
+
+
+# ---------------------------------------------------------------------------
+# Commit action tests (async)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(not HAS_PILOT, reason="textual pilot not available")
+class TestCommitAction:
+    @pytest.mark.asyncio()
+    async def test_commit_blocked_when_no_staged(self) -> None:
+        from textual.widgets import Static
+
+        from tapes.ui.tree_app import TreeApp
+
+        model = _simple_model()
+        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+
+        async with app.run_test() as pilot:
+            await pilot.press("c")
+            status = app.query_one("#status", Static)
+            assert "No staged" in status.renderable  # type: ignore[operator]
+
+    @pytest.mark.asyncio()
+    async def test_commit_shows_confirmation(self) -> None:
+        from textual.widgets import Static
+
+        from tapes.ui.tree_app import TreeApp
+
+        model = _expanded_model()
+        # Stage a file
+        model.all_files()[0].staged = True
+        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+
+        async with app.run_test() as pilot:
+            await pilot.press("c")
+            assert app._confirming_commit is True
+            status = app.query_one("#status", Static)
+            rendered = str(status.renderable)
+            assert "1 file staged" in rendered
+            assert "enter to confirm" in rendered
+
+    @pytest.mark.asyncio()
+    async def test_commit_escape_cancels(self) -> None:
+        from textual.widgets import Static
+
+        from tapes.ui.tree_app import TreeApp
+
+        model = _expanded_model()
+        model.all_files()[0].staged = True
+        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+
+        async with app.run_test() as pilot:
+            await pilot.press("c")
+            assert app._confirming_commit is True
+            await pilot.press("escape")
+            assert app._confirming_commit is False
+            status = app.query_one("#status", Static)
+            assert "staged" in status.renderable  # type: ignore[operator]
+
+    @pytest.mark.asyncio()
+    async def test_x_toggles_ignored(self) -> None:
+        from tapes.ui.tree_app import TreeApp
+
+        model = _expanded_model()
+        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+
+        async with app.run_test() as pilot:
+            tv = app.query_one(TreeView)
+            # Move to file_a.mkv (index 1)
+            await pilot.press("j")
+            node = tv.cursor_node()
+            assert isinstance(node, FileNode)
+            assert not node.ignored
+            await pilot.press("x")
+            assert node.ignored
+
+    @pytest.mark.asyncio()
+    async def test_footer_shows_ignored_count(self) -> None:
+        from textual.widgets import Static
+
+        from tapes.ui.tree_app import TreeApp
+
+        model = _expanded_model()
+        app = TreeApp(model=model, template="{title} ({year}).{ext}")
+
+        async with app.run_test() as pilot:
+            # Move to file and ignore it
+            await pilot.press("j")
+            await pilot.press("x")
+            status = app.query_one("#status", Static)
+            assert "1 ignored" in status.renderable  # type: ignore[operator]

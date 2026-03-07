@@ -98,6 +98,42 @@ class TreeView(Widget):
                 self.model.toggle_staged_recursive(node)
                 self.refresh()
 
+    def toggle_ignored_range(self) -> None:
+        """Toggle ignored on all FileNodes in the selection range."""
+        nodes = self.selected_nodes()
+        file_nodes = [n for n in nodes if isinstance(n, FileNode)]
+        if not file_nodes:
+            return
+        all_ignored = all(f.ignored for f in file_nodes)
+        for f in file_nodes:
+            f.ignored = not all_ignored
+        self.refresh()
+
+    def toggle_ignored_at_cursor(self) -> None:
+        """Toggle ignored on cursor or range."""
+        if self.in_range_mode:
+            self.toggle_ignored_range()
+            self.clear_range_select()
+        else:
+            node = self.cursor_node()
+            if isinstance(node, FileNode):
+                self.model.toggle_ignored(node)
+                self.refresh()
+            elif isinstance(node, FolderNode):
+                self._toggle_ignored_recursive(node)
+                self.refresh()
+
+    def _toggle_ignored_recursive(self, folder: FolderNode) -> None:
+        """Toggle ignored on all file descendants of a folder."""
+        from tapes.ui.tree_model import _collect_files
+
+        files = _collect_files(folder)
+        if not files:
+            return
+        all_ignored = all(f.ignored for f in files)
+        for f in files:
+            f.ignored = not all_ignored
+
     def _refresh_items(self) -> None:
         """Rebuild the flattened item list from the model."""
         self._items = flatten_with_depth(self.model)
@@ -192,6 +228,11 @@ class TreeView(Widget):
     def total_count(self) -> int:
         """Total number of files."""
         return len(self.model.all_files())
+
+    @property
+    def ignored_count(self) -> int:
+        """Number of ignored files."""
+        return sum(1 for f in self.model.all_files() if f.ignored)
 
     @property
     def item_count(self) -> int:

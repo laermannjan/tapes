@@ -27,6 +27,8 @@ class TreeApp(App):
         Binding("v", "range_select", "Range Select"),
         Binding("escape", "cancel", "Cancel"),
         Binding("u", "undo", "Undo"),
+        Binding("x", "toggle_ignored", "Ignore"),
+        Binding("c", "commit", "Commit"),
     ]
 
     CSS = """
@@ -53,6 +55,7 @@ class TreeApp(App):
         self.root_path = root_path
         self._in_detail = False
         self._undo = UndoManager()
+        self._confirming_commit = False
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -125,6 +128,12 @@ class TreeApp(App):
         self._update_footer()
 
     def action_toggle_or_enter(self) -> None:
+        if self._confirming_commit:
+            self._confirming_commit = False
+            tv = self.query_one(TreeView)
+            staged = [f for f in self.model.all_files() if f.staged]
+            self.exit(result=staged)
+            return
         if self._in_detail:
             dv = self.query_one(DetailView)
             dv.apply_source_field()
@@ -146,6 +155,10 @@ class TreeApp(App):
         self.query_one(TreeView).start_range_select()
 
     def action_cancel(self) -> None:
+        if self._confirming_commit:
+            self._confirming_commit = False
+            self._update_footer()
+            return
         if self._in_detail:
             dv = self.query_one(DetailView)
             if dv.editing:
@@ -156,6 +169,29 @@ class TreeApp(App):
         tv = self.query_one(TreeView)
         if tv.in_range_mode:
             tv.clear_range_select()
+
+    def action_toggle_ignored(self) -> None:
+        if self._in_detail:
+            return
+        tv = self.query_one(TreeView)
+        tv.toggle_ignored_at_cursor()
+        self._update_footer()
+
+    def action_commit(self) -> None:
+        if self._in_detail:
+            return
+        tv = self.query_one(TreeView)
+        if tv.staged_count == 0:
+            status = self.query_one("#status", Static)
+            status.update("No staged files to commit")
+            return
+        self._confirming_commit = True
+        status = self.query_one("#status", Static)
+        count = tv.staged_count
+        status.update(
+            f"{count} file{'s' if count != 1 else ''} staged. "
+            "Press enter to confirm, esc to cancel."
+        )
 
     def action_undo(self) -> None:
         if self._undo.undo():
@@ -168,4 +204,9 @@ class TreeApp(App):
     def _update_footer(self) -> None:
         tv = self.query_one(TreeView)
         status = self.query_one("#status", Static)
-        status.update(f"{tv.staged_count} staged / {tv.total_count} total")
+        ignored = tv.ignored_count
+        parts = [f"{tv.staged_count} staged"]
+        if ignored:
+            parts.append(f"{ignored} ignored")
+        parts.append(f"{tv.total_count} total")
+        status.update(" / ".join(parts))
