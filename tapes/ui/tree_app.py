@@ -20,6 +20,8 @@ class TreeApp(App):
         Binding("k,up", "cursor_up", "Up"),
         Binding("enter", "toggle_or_enter", "Toggle"),
         Binding("space", "toggle_staged", "Stage"),
+        Binding("v", "range_select", "Range Select"),
+        Binding("escape", "cancel", "Cancel"),
     ]
 
     CSS = """
@@ -69,6 +71,14 @@ class TreeApp(App):
         node = tv.cursor_node()
         if isinstance(node, FolderNode):
             tv.toggle_folder_at_cursor()
+
+    def action_range_select(self) -> None:
+        self.query_one(TreeView).start_range_select()
+
+    def action_cancel(self) -> None:
+        tv = self.query_one(TreeView)
+        if tv.in_range_mode:
+            tv.clear_range_select()
 
     def _update_footer(self) -> None:
         tv = self.query_one(TreeView)

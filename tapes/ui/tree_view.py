@@ -35,7 +35,68 @@ class TreeView(Widget):
         self.flat_mode = flat_mode
         self.root_path = root_path
         self._items: list[tuple[FileNode | FolderNode, int]] = []
+        self._range_anchor: int | None = None
         self._refresh_items()
+
+    @property
+    def in_range_mode(self) -> bool:
+        """Whether range selection mode is active."""
+        return self._range_anchor is not None
+
+    @property
+    def selected_range(self) -> tuple[int, int] | None:
+        """Return (start, end) inclusive indices of the range, or None."""
+        if self._range_anchor is None:
+            return None
+        lo = min(self._range_anchor, self.cursor_index)
+        hi = max(self._range_anchor, self.cursor_index)
+        return (lo, hi)
+
+    def start_range_select(self) -> None:
+        """Start or cancel range selection at current cursor position."""
+        if self._range_anchor is not None:
+            self._range_anchor = None
+        else:
+            self._range_anchor = self.cursor_index
+        self.refresh()
+
+    def clear_range_select(self) -> None:
+        """Clear range selection."""
+        self._range_anchor = None
+        self.refresh()
+
+    def selected_nodes(self) -> list[FileNode | FolderNode]:
+        """Return nodes in the current selection range."""
+        rng = self.selected_range
+        if rng is None:
+            return []
+        lo, hi = rng
+        return [self._items[i][0] for i in range(lo, hi + 1)]
+
+    def toggle_staged_range(self) -> None:
+        """Toggle staged on all FileNodes in the selection range."""
+        nodes = self.selected_nodes()
+        file_nodes = [n for n in nodes if isinstance(n, FileNode)]
+        if not file_nodes:
+            return
+        all_staged = all(f.staged for f in file_nodes)
+        for f in file_nodes:
+            f.staged = not all_staged
+        self.refresh()
+
+    def toggle_staged_at_cursor(self) -> None:
+        """Toggle staged on cursor or range."""
+        if self.in_range_mode:
+            self.toggle_staged_range()
+            self.clear_range_select()
+        else:
+            node = self.cursor_node()
+            if isinstance(node, FileNode):
+                self.model.toggle_staged(node)
+                self.refresh()
+            elif isinstance(node, FolderNode):
+                self.model.toggle_staged_recursive(node)
+                self.refresh()
 
     def _refresh_items(self) -> None:
         """Rebuild the flattened item list from the model."""
@@ -46,6 +107,7 @@ class TreeView(Widget):
         if not self._items:
             return Text("(empty)")
 
+        rng = self.selected_range
         lines: list[Text] = []
         for i, (node, depth) in enumerate(self._items):
             effective_depth = 0 if self.flat_mode else depth
@@ -59,6 +121,8 @@ class TreeView(Widget):
             line = Text(row_str)
             if i == self.cursor_index:
                 line.stylize("reverse")
+            elif rng and rng[0] <= i <= rng[1]:
+                line.stylize("on dark_blue")
             lines.append(line)
 
         result = Text("\n").join(lines)
@@ -117,16 +181,6 @@ class TreeView(Widget):
     def watch_cursor_index(self) -> None:
         """React to cursor changes by refreshing the display."""
         self.refresh()
-
-    def toggle_staged_at_cursor(self) -> None:
-        """Toggle staged state for the node under the cursor."""
-        node = self.cursor_node()
-        if isinstance(node, FileNode):
-            self.model.toggle_staged(node)
-            self.refresh()
-        elif isinstance(node, FolderNode):
-            self.model.toggle_staged_recursive(node)
-            self.refresh()
 
     @property
     def staged_count(self) -> int:

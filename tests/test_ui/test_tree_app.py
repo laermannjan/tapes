@@ -261,6 +261,165 @@ except ImportError:
     HAS_PILOT = False
 
 
+# ---------------------------------------------------------------------------
+# Range selection unit tests
+# ---------------------------------------------------------------------------
+
+
+def _expanded_model() -> TreeModel:
+    """Model with files visible (folders expanded) for range selection tests.
+
+    Structure:
+        folderA/          (expanded)
+            file_a.mkv
+        folderB/          (expanded)
+            file_b.mkv
+        top.mkv
+
+    Flattened: folderA, file_a.mkv, folderB, file_b.mkv, top.mkv (5 items)
+    """
+    root = FolderNode(
+        name="root",
+        children=[
+            FolderNode(
+                name="folderA",
+                children=[FileNode(path=Path("/root/folderA/file_a.mkv"))],
+                collapsed=False,
+            ),
+            FolderNode(
+                name="folderB",
+                children=[FileNode(path=Path("/root/folderB/file_b.mkv"))],
+                collapsed=False,
+            ),
+            FileNode(path=Path("/root/top.mkv")),
+        ],
+    )
+    return TreeModel(root=root)
+
+
+class TestRangeSelection:
+    def test_start_range_sets_anchor(self) -> None:
+        view = _make_view()
+        view.move_cursor(1)
+        view.start_range_select()
+        assert view._range_anchor == 1
+        assert view.in_range_mode
+
+    def test_selected_range_returns_bounds(self) -> None:
+        view = _make_view(_expanded_model())
+        view.start_range_select()  # anchor at 0
+        view.move_cursor(2)  # cursor at 2
+        rng = view.selected_range
+        assert rng == (0, 2)
+
+    def test_selected_range_cursor_before_anchor(self) -> None:
+        view = _make_view(_expanded_model())
+        view.move_cursor(3)
+        view.start_range_select()  # anchor at 3
+        view.move_cursor(-2)  # cursor at 1
+        rng = view.selected_range
+        assert rng == (1, 3)
+
+    def test_selected_nodes_returns_correct_nodes(self) -> None:
+        model = _expanded_model()
+        view = _make_view(model)
+        view.start_range_select()  # anchor at 0
+        view.move_cursor(2)  # cursor at 2
+        nodes = view.selected_nodes()
+        assert len(nodes) == 3
+        assert isinstance(nodes[0], FolderNode)
+        assert nodes[0].name == "folderA"
+        assert isinstance(nodes[1], FileNode)
+        assert nodes[1].path.name == "file_a.mkv"
+        assert isinstance(nodes[2], FolderNode)
+        assert nodes[2].name == "folderB"
+
+    def test_toggle_staged_range_all_unstaged_become_staged(self) -> None:
+        model = _expanded_model()
+        view = _make_view(model)
+        # Select range covering file_a.mkv (idx 1) and file_b.mkv (idx 3)
+        view.move_cursor(1)
+        view.start_range_select()
+        view.move_cursor(2)  # cursor at 3
+        view.toggle_staged_range()
+        nodes = view.selected_nodes()
+        file_nodes = [n for n in nodes if isinstance(n, FileNode)]
+        assert all(f.staged for f in file_nodes)
+
+    def test_toggle_staged_range_all_staged_become_unstaged(self) -> None:
+        model = _expanded_model()
+        view = _make_view(model)
+        # Stage files first
+        for f in model.all_files():
+            f.staged = True
+        view.move_cursor(1)
+        view.start_range_select()
+        view.move_cursor(2)  # cursor at 3
+        view.toggle_staged_range()
+        nodes = view.selected_nodes()
+        file_nodes = [n for n in nodes if isinstance(n, FileNode)]
+        assert all(not f.staged for f in file_nodes)
+
+    def test_toggle_staged_range_mixed_becomes_all_staged(self) -> None:
+        model = _expanded_model()
+        view = _make_view(model)
+        # Stage only file_a
+        files = model.all_files()
+        files[0].staged = True  # file_a staged
+        files[1].staged = False  # file_b unstaged
+        view.move_cursor(1)
+        view.start_range_select()
+        view.move_cursor(2)  # cursor at 3, range covers file_a and file_b
+        view.toggle_staged_range()
+        nodes = view.selected_nodes()
+        file_nodes = [n for n in nodes if isinstance(n, FileNode)]
+        assert all(f.staged for f in file_nodes)
+
+    def test_clear_range_select(self) -> None:
+        view = _make_view()
+        view.start_range_select()
+        assert view.in_range_mode
+        view.clear_range_select()
+        assert not view.in_range_mode
+        assert view._range_anchor is None
+
+    def test_v_again_exits_range_mode(self) -> None:
+        view = _make_view()
+        view.start_range_select()
+        assert view.in_range_mode
+        view.start_range_select()
+        assert not view.in_range_mode
+
+    def test_render_highlights_range(self) -> None:
+        model = _expanded_model()
+        view = _make_view(model)
+        view.start_range_select()  # anchor at 0
+        view.move_cursor(2)  # cursor at 2
+        result = view.render()
+        # The cursor row (idx 2) has "reverse", range rows (idx 0, 1) have styling
+        # We verify that the Text object has spans applied
+        assert len(result._spans) > 0  # noqa: SLF001
+
+    def test_space_in_range_mode_stages_and_exits(self) -> None:
+        model = _expanded_model()
+        view = _make_view(model)
+        view.move_cursor(1)  # file_a.mkv
+        view.start_range_select()
+        view.move_cursor(2)  # cursor at 3, range 1-3
+        view.toggle_staged_at_cursor()
+        # Should have staged and exited range mode
+        assert not view.in_range_mode
+        file_a = model.all_files()[0]
+        file_b = model.all_files()[1]
+        assert file_a.staged
+        assert file_b.staged
+
+    def test_selected_range_none_when_not_in_range_mode(self) -> None:
+        view = _make_view()
+        assert view.selected_range is None
+        assert view.selected_nodes() == []
+
+
 @pytest.mark.skipif(not HAS_PILOT, reason="textual pilot not available")
 class TestTreeAppKeys:
     @pytest.fixture()
@@ -333,6 +492,31 @@ class TestTreeAppKeys:
             assert tv.item_count == 4
 
     @pytest.mark.asyncio()
+    async def test_v_enters_range_mode(self, model: TreeModel, template: str) -> None:
+        from tapes.ui.tree_app import TreeApp
+
+        app = TreeApp(model=model, template=template)
+        async with app.run_test() as pilot:
+            tv = app.query_one(TreeView)
+            await pilot.press("v")
+            assert tv.in_range_mode
+            assert tv._range_anchor == 0  # noqa: SLF001
+
+    @pytest.mark.asyncio()
+    async def test_escape_exits_range_mode(
+        self, model: TreeModel, template: str
+    ) -> None:
+        from tapes.ui.tree_app import TreeApp
+
+        app = TreeApp(model=model, template=template)
+        async with app.run_test() as pilot:
+            tv = app.query_one(TreeView)
+            await pilot.press("v")
+            assert tv.in_range_mode
+            await pilot.press("escape")
+            assert not tv.in_range_mode
+
+    @pytest.mark.asyncio()
     async def test_space_toggles_staged_file(
         self, model: TreeModel, template: str
     ) -> None:
@@ -365,6 +549,29 @@ class TestTreeAppKeys:
             await pilot.press("space")
             status = app.query_one("#status", Static)
             assert "1 staged" in status.renderable  # type: ignore[operator]
+
+    @pytest.mark.asyncio()
+    async def test_space_in_range_stages_range(
+        self, model: TreeModel, template: str
+    ) -> None:
+        from tapes.ui.tree_app import TreeApp
+
+        # Use expanded model so files are visible
+        expanded = _expanded_model()
+        app = TreeApp(model=expanded, template=template)
+        async with app.run_test() as pilot:
+            tv = app.query_one(TreeView)
+            # Move to file_a (idx 1)
+            await pilot.press("j")
+            await pilot.press("v")  # start range
+            # Move down 2 to file_b (idx 3)
+            await pilot.press("j")
+            await pilot.press("j")
+            await pilot.press("space")  # stage range
+            assert not tv.in_range_mode
+            files = expanded.all_files()
+            assert files[0].staged  # file_a
+            assert files[1].staged  # file_b
 
     @pytest.mark.asyncio()
     async def test_q_quits(self, model: TreeModel, template: str) -> None:
