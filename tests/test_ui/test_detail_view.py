@@ -183,7 +183,7 @@ class TestDetailViewCursor:
         node = _make_node()
         view = DetailView(node, TEMPLATE, TEMPLATE)
         # Simulate on_mount
-        view._fields = get_display_fields(TEMPLATE)
+        view.fields = get_display_fields(TEMPLATE)
         return view
 
     def test_initial_position(self) -> None:
@@ -231,7 +231,7 @@ class TestDetailViewCursor:
     def test_cycle_source_noop_no_sources(self) -> None:
         node = FileNode(path=Path("/test.mkv"), result={}, sources=[])
         view = DetailView(node, TEMPLATE, TEMPLATE)
-        view._fields = get_display_fields(TEMPLATE)
+        view.fields = get_display_fields(TEMPLATE)
         view.cycle_source(1)
         assert view.source_index == 0
 
@@ -255,7 +255,7 @@ class TestDetailViewApply:
     def _make_view(self) -> DetailView:
         node = _make_node()
         view = DetailView(node, TEMPLATE, TEMPLATE)
-        view._fields = get_display_fields(TEMPLATE)
+        view.fields = get_display_fields(TEMPLATE)
         return view
 
     def test_copies_source_value_to_result(self) -> None:
@@ -289,7 +289,7 @@ class TestDetailViewApply:
     def test_enter_on_result_starts_edit_no_sources(self) -> None:
         node = FileNode(path=Path("/test.mkv"), result={"title": "Test"}, sources=[])
         view = DetailView(node, TEMPLATE, TEMPLATE)
-        view._fields = get_display_fields(TEMPLATE)
+        view.fields = get_display_fields(TEMPLATE)
         view.cursor_row = 0
         view.apply_source_field()
         assert view.editing is True
@@ -309,73 +309,73 @@ class TestDetailViewEditing:
     def _make_view(self) -> DetailView:
         node = _make_node()
         view = DetailView(node, TEMPLATE, TEMPLATE)
-        view._fields = get_display_fields(TEMPLATE)
+        view.fields = get_display_fields(TEMPLATE)
         return view
 
     def test_start_edit_populates_value(self) -> None:
         view = self._make_view()
         # tmdb_id is now at index 0; title is at index 1
         view.cursor_row = 1  # title
-        view._start_edit()
+        view.start_edit()
         assert view.editing is True
-        assert view._edit_value == "Breaking Bad"
+        assert view.edit_value == "Breaking Bad"
 
     def test_start_edit_none_value(self) -> None:
         view = self._make_view()
         view.node.result.pop("title", None)
         view.cursor_row = 1  # title
-        view._start_edit()
-        assert view._edit_value == ""
+        view.start_edit()
+        assert view.edit_value == ""
 
     def test_commit_edit_updates_result(self) -> None:
         view = self._make_view()
         view.cursor_row = 1  # title (tmdb_id is at 0)
-        view._start_edit()
-        view._edit_value = "Better Call Saul"
-        view._commit_edit()
+        view.start_edit()
+        view.edit_value = "Better Call Saul"
+        view.commit_edit()
         assert view.node.result["title"] == "Better Call Saul"
         assert view.editing is False
 
     def test_commit_edit_int_coercion_year(self) -> None:
         view = self._make_view()
         view.cursor_row = 2  # year (tmdb_id is at 0)
-        view._start_edit()
-        view._edit_value = "2015"
-        view._commit_edit()
+        view.start_edit()
+        view.edit_value = "2015"
+        view.commit_edit()
         assert view.node.result["year"] == 2015
         assert isinstance(view.node.result["year"], int)
 
     def test_commit_edit_int_coercion_season(self) -> None:
         view = self._make_view()
         view.cursor_row = 3  # season (tmdb_id is at 0)
-        view._start_edit()
-        view._edit_value = "3"
-        view._commit_edit()
+        view.start_edit()
+        view.edit_value = "3"
+        view.commit_edit()
         assert view.node.result["season"] == 3
         assert isinstance(view.node.result["season"], int)
 
     def test_commit_edit_int_coercion_episode(self) -> None:
         view = self._make_view()
         view.cursor_row = 4  # episode (tmdb_id is at 0)
-        view._start_edit()
-        view._edit_value = "10"
-        view._commit_edit()
+        view.start_edit()
+        view.edit_value = "10"
+        view.commit_edit()
         assert view.node.result["episode"] == 10
 
     def test_commit_edit_invalid_int_stays_string(self) -> None:
         view = self._make_view()
         view.cursor_row = 2  # year (tmdb_id is at 0)
-        view._start_edit()
-        view._edit_value = "not_a_number"
-        view._commit_edit()
+        view.start_edit()
+        view.edit_value = "not_a_number"
+        view.commit_edit()
         assert view.node.result["year"] == "not_a_number"
 
     def test_cancel_edit_discards_changes(self) -> None:
         view = self._make_view()
         view.cursor_row = 1  # title (tmdb_id is at 0)
-        view._start_edit()
-        view._edit_value = "Something Else"
-        view._cancel_edit()
+        view.start_edit()
+        view.edit_value = "Something Else"
+        view.cancel_edit()
         assert view.editing is False
         assert view.node.result["title"] == "Breaking Bad"
 
@@ -387,7 +387,7 @@ class TestDetailViewSetNode:
     def test_set_node_resets_cursor(self) -> None:
         node = _make_node()
         view = DetailView(node, TEMPLATE, TEMPLATE)
-        view._fields = get_display_fields(TEMPLATE)
+        view.fields = get_display_fields(TEMPLATE)
         view.cursor_row = 2
         view.source_index = 1
         view.editing = True
@@ -405,9 +405,9 @@ class TestDetailViewSetNode:
     def test_set_node_updates_fields(self) -> None:
         node = _make_node()
         view = DetailView(node, TEMPLATE, TEMPLATE)
-        view._fields = []
+        view.fields = []
         view.set_node(node)
-        assert len(view._fields) == 5  # tmdb_id, title, year, season, episode
+        assert len(view.fields) == 5  # tmdb_id, title, year, season, episode
 
 
 # --- DetailView.apply_source_all_clear ---
@@ -417,7 +417,7 @@ class TestDetailViewApplyAllClear:
     def _make_view(self) -> DetailView:
         node = _make_node()
         view = DetailView(node, TEMPLATE, TEMPLATE)
-        view._fields = get_display_fields(TEMPLATE)
+        view.fields = get_display_fields(TEMPLATE)
         return view
 
     def test_applies_all_and_clears_empties(self) -> None:
@@ -440,7 +440,7 @@ class TestDetailViewApplyAllClear:
     def test_noop_without_sources(self) -> None:
         node = FileNode(path=Path("/test.mkv"), result={"title": "Test"}, sources=[])
         view = DetailView(node, TEMPLATE, TEMPLATE)
-        view._fields = get_display_fields(TEMPLATE)
+        view.fields = get_display_fields(TEMPLATE)
         original = dict(view.node.result)
         view.apply_source_all_clear()
         assert view.node.result == original
@@ -474,7 +474,7 @@ class TestMultiFileDetail:
             ],
         )
         view = DetailView(node1, TEMPLATE, TEMPLATE)
-        view._fields = get_display_fields(TEMPLATE)
+        view.fields = get_display_fields(TEMPLATE)
         view.set_nodes([node1, node2])
         return view, node1, node2
 
@@ -484,7 +484,7 @@ class TestMultiFileDetail:
 
     def test_single_node_not_multi(self) -> None:
         view = DetailView(_make_node(), TEMPLATE, TEMPLATE)
-        view._fields = get_display_fields(TEMPLATE)
+        view.fields = get_display_fields(TEMPLATE)
         assert view.is_multi is False
 
     def test_shows_various_for_differing_values(self) -> None:
@@ -515,9 +515,9 @@ class TestMultiFileDetail:
     def test_editing_applies_to_all_nodes(self) -> None:
         view, node1, node2 = self._make_multi_view()
         view.cursor_row = 1  # title (tmdb_id is at 0)
-        view._start_edit()
-        view._edit_value = "Better Call Saul"
-        view._commit_edit()
+        view.start_edit()
+        view.edit_value = "Better Call Saul"
+        view.commit_edit()
         assert node1.result["title"] == "Better Call Saul"
         assert node2.result["title"] == "Better Call Saul"
 
@@ -560,8 +560,8 @@ class TestMultiFileDetail:
         view, _, _ = self._make_multi_view()
         # episode is (2 values) -- multi-value marker
         view.cursor_row = 4  # episode (tmdb_id at 0)
-        view._start_edit()
-        assert view._edit_value == ""
+        view.start_edit()
+        assert view.edit_value == ""
 
     def test_apply_all_clear_applies_to_all_nodes(self) -> None:
         view, node1, node2 = self._make_multi_view()
@@ -593,7 +593,7 @@ class TestMultiFileDetail:
             result={"title": "C", "year": 2020},
         )
         view = DetailView(node1, TEMPLATE, TEMPLATE)
-        view._fields = get_display_fields(TEMPLATE)
+        view.fields = get_display_fields(TEMPLATE)
         view.set_nodes([node1, node2, node3])
         shared = view._shared_result()
         assert shared["title"] == "(3 values)"
@@ -639,12 +639,12 @@ class TestDetailViewTemplateSelection:
         view = DetailView(
             node, MOVIE_TEMPLATE, TV_TEMPLATE,
         )
-        view._fields = get_display_fields(view._active_template())
+        view.fields = get_display_fields(view._active_template())
         # Movie template has title, year
-        assert "title" in view._fields
-        assert "year" in view._fields
-        assert "season" not in view._fields
-        assert "episode" not in view._fields
+        assert "title" in view.fields
+        assert "year" in view.fields
+        assert "season" not in view.fields
+        assert "episode" not in view.fields
 
     def test_episode_node_uses_tv_template_fields(self) -> None:
         node = FileNode(
@@ -661,10 +661,10 @@ class TestDetailViewTemplateSelection:
         view = DetailView(
             node, MOVIE_TEMPLATE, TV_TEMPLATE,
         )
-        view._fields = get_display_fields(view._active_template())
-        assert "season" in view._fields
-        assert "episode" in view._fields
-        assert "episode_title" in view._fields
+        view.fields = get_display_fields(view._active_template())
+        assert "season" in view.fields
+        assert "episode" in view.fields
+        assert "episode_title" in view.fields
 
     def test_set_node_updates_fields_for_new_media_type(self) -> None:
         movie_node = FileNode(
@@ -685,12 +685,12 @@ class TestDetailViewTemplateSelection:
         view = DetailView(
             movie_node, MOVIE_TEMPLATE, TV_TEMPLATE,
         )
-        view._fields = get_display_fields(view._active_template())
-        assert "season" not in view._fields
+        view.fields = get_display_fields(view._active_template())
+        assert "season" not in view.fields
 
         view.set_node(tv_node)
-        assert "season" in view._fields
-        assert "episode" in view._fields
+        assert "season" in view.fields
+        assert "episode" in view.fields
 
     def test_template_selection_uses_media_type(self) -> None:
         node = FileNode(
@@ -782,7 +782,7 @@ class TestMultiFileDetailIntegration:
             await pilot.press("enter")
             assert app._in_detail is True
             assert dv.is_multi is True
-            assert len(dv._file_nodes) == 2
+            assert len(dv.file_nodes) == 2
 
             # Escape returns to tree
             await pilot.press("escape")

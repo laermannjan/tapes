@@ -159,7 +159,7 @@ class TreeApp(App):
         detail = self.query_one(DetailView)
         detail.set_node(node)
         # separator + tab_bar + blank + path + blank + fields + blank + hints
-        detail.styles.height = len(detail._fields) + 7
+        detail.styles.height = len(detail.fields) + 7
         detail.styles.display = "block"
         self.query_one(TreeView).add_class("dimmed")
         self.query_one(BottomBar).styles.display = "none"
@@ -170,7 +170,7 @@ class TreeApp(App):
         self._in_detail = True
         detail = self.query_one(DetailView)
         detail.set_nodes(nodes)
-        detail.styles.height = len(detail._fields) + 7
+        detail.styles.height = len(detail.fields) + 7
         detail.styles.display = "block"
         self.query_one(TreeView).add_class("dimmed")
         self.query_one(BottomBar).styles.display = "none"
@@ -252,7 +252,7 @@ class TreeApp(App):
     def action_toggle_or_enter(self) -> None:
         if self._in_detail:
             dv = self.query_one(DetailView)
-            dv._start_edit()
+            dv.start_edit()
             return
         tv = self.query_one(TreeView)
         if tv.in_range_mode:
@@ -284,7 +284,7 @@ class TreeApp(App):
         if self._in_detail:
             dv = self.query_one(DetailView)
             if dv.editing:
-                dv._cancel_edit()
+                dv.cancel_edit()
             else:
                 self._show_tree()
             return
@@ -342,7 +342,7 @@ class TreeApp(App):
 
         if self._in_detail:
             dv = self.query_one(DetailView)
-            for fn in dv._file_nodes:
+            for fn in dv.file_nodes:
                 refresh_tmdb_source(fn, token=token, confidence_threshold=threshold)
             dv.refresh()
         else:

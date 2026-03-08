@@ -40,7 +40,7 @@ def _make_detail_view() -> DetailView:
         ],
     )
     view = DetailView(node, MOVIE_TEMPLATE, TV_TEMPLATE)
-    view._fields = get_display_fields(view._active_template())
+    view.fields = get_display_fields(view._active_template())
     return view
 
 

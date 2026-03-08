@@ -57,12 +57,12 @@ class DetailView(Widget):
     ) -> None:
         super().__init__()
         self.node = node
-        self._file_nodes: list[FileNode] = [node]
+        self.file_nodes: list[FileNode] = [node]
         self.movie_template = movie_template
         self.tv_template = tv_template
         self.root_path = root_path
-        self._fields: list[str] = []
-        self._edit_value: str = ""
+        self.fields: list[str] = []
+        self.edit_value: str = ""
 
     def _active_template(self, node: FileNode | None = None) -> str:
         """Return the template for the given (or primary) node."""
@@ -73,18 +73,18 @@ class DetailView(Widget):
     @property
     def is_multi(self) -> bool:
         """Whether multiple nodes are being displayed."""
-        return len(self._file_nodes) > 1
+        return len(self.file_nodes) > 1
 
     def on_mount(self) -> None:
-        self._fields = get_display_fields(self._active_template())
+        self.fields = get_display_fields(self._active_template())
 
     def set_node(self, node: FileNode) -> None:
         """Switch to a new file node, resetting cursor and edit state."""
         self.node = node
-        self._file_nodes = [node]
+        self.file_nodes = [node]
         self.cursor_row = 0
         self.source_index = 0
-        self._fields = get_display_fields(self._active_template(node))
+        self.fields = get_display_fields(self._active_template(node))
         self.editing = False
         self.refresh()
 
@@ -92,11 +92,11 @@ class DetailView(Widget):
         """Switch to multiple file nodes for multi-file detail view."""
         if not nodes:
             return
-        self._file_nodes = list(nodes)
+        self.file_nodes = list(nodes)
         self.node = nodes[0]
         self.cursor_row = 0
         self.source_index = 0
-        self._fields = get_display_fields(self._active_template(self.node))
+        self.fields = get_display_fields(self._active_template(self.node))
         self.editing = False
         self.refresh()
 
@@ -104,7 +104,7 @@ class DetailView(Widget):
         """Compute the shared result for multi-node display."""
         if not self.is_multi:
             return self.node.result
-        return compute_shared_fields(self._file_nodes)
+        return compute_shared_fields(self.file_nodes)
 
     def _display_path(self, node: FileNode) -> str:
         """Return the display path for a node (relative to root or just name)."""
@@ -131,11 +131,11 @@ class DetailView(Widget):
         gap = len(COL_GAP)
 
         # Measure label column
-        label_w = max((len(f) for f in self._fields), default=6) + 2  # 2 left pad
+        label_w = max((len(f) for f in self.fields), default=6) + 2  # 2 left pad
 
         # Measure value column
         val_w = 6  # minimum
-        for f in self._fields:
+        for f in self.fields:
             v = display_val(shared.get(f))
             val_w = max(val_w, len(v))
 
@@ -143,7 +143,7 @@ class DetailView(Widget):
         src_w = 0
         if sources and self.source_index < len(sources):
             src = sources[self.source_index]
-            for f in self._fields:
+            for f in self.fields:
                 v = display_val(src.fields.get(f))
                 src_w = max(src_w, len(v))
             src_w = max(src_w, 6)  # minimum
@@ -192,7 +192,7 @@ class DetailView(Widget):
 
         # Field rows
         label_w, val_w, src_w = self._compute_col_widths()
-        for row_idx, field_name in enumerate(self._fields):
+        for row_idx, field_name in enumerate(self.fields):
             content.append(
                 self._render_field_row(row_idx, field_name, label_w, val_w, src_w)
             )
@@ -246,12 +246,12 @@ class DetailView(Widget):
 
     def _render_multi_path_line(self) -> Text:
         """Render multi-file summary: count + destinations."""
-        count = len(self._file_nodes)
+        count = len(self.file_nodes)
         line = Text()
         line.append(f"  {count} files selected", style="bold")
 
         dests: set[str] = set()
-        for n in self._file_nodes:
+        for n in self.file_nodes:
             d = compute_dest(n, self._active_template(n))
             dests.add(d or "???")
 
@@ -299,7 +299,7 @@ class DetailView(Widget):
         # Value (editable)
         result_raw = shared.get(field_name)
         if self.editing and self.cursor_row == row_idx:
-            edit_display = self._edit_value + "\u2588"
+            edit_display = self.edit_value + "\u2588"
             line.append(self._col(edit_display, val_w), style="underline")
         else:
             result_val = display_val(result_raw)
@@ -330,7 +330,7 @@ class DetailView(Widget):
         """Move cursor row, clamping to valid range."""
         if self.editing:
             return
-        max_row = len(self._fields) - 1
+        max_row = len(self.fields) - 1
         new_row = self.cursor_row + row_delta
         self.cursor_row = max(0, min(max_row, new_row))
 
@@ -352,17 +352,17 @@ class DetailView(Widget):
         """
         sources = self.node.sources
         if not sources:
-            self._start_edit()
+            self.start_edit()
             return
 
         src_idx = self.source_index
         if src_idx >= len(sources):
             return
 
-        field_name = self._fields[self.cursor_row]
+        field_name = self.fields[self.cursor_row]
         val = sources[src_idx].fields.get(field_name)
         if val is not None:
-            for n in self._file_nodes:
+            for n in self.file_nodes:
                 n.result[field_name] = val
         self.refresh()
 
@@ -375,47 +375,47 @@ class DetailView(Widget):
         if src_idx >= len(sources):
             return
         src = sources[src_idx]
-        for field_name in self._fields:
+        for field_name in self.fields:
             val = src.fields.get(field_name)
             if val is not None:
-                for n in self._file_nodes:
+                for n in self.file_nodes:
                     n.result[field_name] = val
             else:
-                for n in self._file_nodes:
+                for n in self.file_nodes:
                     n.result.pop(field_name, None)
         self.refresh()
 
-    def _start_edit(self) -> None:
+    def start_edit(self) -> None:
         """Enter inline edit mode for the current result field."""
         if self.cursor_row < 0:
             return
-        field_name = self._fields[self.cursor_row]
+        field_name = self.fields[self.cursor_row]
         shared = self._shared_result()
         current = shared.get(field_name)
         if is_multi_value(current):
-            self._edit_value = ""
+            self.edit_value = ""
         else:
-            self._edit_value = str(current) if current is not None else ""
+            self.edit_value = str(current) if current is not None else ""
         self.editing = True
         self.refresh()
 
-    def _commit_edit(self) -> None:
+    def commit_edit(self) -> None:
         """Save the edited value to the result for all nodes."""
-        field_name = self._fields[self.cursor_row]
-        val: str | int = self._edit_value
+        field_name = self.fields[self.cursor_row]
+        val: str | int = self.edit_value
         if field_name in INT_FIELDS:
             try:
                 val = int(val)
             except ValueError:
                 pass
-        for n in self._file_nodes:
+        for n in self.file_nodes:
             n.result[field_name] = val
             if field_name != "tmdb_id":
                 n.result.pop("tmdb_id", None)
         self.editing = False
         self.refresh()
 
-    def _cancel_edit(self) -> None:
+    def cancel_edit(self) -> None:
         """Discard the edit and exit edit mode."""
         self.editing = False
         self.refresh()
@@ -426,20 +426,20 @@ class DetailView(Widget):
             return
 
         if event.key == "enter":
-            self._commit_edit()
+            self.commit_edit()
             event.prevent_default()
             event.stop()
         elif event.key == "escape":
-            self._cancel_edit()
+            self.cancel_edit()
             event.prevent_default()
             event.stop()
         elif event.key == "backspace":
-            self._edit_value = self._edit_value[:-1]
+            self.edit_value = self.edit_value[:-1]
             self.refresh()
             event.prevent_default()
             event.stop()
         elif event.character and event.is_printable:
-            self._edit_value += event.character
+            self.edit_value += event.character
             self.refresh()
             event.prevent_default()
             event.stop()
