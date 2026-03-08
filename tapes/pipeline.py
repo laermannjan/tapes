@@ -87,6 +87,7 @@ def run_tmdb_pass(
     confidence_threshold: float | None = None,
     on_progress: Callable[[int, int], None] | None = None,
     max_workers: int = 4,
+    post_update: Callable[[Callable[[], None]], None] | None = None,
 ) -> None:
     """Query TMDB for all files using a thread pool.
 
@@ -94,6 +95,10 @@ def run_tmdb_pass(
         on_progress: Optional callback(done: int, total: int) called after
             each file is processed.
         max_workers: Number of concurrent TMDB queries.
+        post_update: Optional callback to dispatch node mutations to the
+            main thread.  Receives a zero-arg callable that performs the
+            mutation.  When *None*, mutations execute directly (safe for
+            single-threaded / CLI usage).
     """
     import threading
     from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -102,6 +107,8 @@ def run_tmdb_pass(
 
     if confidence_threshold is None:
         confidence_threshold = DEFAULT_AUTO_ACCEPT_THRESHOLD
+
+    _post = post_update if post_update is not None else lambda fn: fn()
 
     if not token:
         return
@@ -128,6 +135,7 @@ def run_tmdb_pass(
                 confidence_threshold,
                 cache=cache,
                 client=client,
+                post_update=_post,
             )
             with lock:
                 done_count += 1
@@ -144,6 +152,7 @@ def run_auto_pipeline(
     model: TreeModel,
     token: str = "",
     confidence_threshold: float | None = None,
+    post_update: Callable[[Callable[[], None]], None] | None = None,
 ) -> None:
     """Populate sources and auto-accept confident matches (synchronous).
 
@@ -158,13 +167,14 @@ def run_auto_pipeline(
         confidence_threshold = DEFAULT_AUTO_ACCEPT_THRESHOLD
 
     run_guessit_pass(model)
-    run_tmdb_pass(model, token=token, confidence_threshold=confidence_threshold)
+    run_tmdb_pass(model, token=token, confidence_threshold=confidence_threshold, post_update=post_update)
 
 
 def refresh_tmdb_source(
     node: FileNode,
     token: str = "",
     confidence_threshold: float | None = None,
+    post_update: Callable[[Callable[[], None]], None] | None = None,
 ) -> None:
     """Re-query TMDB for a file and update its sources.
 
@@ -177,10 +187,15 @@ def refresh_tmdb_source(
     if confidence_threshold is None:
         confidence_threshold = DEFAULT_AUTO_ACCEPT_THRESHOLD
 
-    # Remove existing TMDB sources
-    node.sources = [s for s in node.sources if not s.name.startswith("TMDB")]
+    _post = post_update if post_update is not None else lambda fn: fn()
 
-    _query_tmdb_for_node(node, token, confidence_threshold)
+    # Remove existing TMDB sources
+    def _clear_tmdb(node: FileNode = node) -> None:
+        node.sources = [s for s in node.sources if not s.name.startswith("TMDB")]
+
+    _post(_clear_tmdb)
+
+    _query_tmdb_for_node(node, token, confidence_threshold, post_update=_post)
 
 
 def extract_guessit_fields(filename: str) -> dict[str, Any]:
@@ -237,6 +252,7 @@ def _query_tmdb_for_node(
     threshold: float,
     cache: _TmdbCache | None = None,
     client: httpx.Client | None = None,
+    post_update: Callable[[Callable[[], None]], None] | None = None,
 ) -> None:
     """Two-stage TMDB query for a single node.
 
@@ -253,6 +269,8 @@ def _query_tmdb_for_node(
     - Auto-accept best episode if confident
     """
     from tapes import tmdb
+
+    _post = post_update if post_update is not None else lambda fn: fn()
 
     if not token:
         return
@@ -301,18 +319,29 @@ def _query_tmdb_for_node(
 
     if should_auto_accept(similarities, threshold=threshold):
         # Auto-accept: apply non-empty fields to result
-        for field, val in best.fields.items():
-            if val is not None:
-                node.result[field] = val
-        node.staged = True
+        # Snapshot fields before dispatching -- the dict may be mutated later
+        _best_fields = dict(best.fields)
+
+        def _apply_best(_n: FileNode = node, _f: dict = _best_fields) -> None:
+            for field, val in _f.items():
+                if val is not None:
+                    _n.result[field] = val
+            _n.staged = True
+
+        _post(_apply_best)
 
         # Stage 2: if TV show, fetch episodes
         if best.fields.get(MEDIA_TYPE) == MEDIA_TYPE_EPISODE:
-            _query_episodes(node, token, threshold, best.fields, cache=cache, client=client)
+            _query_episodes(node, token, threshold, best.fields, cache=cache, client=client, post_update=_post)
             return
 
     # Add show-level TMDB sources (not episode sources yet)
-    node.sources.extend(tmdb_sources)
+    _sources_copy = list(tmdb_sources)
+
+    def _extend_sources(_n: FileNode = node, _s: list[Source] = _sources_copy) -> None:
+        _n.sources.extend(_s)
+
+    _post(_extend_sources)
 
 
 def _query_episodes(
@@ -322,9 +351,12 @@ def _query_episodes(
     show_fields: dict,
     cache: _TmdbCache | None = None,
     client: httpx.Client | None = None,
+    post_update: Callable[[Callable[[], None]], None] | None = None,
 ) -> None:
     """Stage 2: fetch episode data for a TV show match."""
     from tapes import tmdb
+
+    _post = post_update if post_update is not None else lambda fn: fn()
 
     show_id = show_fields.get(TMDB_ID)
     show_title = show_fields.get(TITLE, "")
@@ -395,18 +427,22 @@ def _query_episodes(
     all_episode_sources.sort(key=lambda s: s.confidence, reverse=True)
     top_sources = all_episode_sources[:3]
 
-    # Always apply the best episode's fields to the result.
-    # We're only here because the show was confidently matched,
-    # so the best episode data should be used regardless of its
-    # confidence score.
-    if top_sources:
-        best_ep = top_sources[0]
-        for field, val in best_ep.fields.items():
-            if val is not None:
-                node.result[field] = val
-
     # Re-number them
     for i, src in enumerate(top_sources):
         src.name = f"TMDB #{i + 1}"
 
-    node.sources.extend(top_sources)
+    # Always apply the best episode's fields to the result.
+    # We're only here because the show was confidently matched,
+    # so the best episode data should be used regardless of its
+    # confidence score.
+    _top_copy = list(top_sources)
+
+    def _apply_episode(_n: FileNode = node, _top: list[Source] = _top_copy) -> None:
+        if _top:
+            best_ep = _top[0]
+            for field, val in best_ep.fields.items():
+                if val is not None:
+                    _n.result[field] = val
+        _n.sources.extend(_top)
+
+    _post(_apply_episode)
