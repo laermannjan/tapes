@@ -67,9 +67,9 @@ def tree_cmd(
     config_file: Path | None = typer.Option(None, "--config", "-c", help="Path to config file"),
 ) -> None:
     """Launch the tree TUI (dev command)."""
+    from tapes.pipeline import run_guessit_pass
     from tapes.scanner import scan
     from tapes.tree_model import build_tree
-    from tapes.ui.pipeline import run_guessit_pass
     from tapes.ui.tree_app import TreeApp
 
     cfg = load_config(config_file) if config_file else TapesConfig()

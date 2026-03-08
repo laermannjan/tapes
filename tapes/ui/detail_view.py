@@ -415,7 +415,7 @@ class DetailView(Widget):
         """Reset the current field to its guessit-extracted value."""
         if self.editing:
             return
-        from tapes.ui.pipeline import extract_guessit_fields
+        from tapes.pipeline import extract_guessit_fields
 
         field_name = self.fields[self.cursor_row]
         for n in self.file_nodes:

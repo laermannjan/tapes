@@ -129,7 +129,7 @@ class TreeApp(App):
         self.query_one(BottomBar).operation = self.config.library.operation
 
         if self._auto_pipeline:
-            from tapes.ui.pipeline import run_guessit_pass
+            from tapes.pipeline import run_guessit_pass
 
             run_guessit_pass(self.model)
             self.query_one(TreeView).refresh_tree()
@@ -148,7 +148,7 @@ class TreeApp(App):
 
     def _run_tmdb_worker(self, token: str) -> object:
         """Return a callable that runs TMDB queries in a background thread."""
-        from tapes.ui.pipeline import run_tmdb_pass
+        from tapes.pipeline import run_tmdb_pass
 
         threshold = self.config.metadata.auto_accept_threshold
 
@@ -437,7 +437,7 @@ class TreeApp(App):
     def action_refresh_query(self) -> None:
         if self._in_commit or self._in_help:
             return
-        from tapes.ui.pipeline import refresh_tmdb_source
+        from tapes.pipeline import refresh_tmdb_source
 
         token = self.config.metadata.tmdb_token
         threshold = self.config.metadata.auto_accept_threshold
