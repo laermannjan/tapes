@@ -23,6 +23,7 @@ dev = [
     "ruff>=0.11,<1",
     "ty>=0.0.1a7",
     "pre-commit>=4,<5",
+    "pre-commit-uv>=4,<5",
 ]
 
 [project.scripts]
@@ -73,6 +74,9 @@ ignore = [
 [tool.ty]
 # Most current errors are Textual/Pydantic/Rich framework false positives
 # (styles.display setter, dict coercion, render return types)
+
+[tool.sync-with-uv.repo-to-package]
+ruff-pre-commit = "ruff"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
