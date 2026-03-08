@@ -2,18 +2,9 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
-from unittest.mock import PropertyMock, patch
-
 from tapes.ui.help_overlay import HelpView, _build_help_content
 from tapes.ui.tree_app import TreeApp
-
-
-def _render_plain(widget, width: int = 80, height: int = 40) -> str:
-    fake_size = SimpleNamespace(width=width, height=height)
-    with patch.object(type(widget), "size", new_callable=lambda: PropertyMock(return_value=fake_size)):
-        rendered = widget.render()
-    return rendered.plain
+from tests.test_ui.conftest import render_plain
 
 
 class TestHelpContent:
@@ -58,7 +49,7 @@ class TestHelpView:
 
     def test_renders_content(self) -> None:
         view = HelpView()
-        plain = _render_plain(view)
+        plain = render_plain(view, height=40)
         assert "Help" in plain
         assert "File browser" in plain
 

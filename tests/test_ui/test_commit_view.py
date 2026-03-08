@@ -3,19 +3,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import PropertyMock, patch
 
 from tapes.categorize import categorize_staged
 from tapes.tree_model import FileNode
 from tapes.ui.commit_view import CommitView
-
-
-def _render_plain(widget, width: int = 80, height: int = 20) -> str:
-    fake_size = SimpleNamespace(width=width, height=height)
-    with patch.object(type(widget), "size", new_callable=lambda: PropertyMock(return_value=fake_size)):
-        rendered = widget.render()
-    return rendered.plain
+from tests.test_ui.conftest import render_plain
 
 
 class TestCategorizeStaged:
@@ -84,7 +76,7 @@ class TestCommitViewRender:
     def test_renders_separator(self) -> None:
         files = [FileNode(path=Path("/a.mkv"), result={"media_type": "movie"})]
         view = CommitView(files, "copy")
-        plain = _render_plain(view)
+        plain = render_plain(view)
         assert "Commit" in plain
 
     def test_renders_stats(self) -> None:
@@ -93,19 +85,19 @@ class TestCommitViewRender:
             FileNode(path=Path("/b.mkv"), result={"media_type": "movie"}),
         ]
         view = CommitView(files, "copy")
-        plain = _render_plain(view)
+        plain = render_plain(view)
         assert "2 movies" in plain
 
     def test_renders_operation(self) -> None:
         files = [FileNode(path=Path("/a.mkv"), result={"media_type": "movie"})]
         view = CommitView(files, "move")
-        plain = _render_plain(view)
+        plain = render_plain(view)
         assert "move" in plain
 
     def test_renders_hints(self) -> None:
         files = [FileNode(path=Path("/a.mkv"), result={"media_type": "movie"})]
         view = CommitView(files, "copy")
-        plain = _render_plain(view)
+        plain = render_plain(view)
         assert "enter to confirm" in plain
         assert "esc to cancel" in plain
 

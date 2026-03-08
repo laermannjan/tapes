@@ -4,14 +4,43 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import yaml
 
 from tapes.config import (
     LibraryConfig,
+    MetadataConfig,
     ScanConfig,
     TapesConfig,
     load_config,
 )
+
+
+class TestMetadataConfig:
+    """Test MetadataConfig env var fallback and defaults."""
+
+    def test_tmdb_token_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("TMDB_TOKEN", "test-token-123")
+        config = MetadataConfig()
+        assert config.tmdb_token == "test-token-123"
+
+    def test_tmdb_token_explicit_overrides_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("TMDB_TOKEN", "from-env")
+        config = MetadataConfig(tmdb_token="explicit")  # noqa: S106
+        assert config.tmdb_token == "explicit"
+
+    def test_tmdb_token_default_empty(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("TMDB_TOKEN", raising=False)
+        config = MetadataConfig()
+        assert config.tmdb_token == ""
+
+    def test_auto_accept_threshold_default(self) -> None:
+        config = MetadataConfig()
+        assert config.auto_accept_threshold == 0.85
+
+    def test_auto_accept_threshold_custom(self) -> None:
+        config = MetadataConfig(auto_accept_threshold=0.5)
+        assert config.auto_accept_threshold == 0.5
 
 
 class TestLoadConfig:
