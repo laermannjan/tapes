@@ -135,6 +135,36 @@ class TestProcessFileUnknownOperation:
             process_file(src, dest, "rename")
 
 
+class TestProgressCallback:
+    def test_progress_callback_called_on_copy(self, tmp_path: Path) -> None:
+        src = tmp_path / "data.bin"
+        src.write_bytes(b"x" * 10000)
+        dest = tmp_path / "out" / "data.bin"
+        calls: list[tuple[int, int]] = []
+        process_file(src, dest, "copy", progress_callback=lambda copied, total: calls.append((copied, total)))
+        assert len(calls) > 0
+        assert calls[-1][0] == calls[-1][1]  # last call: copied == total
+
+    def test_progress_callback_called_on_move(self, tmp_path: Path) -> None:
+        src = tmp_path / "data.bin"
+        src.write_bytes(b"x" * 10000)
+        dest = tmp_path / "out" / "data.bin"
+        calls: list[tuple[int, int]] = []
+        process_file(src, dest, "move", progress_callback=lambda copied, total: calls.append((copied, total)))
+        assert len(calls) > 0
+        assert calls[-1][0] == calls[-1][1]
+        assert not src.exists()  # source removed after move
+
+    def test_no_callback_when_none(self, tmp_path: Path) -> None:
+        """process_file works without a progress callback."""
+        src = tmp_path / "data.bin"
+        src.write_bytes(b"x" * 100)
+        dest = tmp_path / "out" / "data.bin"
+        result = process_file(src, dest, "copy")
+        assert dest.exists()
+        assert "Copied" in result
+
+
 class TestProcessStaged:
     def test_processes_multiple_files(self, tmp_path: Path) -> None:
         src1 = tmp_path / "a.mkv"
