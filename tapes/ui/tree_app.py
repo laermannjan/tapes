@@ -18,7 +18,6 @@ from tapes.ui.tree_model import (
     FileNode,
     FolderNode,
     TreeModel,
-    accept_best_source,
 )
 from tapes.ui.tree_view import TreeView
 
@@ -39,7 +38,6 @@ class TreeApp(App):
         Binding("escape", "cancel", "Cancel"),
         Binding("x", "toggle_ignored", "Ignore"),
         Binding("c", "commit", "Commit"),
-        Binding("a", "accept_best", "Accept"),
         Binding("r", "refresh_query", "Refresh"),
         Binding("grave_accent", "toggle_flat", "Flat/Tree"),
         Binding("slash", "start_search", "Search"),
@@ -56,7 +54,7 @@ class TreeApp(App):
         padding: 0 1;
     }
     TreeView.dimmed {
-        opacity: 0.4;
+        opacity: 0.65;
     }
     DetailView {
         display: none;
@@ -387,24 +385,6 @@ class TreeApp(App):
             tv.refresh()
         self._update_footer()
 
-    def action_accept_best(self) -> None:
-        if self._in_detail:
-            return
-        tv = self.query_one(TreeView)
-        if tv.in_range_mode:
-            nodes = tv.selected_nodes()
-            file_nodes = [n for n in nodes if isinstance(n, FileNode)]
-            if file_nodes:
-                for fn in file_nodes:
-                    accept_best_source(fn)
-            tv.clear_range_select()
-        else:
-            node = tv.cursor_node()
-            if isinstance(node, FileNode) and node.sources:
-                accept_best_source(node)
-        tv.refresh()
-        self._update_footer()
-
     def action_clear_field(self) -> None:
         if not self._in_detail:
             return
@@ -535,6 +515,6 @@ class TreeApp(App):
             bar.hint_text = "enter to confirm \u00b7 esc to cancel"
         else:
             bar.hint_text = (
-                "space stage \u00b7 enter details \u00b7 a accept \u00b7 "
+                "space stage \u00b7 enter details \u00b7 "
                 "shift-tab op \u00b7 c commit \u00b7 ? help"
             )

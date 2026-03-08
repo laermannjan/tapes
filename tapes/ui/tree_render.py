@@ -17,7 +17,7 @@ MUTED_LIGHT = "#aaaaaa"
 # Dark mossy green background for staged files.
 STAGED_BG = "on #1e3320"
 # Cursor highlight (lazygit-style dark slate).
-CURSOR_BG = "on #36345a"
+CURSOR_BG = "on #373737"
 # Range selection background.
 RANGE_BG = "on #2a2844"
 
@@ -313,7 +313,7 @@ def render_separator(
 
     right_len = 0
     if right_text:
-        right_len = len(right_text) + 1  # space before text
+        right_len = len(right_text) + 3  # space before text + right padding
 
     fill = width - used - right_len
     if fill > 0:
@@ -322,5 +322,6 @@ def render_separator(
     if right_text:
         line.append(" ")
         line.append(right_text, style=MUTED)
+        line.append("  ")
 
     return line

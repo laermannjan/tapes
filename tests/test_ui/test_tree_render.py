@@ -372,7 +372,8 @@ class TestRenderSeparator:
     def test_separator_with_right_text(self) -> None:
         line = render_separator(40, right_text="2 staged")
         plain = line.plain
-        assert plain.endswith(" 2 staged")
+        assert "2 staged" in plain
+        assert plain.endswith("  ")  # right padding
         assert len(plain) == 40
 
     def test_separator_with_title_and_right_text(self) -> None:

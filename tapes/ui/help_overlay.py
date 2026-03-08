@@ -27,7 +27,6 @@ def _build_help_text() -> Text:
         ("j / k", "move cursor"),
         ("enter", "open detail / toggle folder"),
         ("space", "toggle staged"),
-        ("a", "accept best TMDB match"),
         ("x", "toggle ignored"),
         ("v", "range select"),
         ("c", "commit staged files"),

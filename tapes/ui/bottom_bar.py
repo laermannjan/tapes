@@ -65,6 +65,8 @@ class BottomBar(Widget):
         bottom.append("  ")
         op_color = OP_COLORS.get(self.operation, "")
         bottom.append(self.operation, style=op_color)
+        bottom.append("  ")
+        bottom.append("(shift-tab)", style=MUTED)
         if self.hint_text:
             bottom.append("       ")
             bottom.append(self.hint_text, style=f"italic {MUTED}")

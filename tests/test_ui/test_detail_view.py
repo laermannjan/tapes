@@ -216,17 +216,18 @@ class TestDetailViewCursor:
         view.cycle_source(1)
         assert view.source_index == 1
 
-    def test_cycle_source_clamps_at_zero(self) -> None:
+    def test_cycle_source_wraps_at_zero(self) -> None:
         view = self._make_view()
         view.cycle_source(-1)
-        assert view.source_index == 0
+        assert view.source_index == 1  # wraps to last
 
-    def test_cycle_source_clamps_at_max(self) -> None:
+    def test_cycle_source_wraps_at_max(self) -> None:
         view = self._make_view()
-        # 2 sources => max index = 1
-        for _ in range(10):
-            view.cycle_source(1)
+        # 2 sources => wraps around
+        view.cycle_source(1)
         assert view.source_index == 1
+        view.cycle_source(1)
+        assert view.source_index == 0  # wraps to first
 
     def test_cycle_source_noop_no_sources(self) -> None:
         node = FileNode(path=Path("/test.mkv"), result={}, sources=[])

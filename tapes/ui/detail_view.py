@@ -335,15 +335,13 @@ class DetailView(Widget):
         self.cursor_row = max(0, min(max_row, new_row))
 
     def cycle_source(self, delta: int) -> None:
-        """Cycle through source tabs with h/l."""
+        """Cycle through source tabs."""
         if self.editing:
             return
         sources = self.node.sources
         if not sources:
             return
-        max_idx = len(sources) - 1
-        new_idx = self.source_index + delta
-        self.source_index = max(0, min(max_idx, new_idx))
+        self.source_index = (self.source_index + delta) % len(sources)
 
     def apply_source_all_clear(self) -> None:
         """Handle shift-enter: apply all fields from current source."""
