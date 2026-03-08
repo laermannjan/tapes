@@ -1,4 +1,4 @@
-"""Weighted confidence scoring for metadata matching.
+"""Similarity scoring for metadata matching.
 
 Uses rapidfuzz for string similarity. Each field has its own matching
 strategy (fuzzy, integer distance, exact) and weight.
@@ -13,8 +13,10 @@ from tapes.fields import EPISODE, EPISODE_TITLE, SEASON, TITLE, TMDB_ID, YEAR
 # Configuration -- all tuning parameters in one place
 # ---------------------------------------------------------------------------
 
-# Algorithm: "ratio", "token_sort_ratio", "token_set_ratio", "WRatio"
-SIMILARITY_ALGORITHM = "WRatio"
+# Blended similarity: ratio (strict) + token_set_ratio (lenient)
+# Higher STRICT_WEIGHT = more separation between exact and partial matches
+# Lower STRICT_WEIGHT = more tolerant of word order, articles, extra words
+STRICT_WEIGHT = 0.7
 
 # Show/movie scoring weights (must sum to 1.0)
 SHOW_TITLE_WEIGHT = 0.7
@@ -28,27 +30,21 @@ EPISODE_TITLE_WEIGHT = 0.10
 # Year tolerance: exact=1.0, off-by-1=0.5, off-by-2+=0.0
 YEAR_TOLERANCE = 2
 
-# ---------------------------------------------------------------------------
-# Algorithm map
-# ---------------------------------------------------------------------------
-
-_ALGORITHM_MAP = {
-    "ratio": fuzz.ratio,
-    "token_sort_ratio": fuzz.token_sort_ratio,
-    "token_set_ratio": fuzz.token_set_ratio,
-    "WRatio": fuzz.WRatio,
-}
-
 
 def _string_similarity(a: str, b: str) -> float:
-    """Compute string similarity using rapidfuzz (0.0-1.0).
+    """Compute string similarity using a blend of strict and lenient algorithms.
 
-    Algorithm is controlled by SIMILARITY_ALGORITHM constant.
+    Blend: STRICT_WEIGHT * ratio + (1 - STRICT_WEIGHT) * token_set_ratio
+
+    ratio is strict (character-level, penalizes length differences).
+    token_set_ratio is lenient (subset-tolerant, handles articles/word order).
+    The blend creates separation where WRatio cannot.
     """
     if not a or not b:
         return 0.0
-    fn = _ALGORITHM_MAP[SIMILARITY_ALGORITHM]
-    return fn(a, b, processor=utils.default_process) / 100.0
+    strict = fuzz.ratio(a, b, processor=utils.default_process) / 100.0
+    lenient = fuzz.token_set_ratio(a, b, processor=utils.default_process) / 100.0
+    return STRICT_WEIGHT * strict + (1 - STRICT_WEIGHT) * lenient
 
 
 def compute_confidence(query: dict, result: dict) -> float:

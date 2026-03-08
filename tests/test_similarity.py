@@ -42,9 +42,15 @@ class TestStringSimilarity:
         score = _string_similarity("Dune", "Arrival")
         assert score < 0.5
 
-    def test_word_order_irrelevant(self) -> None:
+    def test_word_order_tolerant(self) -> None:
         score = _string_similarity("Batman v Superman", "Superman v Batman")
-        assert score > 0.9
+        assert score > 0.6
+
+    def test_exact_separates_from_subset(self) -> None:
+        """Key property: exact match scores much higher than subset match."""
+        exact = _string_similarity("Breaking Bad", "Breaking Bad")
+        subset = _string_similarity("Breaking Bad", "El Camino A Breaking Bad Movie")
+        assert exact - subset > 0.2
 
     def test_exact_beats_partial(self) -> None:
         exact = _string_similarity("Dune", "Dune")
@@ -202,7 +208,7 @@ class TestComputeEpisodeConfidence:
             {"season": 1, "episode": 1, "episode_title": "The Pilot Episode"},
             {"season": 1, "episode": 1, "episode_title": "Pilot"},
         )
-        # Season (0.25) + episode (0.65) + title_weight * WRatio > 0.95
+        # Season (0.25) + episode (0.65) + title_weight * similarity > 0.95
         assert score > 0.95
         assert score <= 1.0
 
