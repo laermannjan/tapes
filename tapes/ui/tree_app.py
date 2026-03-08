@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import contextlib
 import copy
+import logging
 import time
 from pathlib import Path
-from typing import ClassVar
+from typing import ClassVar, NamedTuple
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -25,6 +25,15 @@ from tapes.ui.commit_view import CommitView
 from tapes.ui.detail_view import DetailView
 from tapes.ui.help_overlay import HELP_HEIGHT, HelpView
 from tapes.ui.tree_view import TreeView
+
+logger = logging.getLogger(__name__)
+
+
+class _NodeSnapshot(NamedTuple):
+    node: FileNode
+    result: dict
+    sources: list
+    staged: bool
 
 
 class TreeApp(App):
@@ -92,7 +101,7 @@ class TreeApp(App):
         self.root_path = root_path
         self.config = config or TapesConfig()
         self._in_detail = False
-        self._detail_snapshot: list[tuple[FileNode, dict, list, bool]] | None = None
+        self._detail_snapshot: list[_NodeSnapshot] | None = None
         self._auto_pipeline = auto_pipeline
         self._tmdb_querying = False
         self._tmdb_progress = (0, 0)
@@ -123,8 +132,10 @@ class TreeApp(App):
         # Use ANSI theme for true terminal background transparency.
         # Only set at mount time -- headless test runners lack a real
         # terminal so the default dark theme is safer there.
-        with contextlib.suppress(Exception):
+        try:
             self.theme = "textual-ansi"
+        except Exception:  # noqa: BLE001
+            logger.warning("Could not set textual-ansi theme, using default")
 
         self.query_one(BottomBar).operation = self.config.library.operation
 
@@ -169,7 +180,9 @@ class TreeApp(App):
     def _show_detail(self, node: FileNode) -> None:
         """Switch from tree view to detail view for a file node."""
         self._in_detail = True
-        self._detail_snapshot = [(node, copy.deepcopy(node.result), copy.deepcopy(node.sources), node.staged)]
+        self._detail_snapshot = [
+            _NodeSnapshot(node, copy.deepcopy(node.result), copy.deepcopy(node.sources), node.staged),
+        ]
         detail = self.query_one(DetailView)
         detail.set_node(node)
         # separator + tab_bar + blank + path + blank + fields + blank + hints
@@ -182,7 +195,9 @@ class TreeApp(App):
     def _show_detail_multi(self, nodes: list[FileNode]) -> None:
         """Switch from tree view to detail view for multiple file nodes."""
         self._in_detail = True
-        self._detail_snapshot = [(n, copy.deepcopy(n.result), copy.deepcopy(n.sources), n.staged) for n in nodes]
+        self._detail_snapshot = [
+            _NodeSnapshot(n, copy.deepcopy(n.result), copy.deepcopy(n.sources), n.staged) for n in nodes
+        ]
         detail = self.query_one(DetailView)
         detail.set_nodes(nodes)
         detail.styles.height = len(detail.fields) + 9
