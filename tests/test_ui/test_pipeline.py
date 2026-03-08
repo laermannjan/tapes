@@ -574,3 +574,127 @@ class TestExtractGuessitFields:
 
         fields = extract_guessit_fields("something.mkv")
         assert "year" not in fields or fields.get("year") is None
+
+
+# ---------------------------------------------------------------------------
+# Config parameter forwarding
+# ---------------------------------------------------------------------------
+
+
+class TestConfigForwarding:
+    """Tests that pipeline functions forward config values to tmdb and similarity."""
+
+    def test_run_tmdb_pass_forwards_max_results(self, mock_tmdb) -> None:
+        """max_results param limits TMDB source count."""
+        from tapes.pipeline import run_tmdb_pass
+
+        # The Office returns 2 candidates. With max_results=1 only 1 should be kept.
+        model = _make_model("The.Office.S01E01.mkv")
+        # Run guessit first to populate result
+        from tapes.pipeline import run_guessit_pass
+
+        run_guessit_pass(model)
+        run_tmdb_pass(model, token=TOKEN, max_results=1)
+        node = model.all_files()[0]
+        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
+        assert len(tmdb_sources) <= 1
+
+    def test_run_tmdb_pass_default_max_results_keeps_all(self, mock_tmdb) -> None:
+        """Default max_results=3 keeps all candidates when fewer than 3."""
+        from tapes.pipeline import run_guessit_pass, run_tmdb_pass
+
+        model = _make_model("The.Office.S01E01.mkv")
+        run_guessit_pass(model)
+        run_tmdb_pass(model, token=TOKEN)
+        node = model.all_files()[0]
+        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
+        assert len(tmdb_sources) == 2
+
+    def test_run_auto_pipeline_forwards_max_results(self, mock_tmdb) -> None:
+        """max_results flows from run_auto_pipeline through to sources."""
+        model = _make_model("The.Office.S01E01.mkv")
+        run_auto_pipeline(model, token=TOKEN, max_results=1)
+        node = model.all_files()[0]
+        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
+        assert len(tmdb_sources) <= 1
+
+    def test_refresh_forwards_max_results(self, mock_tmdb) -> None:
+        """refresh_tmdb_source respects max_results."""
+        node = FileNode(
+            path=Path("/media/The.Office.mkv"),
+            result={"title": "The Office"},
+            sources=[],
+        )
+        refresh_tmdb_source(node, token=TOKEN, max_results=1)
+        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
+        assert len(tmdb_sources) <= 1
+
+    def test_margin_threshold_prevents_auto_accept(self, mock_tmdb) -> None:
+        """High margin_threshold prevents tier 2 auto-accept."""
+        # Breaking Bad without year: tier 2 normally accepts (margin ~0.22).
+        # Set margin_threshold=0.99 so tier 2 won't fire.
+        model = _make_model("Breaking.Bad.S01E01.mkv")
+        run_auto_pipeline(model, token=TOKEN, margin_threshold=0.99)
+        node = model.all_files()[0]
+        # Should NOT auto-accept because tier 1 needs 0.85 (no year = ~0.7)
+        # and tier 2 is blocked by margin_threshold=0.99
+        assert node.staged is False
+
+    def test_min_margin_prevents_auto_accept(self, mock_tmdb) -> None:
+        """High min_margin prevents tier 2 auto-accept."""
+        # Breaking Bad without year: margin ~0.22. Set min_margin=0.5 to block.
+        model = _make_model("Breaking.Bad.S01E01.mkv")
+        run_auto_pipeline(model, token=TOKEN, min_margin=0.5)
+        node = model.all_files()[0]
+        assert node.staged is False
+
+    def test_margin_params_allow_auto_accept(self, mock_tmdb) -> None:
+        """Lenient margin params allow tier 2 auto-accept."""
+        model = _make_model("Breaking.Bad.S01E01.mkv")
+        run_auto_pipeline(model, token=TOKEN, margin_threshold=0.5, min_margin=0.1)
+        node = model.all_files()[0]
+        assert node.staged is True
+
+    def test_refresh_forwards_margin_params(self, mock_tmdb) -> None:
+        """refresh_tmdb_source forwards margin_threshold and min_margin."""
+        node = FileNode(
+            path=Path("/media/test.mkv"),
+            result={"title": "Breaking Bad"},
+            sources=[],
+        )
+        # With strict margin params, tier 2 auto-accept should be blocked
+        refresh_tmdb_source(node, token=TOKEN, margin_threshold=0.99, min_margin=0.99)
+        assert node.staged is False
+
+    def test_tmdb_timeout_forwarded_to_create_client(self, mock_tmdb) -> None:
+        """tmdb_timeout is passed to tmdb.create_client."""
+        from tapes import tmdb
+        from tapes.pipeline import run_guessit_pass, run_tmdb_pass
+
+        model = _make_model("Dune.2021.mkv")
+        run_guessit_pass(model)
+        with patch("tapes.tmdb.create_client", wraps=tmdb.create_client) as mock_create:
+            run_tmdb_pass(model, token=TOKEN, tmdb_timeout=42.0)
+            mock_create.assert_called_once_with(TOKEN, timeout=42.0)
+
+    def test_tmdb_retries_forwarded_to_search(self, mock_tmdb) -> None:
+        """tmdb_retries is forwarded to tmdb.search_multi via max_retries."""
+        from tapes.pipeline import run_guessit_pass, run_tmdb_pass
+
+        model = _make_model("Dune.2021.mkv")
+        run_guessit_pass(model)
+        with patch("tapes.tmdb.search_multi", side_effect=_mock_search_multi) as mock_search:
+            run_tmdb_pass(model, token=TOKEN, tmdb_retries=7)
+            assert mock_search.call_count == 1
+            call_kwargs = mock_search.call_args
+            assert call_kwargs.kwargs.get("max_retries") == 7
+
+    def test_episode_max_results_limits_sources(self, mock_tmdb) -> None:
+        """max_results limits episode sources in stage 2."""
+        model = _make_model("Breaking.Bad.S01E01.mkv")
+        # Low threshold to trigger episode stage
+        run_auto_pipeline(model, token=TOKEN, confidence_threshold=0.5, max_results=1)
+        node = model.all_files()[0]
+        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
+        # Even though 3 episodes are available, only max_results=1 kept
+        assert len(tmdb_sources) == 1

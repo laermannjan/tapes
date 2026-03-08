@@ -20,10 +20,10 @@ from tapes.fields import (
     YEAR,
 )
 from tapes.similarity import compute_episode_similarity, compute_similarity, should_auto_accept
-from tapes.tmdb import MAX_TMDB_RESULTS
 from tapes.tree_model import FileNode, Source, TreeModel
 
 DEFAULT_MAX_WORKERS = 4
+DEFAULT_MAX_RESULTS = 3
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +96,11 @@ def run_tmdb_pass(
     on_progress: Callable[[int, int], None] | None = None,
     max_workers: int = DEFAULT_MAX_WORKERS,
     post_update: Callable[[Callable[[], None]], None] | None = None,
+    max_results: int = DEFAULT_MAX_RESULTS,
+    tmdb_timeout: float = 10.0,
+    tmdb_retries: int = 3,
+    margin_threshold: float | None = None,
+    min_margin: float | None = None,
 ) -> None:
     """Query TMDB for all files using a thread pool.
 
@@ -107,6 +112,11 @@ def run_tmdb_pass(
             main thread.  Receives a zero-arg callable that performs the
             mutation.  When *None*, mutations execute directly (safe for
             single-threaded / CLI usage).
+        max_results: Maximum TMDB results to keep per file.
+        tmdb_timeout: Timeout in seconds for TMDB HTTP requests.
+        tmdb_retries: Number of retries for failed TMDB requests.
+        margin_threshold: Minimum similarity for tier 2 auto-accept.
+        min_margin: Minimum gap between best and second for tier 2.
     """
     import threading
     from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -133,7 +143,7 @@ def run_tmdb_pass(
 
     cache = _TmdbCache()
 
-    with tmdb.create_client(token) as client:
+    with tmdb.create_client(token, timeout=tmdb_timeout) as client:
 
         def query_one(node: FileNode) -> None:
             nonlocal done_count
@@ -144,6 +154,10 @@ def run_tmdb_pass(
                 cache=cache,
                 client=client,
                 post_update=_post,
+                max_results=max_results,
+                max_retries=tmdb_retries,
+                margin_threshold=margin_threshold,
+                min_margin=min_margin,
             )
             with lock:
                 done_count += 1
@@ -161,6 +175,11 @@ def run_auto_pipeline(
     token: str = "",
     confidence_threshold: float | None = None,
     post_update: Callable[[Callable[[], None]], None] | None = None,
+    max_results: int = DEFAULT_MAX_RESULTS,
+    tmdb_timeout: float = 10.0,
+    tmdb_retries: int = 3,
+    margin_threshold: float | None = None,
+    min_margin: float | None = None,
 ) -> None:
     """Populate sources and auto-accept confident matches (synchronous).
 
@@ -175,7 +194,17 @@ def run_auto_pipeline(
         confidence_threshold = DEFAULT_AUTO_ACCEPT_THRESHOLD
 
     run_guessit_pass(model)
-    run_tmdb_pass(model, token=token, confidence_threshold=confidence_threshold, post_update=post_update)
+    run_tmdb_pass(
+        model,
+        token=token,
+        confidence_threshold=confidence_threshold,
+        post_update=post_update,
+        max_results=max_results,
+        tmdb_timeout=tmdb_timeout,
+        tmdb_retries=tmdb_retries,
+        margin_threshold=margin_threshold,
+        min_margin=min_margin,
+    )
 
 
 def refresh_tmdb_source(
@@ -183,6 +212,10 @@ def refresh_tmdb_source(
     token: str = "",
     confidence_threshold: float | None = None,
     post_update: Callable[[Callable[[], None]], None] | None = None,
+    max_results: int = DEFAULT_MAX_RESULTS,
+    max_retries: int = 3,
+    margin_threshold: float | None = None,
+    min_margin: float | None = None,
 ) -> None:
     """Re-query TMDB for a file and update its sources.
 
@@ -203,7 +236,16 @@ def refresh_tmdb_source(
 
     _post(_clear_tmdb)
 
-    _query_tmdb_for_node(node, token, confidence_threshold, post_update=_post)
+    _query_tmdb_for_node(
+        node,
+        token,
+        confidence_threshold,
+        post_update=_post,
+        max_results=max_results,
+        max_retries=max_retries,
+        margin_threshold=margin_threshold,
+        min_margin=min_margin,
+    )
 
 
 def extract_guessit_fields(filename: str) -> dict[str, Any]:
@@ -261,11 +303,15 @@ def _query_tmdb_for_node(
     cache: _TmdbCache | None = None,
     client: httpx.Client | None = None,
     post_update: Callable[[Callable[[], None]], None] | None = None,
+    max_results: int = DEFAULT_MAX_RESULTS,
+    max_retries: int = 3,
+    margin_threshold: float | None = None,
+    min_margin: float | None = None,
 ) -> None:
     """Two-stage TMDB query for a single node.
 
     Stage 1: Find movie/show
-    - search_multi with title (+year if available) -> up to 3 Sources
+    - search_multi with title (+year if available) -> up to max_results Sources
     - Auto-accept via should_auto_accept (high similarity OR clear winner)
     - If accepted media_type == "movie": done
 
@@ -273,7 +319,7 @@ def _query_tmdb_for_node(
     - If season in result: fetch that season's episodes
     - Score episodes against result, create Sources with full fields
     - If no auto-accept from that season: try all other seasons
-    - If still no auto-accept: keep top 3 episode Sources
+    - If still no auto-accept: keep top max_results episode Sources
     - Auto-accept best episode if confident
     """
     from tapes import tmdb
@@ -289,21 +335,33 @@ def _query_tmdb_for_node(
 
     year = node.result.get(YEAR)
 
+    # Build optional kwargs for should_auto_accept margin params
+    _accept_kwargs: dict[str, float] = {}
+    if margin_threshold is not None:
+        _accept_kwargs["margin_threshold"] = margin_threshold
+    if min_margin is not None:
+        _accept_kwargs["min_margin"] = min_margin
+
     # Stage 1: search for movie/show
     if cache is not None:
         search_key = ("search", title.lower(), year)
         search_results = cache.get_or_fetch(
-            search_key, lambda: tmdb.search_multi(title, token, year=year, client=client)
+            search_key,
+            lambda: tmdb.search_multi(
+                title, token, year=year, client=client, max_results=max_results, max_retries=max_retries
+            ),
         )
     else:
-        search_results = tmdb.search_multi(title, token, year=year, client=client)
+        search_results = tmdb.search_multi(
+            title, token, year=year, client=client, max_results=max_results, max_retries=max_retries
+        )
 
     if not search_results:
         return
 
     # Create sources for each search result
     tmdb_sources: list[Source] = []
-    for i, sr in enumerate(search_results[:MAX_TMDB_RESULTS]):
+    for i, sr in enumerate(search_results[:max_results]):
         confidence = compute_similarity(node.result, sr)
         source = Source(
             name=f"TMDB #{i + 1}",
@@ -325,7 +383,7 @@ def _query_tmdb_for_node(
         [(s.name, s.fields.get(TITLE), f"{s.confidence:.2f}") for s in tmdb_sources],
     )
 
-    if should_auto_accept(similarities, threshold=threshold):
+    if should_auto_accept(similarities, threshold=threshold, **_accept_kwargs):
         # Auto-accept: apply non-empty fields to result
         # Snapshot fields before dispatching -- the dict may be mutated later
         _best_fields = dict(best.fields)
@@ -340,7 +398,17 @@ def _query_tmdb_for_node(
 
         # Stage 2: if TV show, fetch episodes
         if best.fields.get(MEDIA_TYPE) == MEDIA_TYPE_EPISODE:
-            _query_episodes(node, token, threshold, best.fields, cache=cache, client=client, post_update=_post)
+            _query_episodes(
+                node,
+                token,
+                threshold,
+                best.fields,
+                cache=cache,
+                client=client,
+                post_update=_post,
+                max_results=max_results,
+                max_retries=max_retries,
+            )
             return
 
     # Add show-level TMDB sources (not episode sources yet)
@@ -360,6 +428,8 @@ def _query_episodes(
     cache: _TmdbCache | None = None,
     client: httpx.Client | None = None,
     post_update: Callable[[Callable[[], None]], None] | None = None,
+    max_results: int = DEFAULT_MAX_RESULTS,
+    max_retries: int = 3,
 ) -> None:
     """Stage 2: fetch episode data for a TV show match."""
     from tapes import tmdb
@@ -375,9 +445,12 @@ def _query_episodes(
 
     # Get show info to know available seasons
     if cache is not None:
-        show_info = cache.get_or_fetch(("show", show_id), lambda: tmdb.get_show(show_id, token, client=client))
+        show_info = cache.get_or_fetch(
+            ("show", show_id),
+            lambda: tmdb.get_show(show_id, token, client=client, max_retries=max_retries),
+        )
     else:
-        show_info = tmdb.get_show(show_id, token, client=client)
+        show_info = tmdb.get_show(show_id, token, client=client, max_retries=max_retries)
     if not show_info:
         return
 
@@ -406,6 +479,7 @@ def _query_episodes(
                     show_title=show_title,
                     show_year=show_year,
                     client=client,
+                    max_retries=max_retries,
                 ),
             )
         else:
@@ -416,6 +490,7 @@ def _query_episodes(
                 show_title=show_title,
                 show_year=show_year,
                 client=client,
+                max_retries=max_retries,
             )
 
         for ep in episodes:
@@ -431,9 +506,9 @@ def _query_episodes(
         if any(s.confidence >= threshold for s in all_episode_sources):
             break
 
-    # Keep top 3 episode sources by confidence
+    # Keep top max_results episode sources by confidence
     all_episode_sources.sort(key=lambda s: s.confidence, reverse=True)
-    top_sources = all_episode_sources[:MAX_TMDB_RESULTS]
+    top_sources = all_episode_sources[:max_results]
 
     # Re-number them
     for i, src in enumerate(top_sources):

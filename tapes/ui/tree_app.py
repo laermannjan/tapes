@@ -181,6 +181,12 @@ class TreeApp(App):
         from tapes.pipeline import run_tmdb_pass
 
         threshold = self.config.metadata.auto_accept_threshold
+        max_workers = self.config.advanced.max_workers
+        max_results = self.config.metadata.max_results
+        tmdb_timeout = self.config.advanced.tmdb_timeout
+        tmdb_retries = self.config.advanced.tmdb_retries
+        margin_threshold = self.config.metadata.margin_accept_threshold
+        min_margin = self.config.metadata.min_accept_margin
 
         def worker() -> None:
             def on_progress(done: int, total: int) -> None:
@@ -191,7 +197,13 @@ class TreeApp(App):
                 token=token,
                 confidence_threshold=threshold,
                 on_progress=on_progress,
+                max_workers=max_workers,
                 post_update=self.call_from_thread,
+                max_results=max_results,
+                tmdb_timeout=tmdb_timeout,
+                tmdb_retries=tmdb_retries,
+                margin_threshold=margin_threshold,
+                min_margin=min_margin,
             )
             self.call_from_thread(self._on_tmdb_done)
 
@@ -478,11 +490,26 @@ class TreeApp(App):
 
         token = self.config.metadata.tmdb_token
         threshold = self.config.metadata.auto_accept_threshold
+        max_results = self.config.metadata.max_results
+        max_retries = self.config.advanced.tmdb_retries
+        margin_threshold = self.config.metadata.margin_accept_threshold
+        min_margin = self.config.metadata.min_accept_margin
+
+        def _refresh(node: FileNode) -> None:
+            refresh_tmdb_source(
+                node,
+                token=token,
+                confidence_threshold=threshold,
+                max_results=max_results,
+                max_retries=max_retries,
+                margin_threshold=margin_threshold,
+                min_margin=min_margin,
+            )
 
         if self._mode == AppMode.DETAIL:
             dv = self.query_one(DetailView)
             for fn in dv.file_nodes:
-                refresh_tmdb_source(fn, token=token, confidence_threshold=threshold)
+                _refresh(fn)
             dv.refresh()
         else:
             tv = self.query_one(TreeView)
@@ -491,12 +518,12 @@ class TreeApp(App):
                 file_nodes = [n for n in nodes if isinstance(n, FileNode)]
                 if file_nodes:
                     for fn in file_nodes:
-                        refresh_tmdb_source(fn, token=token, confidence_threshold=threshold)
+                        _refresh(fn)
                 tv.clear_range_select()
             else:
                 node = tv.cursor_node()
                 if isinstance(node, FileNode):
-                    refresh_tmdb_source(node, token=token, confidence_threshold=threshold)
+                    _refresh(node)
             tv.refresh()
         self._update_footer()
 
