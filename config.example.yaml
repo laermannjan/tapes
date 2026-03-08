@@ -1,0 +1,72 @@
+# Tapes configuration
+#
+# Copy this file to ~/.config/tapes/config.yaml (or set TAPES_CONFIG to a
+# custom path). All settings can also be set via environment variables
+# (TAPES_ prefix, double underscore for nesting) or CLI flags (--flag-name).
+#
+# Precedence: CLI flags > environment variables > config file > defaults
+
+# ---------------------------------------------------------------------------
+# Library -- where files end up
+# ---------------------------------------------------------------------------
+library:
+  # Root directories for movie and TV libraries.
+  # movies: /media/movies
+  # tv: /media/tv
+
+  # Path templates. Available fields: title, year, season, episode,
+  # episode_title, ext, plus any guessit fields (codec, media_source, audio).
+  # movie_template: "{title} ({year})/{title} ({year}).{ext}"
+  # tv_template: "{title} ({year})/Season {season:02d}/{title} - S{season:02d}E{episode:02d} - {episode_title}.{ext}"
+
+  # File operation: copy, move (copy-verify-delete), link (symlink), hardlink.
+  # operation: copy
+
+# ---------------------------------------------------------------------------
+# Metadata -- TMDB and matching
+# ---------------------------------------------------------------------------
+metadata:
+  # TMDB v4 read access token (or set TMDB_TOKEN / TAPES_METADATA__TMDB_TOKEN).
+  # tmdb_token: ""
+
+  # Auto-accept threshold (tier 1): accept best match if similarity >= this.
+  # auto_accept_threshold: 0.85
+
+  # Auto-accept tier 2: accept if similarity >= margin_accept_threshold AND
+  # the gap to the second-best match >= min_accept_margin.
+  # margin_accept_threshold: 0.6
+  # min_accept_margin: 0.15
+
+  # Maximum TMDB search results to keep per query.
+  # max_results: 3
+
+# ---------------------------------------------------------------------------
+# Scan -- file discovery
+# ---------------------------------------------------------------------------
+scan:
+  # Filename patterns to ignore (fnmatch syntax).
+  # ignore_patterns: [Thumbs.db, .DS_Store, desktop.ini]
+
+  # File extensions treated as video (affects sample-file filtering only;
+  # all files are imported regardless of extension).
+  # video_extensions: [.mkv, .mp4, .avi, .mov, .m4v, .ts, .m2ts, .wmv, .flv]
+
+# ---------------------------------------------------------------------------
+# Advanced -- tuning knobs (may change without notice)
+# ---------------------------------------------------------------------------
+advanced:
+  # Concurrent TMDB query threads.
+  # max_workers: 4
+
+  # TMDB HTTP request timeout in seconds.
+  # tmdb_timeout: 10.0
+
+  # TMDB retry attempts on 429/5xx errors.
+  # tmdb_retries: 3
+
+# ---------------------------------------------------------------------------
+# Global
+# ---------------------------------------------------------------------------
+
+# Preview mode: no files are ever copied, moved, or modified.
+# dry_run: false
