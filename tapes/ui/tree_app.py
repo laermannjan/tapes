@@ -486,46 +486,68 @@ class TreeApp(App):
     def action_refresh_query(self) -> None:
         if self._mode in _MODAL_MODES:
             return
-        from tapes.pipeline import refresh_tmdb_source
+        if self._tmdb_querying:
+            return  # Already querying
 
         token = self.config.metadata.tmdb_token
-        threshold = self.config.metadata.auto_accept_threshold
-        max_results = self.config.metadata.max_results
-        max_retries = self.config.advanced.tmdb_retries
-        margin_threshold = self.config.metadata.margin_accept_threshold
-        min_margin = self.config.metadata.min_accept_margin
+        if not token:
+            return
 
-        def _refresh(node: FileNode) -> None:
-            refresh_tmdb_source(
-                node,
-                token=token,
-                confidence_threshold=threshold,
-                max_results=max_results,
-                max_retries=max_retries,
-                margin_threshold=margin_threshold,
-                min_margin=min_margin,
-            )
-
+        # Collect target nodes
         if self._mode == AppMode.DETAIL:
-            dv = self.query_one(DetailView)
-            for fn in dv.file_nodes:
-                _refresh(fn)
-            dv.refresh()
+            nodes = list(self.query_one(DetailView).file_nodes)
         else:
             tv = self.query_one(TreeView)
             if tv.in_range_mode:
-                nodes = tv.selected_nodes()
-                file_nodes = [n for n in nodes if isinstance(n, FileNode)]
-                if file_nodes:
-                    for fn in file_nodes:
-                        _refresh(fn)
+                selected = tv.selected_nodes()
+                nodes = [n for n in selected if isinstance(n, FileNode)]
                 tv.clear_range_select()
             else:
                 node = tv.cursor_node()
-                if isinstance(node, FileNode):
-                    _refresh(node)
-            tv.refresh()
+                nodes = [node] if isinstance(node, FileNode) else []
+
+        if not nodes:
+            return
+
+        self._tmdb_querying = True
         self._update_footer()
+        self.run_worker(
+            self._run_refresh_worker(nodes, token),  # ty: ignore[invalid-argument-type]  # Textual WorkType stubs
+            thread=True,
+        )
+
+    def _run_refresh_worker(self, nodes: list[FileNode], token: str) -> object:
+        """Return a callable that refreshes TMDB data in a background thread."""
+        from tapes.pipeline import refresh_tmdb_batch
+
+        threshold = self.config.metadata.auto_accept_threshold
+        max_workers = self.config.advanced.max_workers
+        max_results = self.config.metadata.max_results
+        tmdb_timeout = self.config.advanced.tmdb_timeout
+        tmdb_retries = self.config.advanced.tmdb_retries
+        margin_threshold = self.config.metadata.margin_accept_threshold
+        min_margin = self.config.metadata.min_accept_margin
+
+        def worker() -> None:
+            def on_progress(done: int, total: int) -> None:
+                self.call_from_thread(self._on_tmdb_progress, done, total)
+
+            refresh_tmdb_batch(
+                nodes,
+                token=token,
+                confidence_threshold=threshold,
+                on_progress=on_progress,
+                max_workers=max_workers,
+                post_update=self.call_from_thread,
+                max_results=max_results,
+                tmdb_timeout=tmdb_timeout,
+                max_retries=tmdb_retries,
+                margin_threshold=margin_threshold,
+                min_margin=min_margin,
+            )
+            self.call_from_thread(self._on_tmdb_done)
+
+        return worker
 
     def action_clear_field(self) -> None:
         if self._mode != AppMode.DETAIL:

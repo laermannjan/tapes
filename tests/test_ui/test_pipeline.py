@@ -303,6 +303,78 @@ class TestTwoTierAutoAccept:
 # ---------------------------------------------------------------------------
 
 
+class TestRefreshTmdbBatch:
+    """Tests for batch refresh with cache and dedup."""
+
+    def test_batch_refreshes_multiple_nodes(self, mock_tmdb) -> None:
+        """All nodes in the batch get refreshed."""
+        from tapes.pipeline import refresh_tmdb_batch
+
+        node1 = FileNode(
+            path=Path("/media/Dune.mkv"),
+            result={"title": "Dune", "year": 2021},
+            sources=[Source(name="TMDB #1", fields={"title": "Old"}, confidence=0.5)],
+        )
+        node2 = FileNode(
+            path=Path("/media/Arrival.mkv"),
+            result={"title": "Arrival", "year": 2016},
+            sources=[],
+        )
+        refresh_tmdb_batch([node1, node2], token=TOKEN)
+        for n in [node1, node2]:
+            tmdb = [s for s in n.sources if s.name.startswith("TMDB")]
+            assert len(tmdb) >= 1
+
+    def test_batch_deduplicates_queries(self, mock_tmdb) -> None:
+        """Nodes with same title/year share a single search_multi call."""
+        from tapes.pipeline import refresh_tmdb_batch
+
+        node1 = FileNode(
+            path=Path("/media/show.s01e01.mkv"),
+            result={"title": "Breaking Bad", "season": 1, "episode": 1, "media_type": "episode"},
+            sources=[],
+        )
+        node2 = FileNode(
+            path=Path("/media/show.s01e01.nfo"),
+            result={"title": "Breaking Bad", "season": 1, "episode": 1, "media_type": "episode"},
+            sources=[],
+        )
+        with patch("tapes.tmdb.search_multi", side_effect=_mock_search_multi) as mock_search:
+            refresh_tmdb_batch([node1, node2], token=TOKEN)
+            # Cache dedup: search_multi called once, not twice
+            assert mock_search.call_count == 1
+
+    def test_batch_clears_existing_tmdb_sources(self, mock_tmdb) -> None:
+        """Existing TMDB sources are cleared before refresh."""
+        from tapes.pipeline import refresh_tmdb_batch
+
+        node = FileNode(
+            path=Path("/media/Dune.mkv"),
+            result={"title": "Dune", "year": 2021},
+            sources=[Source(name="TMDB #1", fields={"title": "Old"}, confidence=0.1)],
+        )
+        refresh_tmdb_batch([node], token=TOKEN)
+        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
+        assert all(s.fields.get("title") != "Old" for s in tmdb_sources)
+
+    def test_batch_reports_progress(self, mock_tmdb) -> None:
+        """on_progress callback is invoked after each node."""
+        from tapes.pipeline import refresh_tmdb_batch
+
+        progress_calls: list[tuple[int, int]] = []
+
+        def on_progress(done: int, total: int) -> None:
+            progress_calls.append((done, total))
+
+        nodes = [
+            FileNode(path=Path(f"/media/file{i}.mkv"), result={"title": "Dune", "year": 2021}, sources=[])
+            for i in range(3)
+        ]
+        refresh_tmdb_batch(nodes, token=TOKEN, on_progress=on_progress)
+        assert len(progress_calls) == 3
+        assert progress_calls[-1] == (3, 3)
+
+
 class TestRefreshTmdbSource:
     def test_updates_tmdb_source(self, mock_tmdb) -> None:
         node = FileNode(
@@ -436,6 +508,7 @@ class TestRefreshQueryIntegration:
 
         async with app.run_test() as pilot:
             await pilot.press("r")
+            await app.workers.wait_for_complete()
             tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
             assert len(tmdb_sources) == 1
             assert tmdb_sources[0].confidence == 1.0
@@ -459,6 +532,7 @@ class TestRefreshQueryIntegration:
             await pilot.press("enter")
             assert app.mode == AppMode.DETAIL
             await pilot.press("r")
+            await app.workers.wait_for_complete()
             tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
             assert len(tmdb_sources) == 1
             assert node.result.get("year") == 2016
@@ -487,6 +561,7 @@ class TestRefreshQueryIntegration:
             await pilot.press("v")
             await pilot.press("j")
             await pilot.press("r")
+            await app.workers.wait_for_complete()
             for n in [node1, node2]:
                 tmdb = [s for s in n.sources if s.name.startswith("TMDB")]
                 assert len(tmdb) == 1
@@ -517,9 +592,44 @@ class TestRefreshQueryIntegration:
             await pilot.press("enter")
             assert app.mode == AppMode.DETAIL
             await pilot.press("r")
+            await app.workers.wait_for_complete()
             for n in [node1, node2]:
                 tmdb = [s for s in n.sources if s.name.startswith("TMDB")]
                 assert len(tmdb) == 1
+
+    @pytest.mark.asyncio()
+    async def test_r_in_detail_runs_async_with_progress(self, mock_tmdb) -> None:
+        """Pressing 'r' in detail mode runs refresh asynchronously."""
+        from tapes.ui.tree_app import TreeApp
+
+        node1 = FileNode(
+            path=Path("/media/Dune.mkv"),
+            result={"title": "Dune", "year": 2021},
+            sources=[],
+        )
+        node2 = FileNode(
+            path=Path("/media/Arrival.mkv"),
+            result={"title": "Arrival", "year": 2016},
+            sources=[],
+        )
+        root = FolderNode(name="root", children=[node1, node2])
+        model = TreeModel(root=root)
+        config_obj = _make_config(TOKEN)
+        _tmpl = "{title} ({year}).{ext}"
+        app = TreeApp(model=model, movie_template=_tmpl, tv_template=_tmpl, config=config_obj)
+
+        async with app.run_test() as pilot:
+            # Enter multi-detail mode
+            await pilot.press("v")
+            await pilot.press("j")
+            await pilot.press("enter")
+            assert app.mode == AppMode.DETAIL
+            # Press 'r' -- should not block
+            await pilot.press("r")
+            await app.workers.wait_for_complete()
+            for n in [node1, node2]:
+                tmdb = [s for s in n.sources if s.name.startswith("TMDB")]
+                assert len(tmdb) >= 1
 
 
 class TestTmdbCache:

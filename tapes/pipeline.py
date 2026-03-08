@@ -244,6 +244,78 @@ def refresh_tmdb_source(
     )
 
 
+def refresh_tmdb_batch(
+    nodes: list[FileNode],
+    token: str = "",
+    confidence_threshold: float | None = None,
+    on_progress: Callable[[int, int], None] | None = None,
+    max_workers: int = DEFAULT_MAX_WORKERS,
+    post_update: Callable[[Callable[[], None]], None] | None = None,
+    max_results: int = DEFAULT_MAX_RESULTS,
+    tmdb_timeout: float = 10.0,
+    max_retries: int = 3,
+    margin_threshold: float | None = None,
+    min_margin: float | None = None,
+) -> None:
+    """Re-query TMDB for multiple files with shared cache and deduplication.
+
+    Like run_tmdb_pass but operates on a specific list of nodes and clears
+    existing TMDB sources before querying. Uses a shared cache and httpx
+    client to deduplicate identical queries.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    if confidence_threshold is None:
+        confidence_threshold = DEFAULT_AUTO_ACCEPT_THRESHOLD
+
+    _post = post_update if post_update is not None else lambda fn: fn()
+
+    if not token or not nodes:
+        return
+
+    from tapes import tmdb
+
+    total = len(nodes)
+    done_count = 0
+    lock = threading.Lock()
+    cache = _TmdbCache()
+
+    with tmdb.create_client(token, timeout=tmdb_timeout) as client:
+
+        def _refresh_one(node: FileNode) -> None:
+            nonlocal done_count
+
+            # Clear existing TMDB sources
+            def _clear_tmdb(n: FileNode = node) -> None:
+                n.sources = [s for s in n.sources if not s.name.startswith("TMDB")]
+
+            _post(_clear_tmdb)
+
+            # Query TMDB (cache deduplicates identical queries)
+            _query_tmdb_for_node(
+                node,
+                token,
+                confidence_threshold,
+                cache=cache,
+                client=client,
+                post_update=_post,
+                max_results=max_results,
+                max_retries=max_retries,
+                margin_threshold=margin_threshold,
+                min_margin=min_margin,
+            )
+
+            with lock:
+                done_count += 1
+                if on_progress is not None:
+                    on_progress(done_count, total)
+
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = [pool.submit(_refresh_one, node) for node in nodes]
+            for f in as_completed(futures):
+                f.result()  # propagate exceptions
+
+
 def extract_guessit_fields(filename: str) -> dict[str, Any]:
     """Extract metadata fields from a filename via guessit.
 
