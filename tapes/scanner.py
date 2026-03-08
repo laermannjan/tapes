@@ -3,21 +3,13 @@
 from __future__ import annotations
 
 import fnmatch
+import os
 import re
 from pathlib import Path
 
 VIDEO_EXTENSIONS: frozenset[str] = frozenset({".mkv", ".mp4", ".avi", ".mov", ".m4v", ".ts", ".m2ts", ".wmv", ".flv"})
 
 SAMPLE_RE = re.compile(r"(?i)(^sample$|^sample[.\-_ ]|[.\-_ ]sample[.\-_ ]|[.\-_ ]sample$)")
-
-
-def _is_hidden_path(path: Path, root: Path) -> bool:
-    """Return True if any component between root and path starts with '.'."""
-    try:
-        rel = path.relative_to(root)
-    except ValueError:
-        return False
-    return any(part.startswith(".") for part in rel.parts[:-1])
 
 
 def _is_sample(path: Path) -> bool:
@@ -60,16 +52,20 @@ def scan(
         return [root]
 
     results: list[Path] = []
-    for path in root.rglob("*"):
-        if not path.is_file():
-            continue
-        if _is_hidden_path(path, root):
-            continue
-        if _matches_ignore(path, ignore_patterns):
-            continue
-        if _is_video(path) and _is_sample(path):
-            continue
-        results.append(path)
+    for dirpath, dirnames, filenames in os.walk(root):
+        # Prune hidden directories in-place
+        dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+        dirnames.sort()
+
+        for name in sorted(filenames):
+            if name.startswith("."):
+                continue
+            path = Path(dirpath) / name
+            if _matches_ignore(path, ignore_patterns):
+                continue
+            if _is_video(path) and _is_sample(path):
+                continue
+            results.append(path)
 
     results.sort()
     return results
