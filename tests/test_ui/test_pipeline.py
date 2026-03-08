@@ -7,8 +7,8 @@ from unittest.mock import patch
 
 import pytest
 
+from tapes.tree_model import FileNode, FolderNode, Source, TreeModel
 from tapes.ui.pipeline import refresh_tmdb_source, run_auto_pipeline
-from tapes.ui.tree_model import FileNode, FolderNode, Source, TreeModel
 
 TOKEN = "test-token"
 

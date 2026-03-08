@@ -1,10 +1,10 @@
-"""Tests for tapes.ui.tree_model."""
+"""Tests for tapes.tree_model."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from tapes.ui.tree_model import (
+from tapes.tree_model import (
     FileNode,
     FolderNode,
     Source,

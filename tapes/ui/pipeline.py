@@ -20,7 +20,7 @@ from tapes.fields import (
     YEAR,
 )
 from tapes.similarity import compute_episode_similarity, compute_similarity, should_auto_accept
-from tapes.ui.tree_model import FileNode, Source, TreeModel
+from tapes.tree_model import FileNode, Source, TreeModel
 
 logger = logging.getLogger(__name__)
 

@@ -38,8 +38,8 @@ def import_cmd(
         cfg.dry_run = True
 
     from tapes.scanner import scan
+    from tapes.tree_model import build_tree
     from tapes.ui.tree_app import TreeApp
-    from tapes.ui.tree_model import build_tree
 
     resolved = path.resolve()
     files = scan(resolved, ignore_patterns=cfg.scan.ignore_patterns)
@@ -68,9 +68,9 @@ def tree_cmd(
 ) -> None:
     """Launch the tree TUI (dev command)."""
     from tapes.scanner import scan
+    from tapes.tree_model import build_tree
     from tapes.ui.pipeline import run_guessit_pass
     from tapes.ui.tree_app import TreeApp
-    from tapes.ui.tree_model import build_tree
 
     cfg = load_config(config_file) if config_file else TapesConfig()
     resolved = path.resolve()

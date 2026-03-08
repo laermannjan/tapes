@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from tapes.tree_model import FileNode, Source
 from tapes.ui.detail_render import (
     display_val,
     get_display_fields,
@@ -14,7 +15,6 @@ from tapes.ui.detail_render import (
     render_detail_header,
 )
 from tapes.ui.detail_view import DetailView
-from tapes.ui.tree_model import FileNode, Source
 
 TEMPLATE = "{title} ({year})/S{season:02d}E{episode:02d}.{ext}"
 
@@ -711,8 +711,8 @@ except ImportError:
 class TestTreeDetailIntegration:
     @pytest.mark.asyncio()
     async def test_enter_on_file_shows_detail_esc_returns(self) -> None:
+        from tapes.tree_model import FolderNode, TreeModel
         from tapes.ui.tree_app import TreeApp
-        from tapes.ui.tree_model import FolderNode, TreeModel
         from tapes.ui.tree_view import TreeView
 
         node = _make_node()
@@ -747,8 +747,8 @@ class TestTreeDetailIntegration:
 class TestMultiFileDetailIntegration:
     @pytest.mark.asyncio()
     async def test_enter_in_range_opens_multi_detail(self) -> None:
+        from tapes.tree_model import FolderNode, TreeModel
         from tapes.ui.tree_app import TreeApp
-        from tapes.ui.tree_model import FolderNode, TreeModel
         from tapes.ui.tree_view import TreeView
 
         node1 = FileNode(

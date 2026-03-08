@@ -6,7 +6,7 @@ from pathlib import Path
 
 from rich.text import Text
 
-from tapes.ui.tree_model import FileNode, FolderNode, TreeModel
+from tapes.tree_model import FileNode, FolderNode, TreeModel
 from tapes.ui.tree_render import (
     compute_dest,
     flatten_with_depth,

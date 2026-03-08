@@ -14,15 +14,15 @@ from textual.events import Key
 
 from tapes.config import TapesConfig
 from tapes.fields import MEDIA_TYPE, MEDIA_TYPE_EPISODE
-from tapes.ui.bottom_bar import BottomBar
-from tapes.ui.commit_view import CommitView, categorize_staged
-from tapes.ui.detail_view import DetailView
-from tapes.ui.help_overlay import HELP_HEIGHT, HelpView
-from tapes.ui.tree_model import (
+from tapes.tree_model import (
     FileNode,
     FolderNode,
     TreeModel,
 )
+from tapes.ui.bottom_bar import BottomBar
+from tapes.ui.commit_view import CommitView, categorize_staged
+from tapes.ui.detail_view import DetailView
+from tapes.ui.help_overlay import HELP_HEIGHT, HelpView
 from tapes.ui.tree_view import TreeView
 
 

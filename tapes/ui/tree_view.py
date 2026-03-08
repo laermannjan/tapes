@@ -9,7 +9,7 @@ from rich.text import Text
 from textual.reactive import reactive
 from textual.widget import Widget
 
-from tapes.ui.tree_model import FileNode, FolderNode, TreeModel
+from tapes.tree_model import FileNode, FolderNode, TreeModel
 from tapes.ui.tree_render import CURSOR_BG, MUTED, RANGE_BG, flatten_all_with_depth, flatten_with_depth, render_row
 
 if TYPE_CHECKING:

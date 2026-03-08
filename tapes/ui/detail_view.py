@@ -12,13 +12,13 @@ from textual.reactive import reactive
 from textual.widget import Widget
 
 from tapes.fields import INT_FIELDS
+from tapes.tree_model import FileNode, compute_shared_fields
 from tapes.ui.detail_render import (
     diff_style,
     display_val,
     get_display_fields,
     is_multi_value,
 )
-from tapes.ui.tree_model import FileNode, compute_shared_fields
 from tapes.ui.tree_render import (
     CURSOR_BG,
     MUTED,

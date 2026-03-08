@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from tapes.ui.tree_model import (
+from tapes.tree_model import (
     FileNode,
     FolderNode,
     Source,

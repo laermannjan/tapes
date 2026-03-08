@@ -6,9 +6,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import PropertyMock, patch
 
+from tapes.tree_model import FileNode, FolderNode, Source, TreeModel
 from tapes.ui.detail_render import get_display_fields
 from tapes.ui.detail_view import DetailView
-from tapes.ui.tree_model import FileNode, FolderNode, Source, TreeModel
 from tapes.ui.tree_view import TreeView
 
 MOVIE_TEMPLATE = "{title} ({year})/{title} ({year}).{ext}"

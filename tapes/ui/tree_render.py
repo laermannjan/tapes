@@ -9,7 +9,7 @@ from typing import Any
 from rich.text import Text
 
 from tapes.fields import MEDIA_TYPE, MEDIA_TYPE_EPISODE
-from tapes.ui.tree_model import FileNode, FolderNode, TreeModel
+from tapes.tree_model import FileNode, FolderNode, TreeModel
 
 # Explicit muted gray instead of Rich "dim" (which thins the font weight).
 MUTED = "#888888"

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from tapes.ui.tree_model import FileNode
+from tapes.tree_model import FileNode
 from tapes.ui.tree_render import MUTED, compute_dest, template_field_names
 
 LABEL_WIDTH = 16

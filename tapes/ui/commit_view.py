@@ -9,8 +9,8 @@ from textual.reactive import reactive
 from textual.widget import Widget
 
 from tapes.fields import MEDIA_TYPE, MEDIA_TYPE_EPISODE, MEDIA_TYPE_MOVIE
+from tapes.tree_model import FileNode
 from tapes.ui.bottom_bar import OP_COLORS, OPERATIONS
-from tapes.ui.tree_model import FileNode
 from tapes.ui.tree_render import MUTED, render_separator
 
 if TYPE_CHECKING:
