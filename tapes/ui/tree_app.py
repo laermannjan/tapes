@@ -26,6 +26,8 @@ from tapes.ui.detail_view import DetailView
 from tapes.ui.help_overlay import HELP_HEIGHT, HelpView
 from tapes.ui.tree_view import TreeView
 
+DETAIL_CHROME_LINES = 9
+
 
 class TreeApp(App):
     """Interactive tree browser with cursor navigation."""
@@ -173,7 +175,7 @@ class TreeApp(App):
         detail = self.query_one(DetailView)
         detail.set_node(node)
         # separator + tab_bar + blank + path + blank + fields + blank + hints
-        detail.styles.height = len(detail.fields) + 9
+        detail.styles.height = len(detail.fields) + DETAIL_CHROME_LINES
         detail.styles.display = "block"
         self.query_one(TreeView).add_class("dimmed")
         self.query_one(BottomBar).styles.display = "none"  # ty: ignore[invalid-assignment]  # Textual RenderStyles setter
@@ -185,7 +187,7 @@ class TreeApp(App):
         self._detail_snapshot = [(n, copy.deepcopy(n.result), copy.deepcopy(n.sources), n.staged) for n in nodes]
         detail = self.query_one(DetailView)
         detail.set_nodes(nodes)
-        detail.styles.height = len(detail.fields) + 9
+        detail.styles.height = len(detail.fields) + DETAIL_CHROME_LINES
         detail.styles.display = "block"
         self.query_one(TreeView).add_class("dimmed")
         self.query_one(BottomBar).styles.display = "none"  # ty: ignore[invalid-assignment]  # Textual RenderStyles setter
