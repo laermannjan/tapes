@@ -289,3 +289,38 @@ def _flatten_all_children(
         result.append((child, depth))
         if isinstance(child, FolderNode):
             _flatten_all_children(child, result, depth + 1)
+
+
+def render_separator(
+    width: int,
+    title: str | None = None,
+    right_text: str | None = None,
+    color: str = "#555555",
+) -> Text:
+    """Render a horizontal separator line spanning *width* characters.
+
+    Format: ``─── Title ──────────────────── right text``
+    """
+    line = Text()
+    used = 0
+
+    if title:
+        prefix = "─── "
+        line.append(prefix, style=color)
+        line.append(title, style=f"bold {color}")
+        line.append(" ", style=color)
+        used = len(prefix) + len(title) + 1
+
+    right_len = 0
+    if right_text:
+        right_len = len(right_text) + 1  # space before text
+
+    fill = width - used - right_len
+    if fill > 0:
+        line.append("─" * fill, style=color)
+
+    if right_text:
+        line.append(" ")
+        line.append(right_text, style=MUTED)
+
+    return line
