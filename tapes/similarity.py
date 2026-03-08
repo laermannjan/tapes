@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from rapidfuzz import fuzz, utils
 
+from tapes.config import DEFAULT_AUTO_ACCEPT_THRESHOLD
 from tapes.fields import EPISODE, EPISODE_TITLE, SEASON, TITLE, TMDB_ID, YEAR
 
 # ---------------------------------------------------------------------------
@@ -29,6 +30,10 @@ EPISODE_TITLE_WEIGHT = 0.10
 
 # Year tolerance: exact=1.0, off-by-1=0.5, off-by-2+=0.0
 YEAR_TOLERANCE = 2
+
+# Two-tier auto-accept thresholds
+MARGIN_ACCEPT_THRESHOLD = 0.6   # minimum similarity for tier 2
+MIN_ACCEPT_MARGIN = 0.15        # minimum gap between best and second
 
 
 def _string_similarity(a: str, b: str) -> float:
@@ -127,3 +132,34 @@ def compute_episode_similarity(query: dict, episode: dict) -> float:
         score += EPISODE_TITLE_WEIGHT * _string_similarity(str(q_title), str(e_title))
 
     return min(score, 1.0)
+
+
+def should_auto_accept(
+    similarities: list[float],
+    threshold: float = DEFAULT_AUTO_ACCEPT_THRESHOLD,
+    margin_threshold: float = MARGIN_ACCEPT_THRESHOLD,
+    min_margin: float = MIN_ACCEPT_MARGIN,
+) -> bool:
+    """Decide whether to auto-accept the best candidate.
+
+    Two-tier gate:
+    - Tier 1: best similarity >= threshold (strong absolute match)
+    - Tier 2: best >= margin_threshold AND margin to second >= min_margin
+              AND at least 2 candidates (need alternatives to compare against)
+
+    Args:
+        similarities: Scores sorted descending. Caller must sort.
+        threshold: Tier 1 absolute threshold.
+        margin_threshold: Minimum similarity for tier 2 to apply.
+        min_margin: Minimum gap between best and second-best for tier 2.
+    """
+    if not similarities:
+        return False
+    best = similarities[0]
+    if best >= threshold:
+        return True
+    if len(similarities) >= 2 and best >= margin_threshold:
+        margin = best - similarities[1]
+        if margin >= min_margin:
+            return True
+    return False

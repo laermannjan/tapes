@@ -8,6 +8,7 @@ from tapes.similarity import (
     _string_similarity,
     compute_episode_similarity,
     compute_similarity,
+    should_auto_accept,
 )
 
 
@@ -248,6 +249,61 @@ class TestComputeEpisodeSimilarity:
             {"season": 1, "episode": 1},
         )
         assert with_title - without_title == pytest.approx(0.10)
+
+
+class TestShouldAutoAccept:
+    """Two-tier auto-accept: high similarity OR clear winner."""
+
+    def test_empty_list(self) -> None:
+        assert should_auto_accept([]) is False
+
+    def test_high_similarity_single(self) -> None:
+        """Tier 1: best >= threshold."""
+        assert should_auto_accept([0.95]) is True
+
+    def test_high_similarity_multiple(self) -> None:
+        assert should_auto_accept([0.90, 0.85]) is True
+
+    def test_at_threshold_boundary(self) -> None:
+        assert should_auto_accept([0.85]) is True
+
+    def test_below_threshold_single_candidate(self) -> None:
+        """Single candidate below threshold -- no tier 2 (needs >= 2)."""
+        assert should_auto_accept([0.7]) is False
+
+    def test_clear_winner_above_margin_threshold(self) -> None:
+        """Tier 2: below threshold but clear separation from second."""
+        assert should_auto_accept([0.7, 0.45]) is True  # margin 0.25 >= 0.15
+
+    def test_no_winner_equal_scores(self) -> None:
+        """Two equally good candidates -- no clear winner."""
+        assert should_auto_accept([0.7, 0.7]) is False  # margin 0
+
+    def test_no_winner_small_margin(self) -> None:
+        """Margin too small for tier 2."""
+        assert should_auto_accept([0.7, 0.60]) is False  # margin 0.10 < 0.15
+
+    def test_below_margin_threshold(self) -> None:
+        """Best below margin threshold -- tier 2 does not apply."""
+        assert should_auto_accept([0.5, 0.2]) is False
+
+    def test_three_candidates_clear_winner(self) -> None:
+        assert should_auto_accept([0.75, 0.55, 0.30]) is True  # margin 0.20
+
+    def test_three_candidates_no_winner(self) -> None:
+        assert should_auto_accept([0.75, 0.70, 0.30]) is False  # margin 0.05
+
+    def test_custom_thresholds(self) -> None:
+        assert should_auto_accept(
+            [0.6, 0.3],
+            threshold=0.9,
+            margin_threshold=0.5,
+            min_margin=0.2,
+        ) is True  # margin 0.3 >= 0.2, best 0.6 >= 0.5
+
+    def test_must_be_sorted_descending(self) -> None:
+        """Caller must sort descending. Function trusts the order."""
+        assert should_auto_accept([0.45, 0.7]) is False
 
 
 class TestDefaultThreshold:
