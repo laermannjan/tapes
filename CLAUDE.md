@@ -61,21 +61,22 @@ CLI
 TUI (textual, Claude Code-inspired layout)
   tapes/ui/tree_app.py      -- main Textual App, keybindings, inline view management
   tapes/ui/tree_view.py     -- file tree widget with cursor, staging, filtering, scroll indicators
-  tapes/ui/tree_model.py    -- FileNode, FolderNode, TreeModel, Source
   tapes/ui/tree_render.py   -- pure rendering (compute_dest, flatten, render_row, render_separator, full_extension)
   tapes/ui/detail_view.py   -- inline detail view for metadata curation (confirm/discard model)
   tapes/ui/detail_render.py -- detail view rendering (header, grid, field display)
   tapes/ui/commit_view.py   -- inline commit confirmation view with file categorization
   tapes/ui/help_overlay.py  -- inline help view with workflow guide
   tapes/ui/bottom_bar.py    -- persistent bottom bar (stats, search, operation mode, hints)
-  tapes/ui/pipeline.py      -- auto-pipeline (guessit + two-stage TMDB per file)
 
 Core
+  tapes/tree_model.py       -- FileNode, FolderNode, TreeModel, Source
+  tapes/pipeline.py         -- auto-pipeline (guessit + two-stage TMDB per file)
+  tapes/categorize.py       -- categorize staged files for commit view
   tapes/scanner.py          -- find all files (with ignore_patterns filtering)
   tapes/metadata.py         -- guessit wrapper, FileMetadata, field normalization
   tapes/tmdb.py             -- TMDB API client (search_multi, get_movie, get_show, get_season_episodes)
   tapes/similarity.py       -- confidence scoring (title similarity, episode matching)
-  tapes/file_ops.py         -- file processing (copy, move/copy-verify-delete, symlink)
+  tapes/file_ops.py         -- file processing (copy, move/copy-verify-delete, symlink, hardlink)
   tapes/config.py           -- Pydantic v2 config (scan, metadata, library, dry_run)
 ```
 

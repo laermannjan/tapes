@@ -46,7 +46,10 @@ class TreeModel:
         self._cached_files: list[FileNode] | None = None
 
     def all_files(self) -> list[FileNode]:
-        """Return all FileNodes depth-first (cached, returns a copy)."""
+        """Return all FileNodes depth-first (cached, returns a copy).
+
+        The cache assumes the tree structure is immutable after construction.
+        """
         if self._cached_files is None:
             self._cached_files = collect_files(self.root)
         return list(self._cached_files)

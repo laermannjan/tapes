@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 import shutil
 from collections.abc import Callable
 from pathlib import Path
@@ -87,8 +88,6 @@ def process_file(
         dest.symlink_to(src.resolve())
         return f"Linked {dest} -> {src.resolve()}"
     if operation == "hardlink":
-        import os
-
         os.link(src, dest)
         return f"Hardlinked {dest} -> {src}"
     raise ValueError(f"Unknown operation: {operation!r}")
