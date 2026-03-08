@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import string
 from pathlib import Path
 from typing import Any
 
@@ -25,7 +26,7 @@ RANGE_BG = "on #373737"
 
 def template_field_names(template: str) -> list[str]:
     """Extract unique field names referenced in a template string."""
-    return list(dict.fromkeys(m.group(1).split(":")[0] for m in re.finditer(r"\{(\w+[^}]*)\}", template)))
+    return list(dict.fromkeys(fname for _, fname, _, _ in string.Formatter().parse(template) if fname is not None))
 
 
 def select_template(node: FileNode, movie_template: str, tv_template: str) -> str:
