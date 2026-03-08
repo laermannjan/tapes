@@ -42,6 +42,15 @@ class TreeModel:
 
     root: FolderNode
 
+    def __post_init__(self) -> None:
+        self._cached_files: list[FileNode] | None = None
+
+    def all_files(self) -> list[FileNode]:
+        """Return all FileNodes depth-first (cached, returns a copy)."""
+        if self._cached_files is None:
+            self._cached_files = collect_files(self.root)
+        return list(self._cached_files)
+
     def toggle_staged(self, node: FileNode) -> None:
         """Toggle staged flag on a file node."""
         node.staged = not node.staged
@@ -95,10 +104,6 @@ class TreeModel:
         all_ignored = all(f.ignored for f in files)
         for f in files:
             f.ignored = not all_ignored
-
-    def all_files(self) -> list[FileNode]:
-        """Return all FileNodes depth-first."""
-        return collect_files(self.root)
 
 
 def collect_files(node: FolderNode) -> list[FileNode]:
