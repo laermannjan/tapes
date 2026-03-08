@@ -684,12 +684,10 @@ class TestCommitAction:
 
         async with app.run_test() as pilot:
             await pilot.press("c")
-            # No screen pushed (commit is blocked)
-            assert len(app.screen_stack) == 1
+            assert not app._in_commit
 
     @pytest.mark.asyncio()
-    async def test_commit_shows_confirmation(self) -> None:
-        from tapes.ui.commit_modal import CommitScreen
+    async def test_c_shows_commit_view(self) -> None:
         from tapes.ui.tree_app import TreeApp
 
         model = _expanded_model()
@@ -698,11 +696,10 @@ class TestCommitAction:
 
         async with app.run_test() as pilot:
             await pilot.press("c")
-            assert len(app.screen_stack) == 2
-            assert isinstance(app.screen, CommitScreen)
+            assert app._in_commit
 
     @pytest.mark.asyncio()
-    async def test_commit_y_confirms_and_exits(self) -> None:
+    async def test_commit_esc_cancels(self) -> None:
         from tapes.ui.tree_app import TreeApp
 
         model = _expanded_model()
@@ -711,25 +708,9 @@ class TestCommitAction:
 
         async with app.run_test() as pilot:
             await pilot.press("c")
-            assert len(app.screen_stack) == 2
-            await pilot.press("y")
-            # App should exit after commit
-            assert app.return_code is not None or app._exit
-
-    @pytest.mark.asyncio()
-    async def test_commit_escape_cancels(self) -> None:
-        from tapes.ui.tree_app import TreeApp
-
-        model = _expanded_model()
-        model.all_files()[0].staged = True
-        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
-
-        async with app.run_test() as pilot:
-            await pilot.press("c")
-            assert len(app.screen_stack) == 2
+            assert app._in_commit
             await pilot.press("escape")
-            # Back to main screen
-            assert len(app.screen_stack) == 1
+            assert not app._in_commit
 
     @pytest.mark.asyncio()
     async def test_x_toggles_ignored(self) -> None:

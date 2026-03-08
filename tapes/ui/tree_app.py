@@ -11,7 +11,7 @@ from textual.events import Key
 from tapes.config import TapesConfig
 from tapes.fields import MEDIA_TYPE, MEDIA_TYPE_EPISODE
 from tapes.ui.bottom_bar import BottomBar
-from tapes.ui.commit_modal import CommitScreen
+from tapes.ui.commit_view import CommitView, categorize_staged
 from tapes.ui.detail_view import DetailView
 from tapes.ui.help_overlay import HelpScreen
 from tapes.ui.tree_model import (
@@ -60,6 +60,10 @@ class TreeApp(App):
         display: none;
         padding: 0 1;
     }
+    CommitView {
+        display: none;
+        padding: 0 1;
+    }
     BottomBar {
         dock: bottom;
         height: 4;
@@ -88,6 +92,7 @@ class TreeApp(App):
         self._tmdb_querying = False
         self._tmdb_progress = (0, 0)
         self._searching = False
+        self._in_commit = False
         self._search_query = ""
 
     def compose(self) -> ComposeResult:
@@ -103,6 +108,7 @@ class TreeApp(App):
             self.tv_template,
             root_path=self.root_path,
         )
+        yield CommitView([], "copy", id="commit-view")
         yield BottomBar(id="bottom-bar")
 
     def on_mount(self) -> None:
@@ -196,6 +202,33 @@ class TreeApp(App):
         tv.refresh()
         self._update_footer()
 
+    def _show_commit(self) -> None:
+        """Show the commit confirmation view."""
+        self._in_commit = True
+        staged = [f for f in self.model.all_files() if f.staged]
+        bar = self.query_one(BottomBar)
+        cv = self.query_one(CommitView)
+        cv._files = staged
+        cv._categories = categorize_staged(staged)
+        cv.operation = bar.operation
+        cv.styles.height = cv.computed_height
+        cv.styles.display = "block"
+        self.query_one(TreeView).add_class("dimmed")
+        bar.styles.display = "none"
+        cv.focus()
+
+    def _hide_commit(self) -> None:
+        """Hide the commit view and return to tree."""
+        self._in_commit = False
+        cv = self.query_one(CommitView)
+        cv.styles.display = "none"
+        tv = self.query_one(TreeView)
+        tv.remove_class("dimmed")
+        self.query_one(BottomBar).styles.display = "block"
+        tv.focus()
+        tv.refresh()
+        self._update_footer()
+
     def _confirm_detail(self) -> None:
         """Confirm detail view changes and return to tree."""
         self._detail_snapshot = None
@@ -216,26 +249,36 @@ class TreeApp(App):
         self.push_screen(HelpScreen())
 
     def action_cursor_down(self) -> None:
+        if self._in_commit:
+            return
         if self._in_detail:
             self.query_one(DetailView).move_cursor(row_delta=1)
         else:
             self.query_one(TreeView).move_cursor(1)
 
     def action_cursor_up(self) -> None:
+        if self._in_commit:
+            return
         if self._in_detail:
             self.query_one(DetailView).move_cursor(row_delta=-1)
         else:
             self.query_one(TreeView).move_cursor(-1)
 
     def action_cursor_left(self) -> None:
+        if self._in_commit:
+            return
         if self._in_detail:
             self.query_one(DetailView).cycle_source(-1)
 
     def action_cursor_right(self) -> None:
+        if self._in_commit:
+            return
         if self._in_detail:
             self.query_one(DetailView).cycle_source(1)
 
     def action_toggle_staged(self) -> None:
+        if self._in_commit:
+            return
         if self._in_detail:
             return
         tv = self.query_one(TreeView)
@@ -243,6 +286,8 @@ class TreeApp(App):
         self._update_footer()
 
     def action_cycle_op(self) -> None:
+        if self._in_commit:
+            return
         if self._in_detail:
             return
         self.query_one(BottomBar).cycle_operation()
@@ -273,6 +318,11 @@ class TreeApp(App):
         return pairs
 
     def action_toggle_or_enter(self) -> None:
+        if self._in_commit:
+            cv = self.query_one(CommitView)
+            self._hide_commit()
+            self._do_commit(cv.operation)
+            return
         if self._in_detail:
             dv = self.query_one(DetailView)
             dv.start_edit()
@@ -292,10 +342,14 @@ class TreeApp(App):
             self._show_detail(node)
 
     def action_apply_all_clear(self) -> None:
+        if self._in_commit:
+            return
         if self._in_detail:
             self.query_one(DetailView).apply_source_all_clear()
 
     def action_range_select(self) -> None:
+        if self._in_commit:
+            return
         if self._in_detail:
             return
         self.query_one(TreeView).start_range_select()
@@ -303,6 +357,9 @@ class TreeApp(App):
     def action_cancel(self) -> None:
         if self._searching:
             self._finish_search(keep_filter=False)
+            return
+        if self._in_commit:
+            self._hide_commit()
             return
         if self._in_detail:
             dv = self.query_one(DetailView)
@@ -316,6 +373,8 @@ class TreeApp(App):
             tv.clear_range_select()
 
     def action_toggle_ignored(self) -> None:
+        if self._in_commit:
+            return
         if self._in_detail:
             return
         tv = self.query_one(TreeView)
@@ -326,24 +385,16 @@ class TreeApp(App):
         if self._in_detail:
             self._confirm_detail()
             return
+        if self._in_commit:
+            cv = self.query_one(CommitView)
+            self._hide_commit()
+            self._do_commit(cv.operation)
+            return
         tv = self.query_one(TreeView)
         if tv.staged_count == 0:
             self.notify("No staged files to commit")
             return
-        count = tv.staged_count
-        bar = self.query_one(BottomBar)
-        self.push_screen(
-            CommitScreen(count, bar.operation),
-            callback=self._on_commit_result,
-        )
-
-    def _on_commit_result(self, result: tuple[bool, str]) -> None:
-        """Handle commit screen dismissal."""
-        confirmed, operation = result
-        if confirmed:
-            self._do_commit(operation)
-        else:
-            self._update_footer()
+        self._show_commit()
 
     def _do_commit(self, operation: str) -> None:
         """Execute the commit: process staged files and exit."""
@@ -359,6 +410,8 @@ class TreeApp(App):
         self.exit(result=results)
 
     def action_refresh_query(self) -> None:
+        if self._in_commit:
+            return
         from tapes.ui.pipeline import refresh_tmdb_source
 
         token = self.config.metadata.tmdb_token
@@ -386,16 +439,22 @@ class TreeApp(App):
         self._update_footer()
 
     def action_clear_field(self) -> None:
+        if self._in_commit:
+            return
         if not self._in_detail:
             return
         self.query_one(DetailView).clear_field()
 
     def action_reset_guessit(self) -> None:
+        if self._in_commit:
+            return
         if not self._in_detail:
             return
         self.query_one(DetailView).reset_field_to_guessit()
 
     def action_start_search(self) -> None:
+        if self._in_commit:
+            return
         if self._in_detail:
             return
         self._searching = True
@@ -424,7 +483,10 @@ class TreeApp(App):
         """Intercept key events during search mode."""
         # Intercept shift+tab for op cycling (Textual captures it for focus)
         if event.key == "shift+tab" and not self._in_detail and not self._searching:
-            self.action_cycle_op()
+            if self._in_commit:
+                self.query_one(CommitView).cycle_operation()
+            else:
+                self.query_one(BottomBar).cycle_operation()
             event.prevent_default()
             event.stop()
             return
@@ -458,18 +520,24 @@ class TreeApp(App):
             event.stop()
 
     def action_collapse_all(self) -> None:
+        if self._in_commit:
+            return
         if self._in_detail:
             return
         self.model.collapse_all()
         self.query_one(TreeView).refresh_tree()
 
     def action_expand_all(self) -> None:
+        if self._in_commit:
+            return
         if self._in_detail:
             return
         self.model.expand_all()
         self.query_one(TreeView).refresh_tree()
 
     def action_toggle_flat(self) -> None:
+        if self._in_commit:
+            return
         if self._in_detail:
             return
         self.query_one(TreeView).toggle_flat_mode()
