@@ -420,10 +420,15 @@ class TestSanitizeField:
 
         assert _sanitize_field('a*b?c"d<e>f|g') == "a_b_c_d_e_f_g"
 
+    def test_dot_replaced(self) -> None:
+        from tapes.ui.tree_render import _sanitize_field
+
+        assert _sanitize_field("H.265") == "H_265"
+
     def test_control_chars_replaced(self) -> None:
         from tapes.ui.tree_render import _sanitize_field
 
-        assert _sanitize_field("hello\x00world\x1f") == "hello_world_"
+        assert _sanitize_field("hello\x00world\x1f") == "hello_world"
 
     def test_leading_trailing_dots_stripped(self) -> None:
         from tapes.ui.tree_render import _sanitize_field
@@ -445,12 +450,17 @@ class TestSanitizeField:
 
         assert _sanitize_field("Inception") == "Inception"
 
+    def test_consecutive_underscores_collapsed(self) -> None:
+        from tapes.ui.tree_render import _sanitize_field
+
+        assert _sanitize_field("a//b") == "a_b"
+
     def test_apostrophe_preserved(self) -> None:
         from tapes.ui.tree_render import _sanitize_field
 
         assert _sanitize_field("Cat's in the Bag") == "Cat's in the Bag"
 
-    def test_trailing_dots_stripped(self) -> None:
+    def test_trailing_dots_collapsed_and_stripped(self) -> None:
         from tapes.ui.tree_render import _sanitize_field
 
         assert _sanitize_field("Cat's in the Bag...") == "Cat's in the Bag"
@@ -466,6 +476,15 @@ class TestComputeDestSanitization:
         assert result is not None
         assert "/" not in result.split("/")[0]  # title part has no literal /
         assert "AC_DC_ Live" in result
+
+    def test_dot_in_codec_sanitized(self) -> None:
+        tmpl = "{title} [{codec}].{ext}"
+        node = FileNode(
+            path=Path("/movies/movie.mkv"),
+            result={"title": "Movie", "codec": "H.265"},
+        )
+        result = compute_dest(node, tmpl)
+        assert result == "Movie [H_265].mkv"
 
     def test_integer_fields_unaffected(self) -> None:
         node = FileNode(

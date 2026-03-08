@@ -99,19 +99,23 @@ def full_extension(path: Path) -> str:
     return ext
 
 
-_UNSAFE_PATH_CHARS = re.compile(r'[/\\:*?"<>|\x00-\x1f]')
+_UNSAFE_PATH_CHARS = re.compile(r'[./\\:*?"<>|\x00-\x1f]')
 
 
 def _sanitize_field(value: Any) -> Any:
     """Sanitize a template field value for safe use in file paths.
 
     Replaces characters that are illegal or dangerous in filenames:
-    ``/ \\ : * ? " < > |`` and control characters (0x00-0x1F).
+    ``. / \\ : * ? " < > |`` and control characters (0x00-0x1F).
+    Consecutive underscores from replacements are collapsed.
+    Leading/trailing dots, spaces, and underscores are stripped.
     Only applies to string values; integers and other types pass through.
     """
     if not isinstance(value, str):
         return value
-    return _UNSAFE_PATH_CHARS.sub("_", value).strip(". ")
+    result = _UNSAFE_PATH_CHARS.sub("_", value)
+    result = re.sub(r"_+", "_", result)
+    return result.strip(". _")
 
 
 def compute_dest(node: FileNode, template: str) -> str | None:
