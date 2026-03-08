@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     import httpx
 
+from tapes.config import DEFAULT_AUTO_ACCEPT_THRESHOLD
 from tapes.fields import (
     EPISODE,
     MEDIA_TYPE,
@@ -118,10 +119,7 @@ def run_tmdb_pass(
         margin_threshold: Minimum similarity for tier 2 auto-accept.
         min_margin: Minimum gap between best and second for tier 2.
     """
-    import threading
     from concurrent.futures import ThreadPoolExecutor, as_completed
-
-    from tapes.config import DEFAULT_AUTO_ACCEPT_THRESHOLD
 
     if confidence_threshold is None:
         confidence_threshold = DEFAULT_AUTO_ACCEPT_THRESHOLD
@@ -188,7 +186,6 @@ def run_auto_pipeline(
     2. Query TMDB (two-stage: show/movie, then episodes) -> add TMDB sources
     3. Auto-accept via should_auto_accept (high similarity OR clear winner)
     """
-    from tapes.config import DEFAULT_AUTO_ACCEPT_THRESHOLD
 
     if confidence_threshold is None:
         confidence_threshold = DEFAULT_AUTO_ACCEPT_THRESHOLD
@@ -223,7 +220,6 @@ def refresh_tmdb_source(
     Removes existing TMDB sources, adds new ones if found.
     Auto-accepts if confidence >= threshold.
     """
-    from tapes.config import DEFAULT_AUTO_ACCEPT_THRESHOLD
 
     if confidence_threshold is None:
         confidence_threshold = DEFAULT_AUTO_ACCEPT_THRESHOLD

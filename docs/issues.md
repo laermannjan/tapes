@@ -234,7 +234,7 @@ Blue TMDB label + green confidence look discordant.
 - **Code hygiene** (I38 + I39 + I40): deduplication, constant consolidation,
   dead code removal. One cleanup pass.
 - **Config & validation** (I29 + I36 + I37b): pydantic-settings, operation
-  validation, deciding which values to expose. One brainstorm + implementation.
+  validation, deciding which values to expose. Implemented.
 - **Architecture** (I31 + I32 + I35): provider abstraction, template system,
   media type model. Brainstorm together (defer implementation).
 
@@ -250,8 +250,8 @@ I32 (templates) -> I35 (template selection needs media types)
 
 | Tier | Issues | Rationale |
 |------|--------|-----------|
-| Done | I17, I18, I19, I20, I21, I22, I23, I24, I25, I26, I27, I28, I33, I34, I37a, I38, I39, I40, I41, I42 | All implemented |
-| Defer | I29+I36+I37b, I30, I31+I32 | Premature at pre-alpha |
+| Done | I17, I18, I19, I20, I21, I22, I23, I24, I25, I26, I27, I28, I29+I36+I37b, I33, I34, I37a, I38, I39, I40, I41, I42 | All implemented |
+| Defer | I30, I31+I32 | Premature at pre-alpha |
 
 ---
 
@@ -406,24 +406,30 @@ Replaced regex with `string.Formatter().parse()`. Cached with `@lru_cache`.
 ---
 
 ## I29: Config overhaul (pydantic-settings + CLI flags + validation)
-**Status:** `open`
-**Priority:** defer
+**Status:** `done`
+**Priority:** high
 **Severity:** usability
 **Review:** `docs/reviews/2026-03-08-code-review.md` sections 3.4, 5.1, 5.2
-**Files:** `tapes/config.py`, `tapes/cli.py`
-**Merge:** absorbs I36 (operation validation) and I37b (which values to expose)
+**Design:** `docs/plans/2026-03-08-config-overhaul.md`
+**Files:** `tapes/config.py`, `tapes/cli.py`, `tapes/pipeline.py`, `tapes/tmdb.py`, `tapes/scanner.py`, `tapes/ui/tree_app.py`
+**Merge:** absorbed I36 (operation validation) and I37b (which values to expose)
 **Depends on:** I17 (hardlink must work before validating it as an option)
-**Action:** brainstorm (decide config precedence, which CLI flags to add)
 
-Only `TMDB_TOKEN` has env var fallback. No CLI flags for operation, library
-paths, templates, threshold. Need to decide: env prefix, which settings get
-CLI flags, precedence order (CLI > env > config > defaults).
+Migrated to pydantic-settings with four config sections (scan, metadata,
+library, advanced). Config precedence: CLI flags > env vars > config file >
+defaults. Config file discovery via platformdirs (`~/.config/tapes/config.toml`).
+Env var prefix `TAPES_` with `__` nesting (e.g. `TAPES_METADATA__TMDB_TOKEN`).
 
-Includes I36: `operation: str = "copy"` accepts any string. Change to
-`Literal["copy", "move", "link", "hardlink"]`.
+All hardcoded constants now serve as default values for their respective config
+fields and function parameters. Pipeline, tmdb, and scanner functions accept
+config values as parameters, with constants as fallback defaults for backwards
+compatibility and test convenience.
 
-Includes I37b: decide which hardcoded values (max_workers, timeout,
-video extensions) warrant config exposure. See I37a for the naming pass.
+Includes I36: operation validated as `Literal["copy", "move", "link", "hardlink"]`.
+
+Includes I37b: exposed max_workers, tmdb_timeout, tmdb_retries, max_results,
+video_extensions, auto_accept_threshold, margin_accept_threshold,
+min_accept_margin as config fields with CLI flags.
 
 ---
 
