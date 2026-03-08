@@ -22,7 +22,7 @@ def process_file(src: Path, dest: Path, operation: str, dry_run: bool = False) -
     Args:
         src: Source file path.
         dest: Destination file path.
-        operation: One of "copy", "move", "link" (symlink).
+        operation: One of "copy", "move", "link" (symlink), "hardlink".
         dry_run: If True, describe what would happen without doing it.
 
     Returns:
@@ -55,6 +55,11 @@ def process_file(src: Path, dest: Path, operation: str, dry_run: bool = False) -
     if operation == "link":
         dest.symlink_to(src.resolve())
         return f"Linked {dest} -> {src.resolve()}"
+    if operation == "hardlink":
+        import os
+
+        os.link(src, dest)
+        return f"Hardlinked {dest} -> {src}"
     raise ValueError(f"Unknown operation: {operation!r}")
 
 
@@ -70,7 +75,7 @@ def process_staged(
 
     Args:
         files: List of (source, destination) path pairs.
-        operation: One of "copy", "move", "link".
+        operation: One of "copy", "move", "link", "hardlink".
         dry_run: If True, describe what would happen without doing it.
 
     Returns:

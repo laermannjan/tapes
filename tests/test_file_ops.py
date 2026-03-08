@@ -61,6 +61,26 @@ class TestProcessFileLink:
         assert "Linked" in result
 
 
+class TestProcessFileHardlink:
+    def test_hardlink_creates_hard_link(self, tmp_path: Path) -> None:
+        src = tmp_path / "source.txt"
+        src.write_text("hello")
+        dest = tmp_path / "out" / "dest.txt"
+        result = process_file(src, dest, "hardlink")
+        assert dest.exists()
+        assert dest.read_text() == "hello"
+        assert dest.stat().st_ino == src.stat().st_ino  # same inode
+        assert "Hardlinked" in result
+
+    def test_hardlink_dry_run(self, tmp_path: Path) -> None:
+        src = tmp_path / "source.txt"
+        src.write_text("hello")
+        dest = tmp_path / "out" / "dest.txt"
+        result = process_file(src, dest, "hardlink", dry_run=True)
+        assert not dest.exists()
+        assert "[dry-run]" in result
+
+
 class TestProcessFileDryRun:
     def test_dry_run_does_nothing(self, tmp_path: Path) -> None:
         src = tmp_path / "source.mkv"
