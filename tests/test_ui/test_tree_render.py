@@ -16,6 +16,7 @@ from tapes.ui.tree_render import (
     render_row,
     render_separator,
     select_template,
+    template_field_names,
 )
 
 MOVIE_TEMPLATE = "{title} ({year})/{title} ({year}).{ext}"
@@ -383,3 +384,12 @@ class TestRenderSeparator:
         line = render_separator(20, color="#B1B9F9")
         # Verify style spans exist (implementation detail, but ensures color is used)
         assert line.plain == "\u2500" * 20
+
+
+# --- template_field_names ---
+
+
+class TestTemplateFieldNames:
+    def test_template_field_names_escaped_braces(self) -> None:
+        """Escaped braces should not be extracted as field names."""
+        assert template_field_names("{{literal}} {title}/{year}") == ["title", "year"]
