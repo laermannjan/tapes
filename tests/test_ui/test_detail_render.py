@@ -1,16 +1,11 @@
 """Tests for diff_style, confidence_style, and compact preview in detail_render."""
+
 from __future__ import annotations
-
-from pathlib import Path
-
-import pytest
 
 from tapes.ui.detail_render import (
     confidence_style,
     diff_style,
 )
-from tapes.ui.tree_model import FileNode, FolderNode, Source
-
 
 # --- diff_style ---
 

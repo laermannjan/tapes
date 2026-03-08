@@ -1,4 +1,5 @@
 """Textual widget that renders the file tree with cursor navigation."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -167,8 +168,7 @@ class TreeView(Widget):
             else:
                 filename = node.path.name
             width = indent_len + len(filename)
-            if width > max_width:
-                max_width = width
+            max_width = max(max_width, width)
         inner_width = self.size.width  # self.size is already the content area
         max_allowed = inner_width // 2
         return min(max_width + 3, max_allowed)
@@ -317,9 +317,7 @@ class TreeView(Widget):
         if self.cursor_index - scrolloff < top:
             self._scroll_offset = max(0, self.cursor_index - scrolloff)
         elif self.cursor_index + scrolloff > bottom:
-            self._scroll_offset = max(
-                0, self.cursor_index + scrolloff - viewport_height + 1
-            )
+            self._scroll_offset = max(0, self.cursor_index + scrolloff - viewport_height + 1)
 
     @property
     def staged_count(self) -> int:
@@ -348,9 +346,7 @@ class TreeView(Widget):
             else:
                 # Node not found (e.g. folder hidden in flat mode)
                 if self._items:
-                    self.cursor_index = min(
-                        self.cursor_index, len(self._items) - 1
-                    )
+                    self.cursor_index = min(self.cursor_index, len(self._items) - 1)
                 else:
                     self.cursor_index = 0
         self.refresh()
@@ -394,11 +390,7 @@ class TreeView(Widget):
 
         if self.flat_mode:
             # In flat mode, just show matching files
-            self._items = [
-                (node, depth)
-                for i, (node, depth) in enumerate(self._all_items)
-                if i in matching_files
-            ]
+            self._items = [(node, depth) for i, (node, depth) in enumerate(self._all_items) if i in matching_files]
         else:
             # In tree mode, show matching files and their parent folders
             # A folder is shown if any descendant file matches
@@ -413,11 +405,7 @@ class TreeView(Widget):
                         file_depth = depth_j
                     if depth_j == 0 and isinstance(node_j, FolderNode):
                         break
-            self._items = [
-                (node, depth)
-                for i, (node, depth) in enumerate(self._all_items)
-                if i in keep
-            ]
+            self._items = [(node, depth) for i, (node, depth) in enumerate(self._all_items) if i in keep]
 
     @property
     def ignored_count(self) -> int:

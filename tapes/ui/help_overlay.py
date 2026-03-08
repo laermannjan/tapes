@@ -1,4 +1,5 @@
 """Inline help view showing workflow guide and keybinding reference."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

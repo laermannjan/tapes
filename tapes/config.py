@@ -19,7 +19,7 @@ class MetadataConfig(BaseModel):
     tmdb_token: str = ""
     auto_accept_threshold: float = DEFAULT_AUTO_ACCEPT_THRESHOLD
 
-    def model_post_init(self, __context: object) -> None:
+    def model_post_init(self, context: object, /) -> None:  # noqa: ARG002
         import os
 
         if not self.tmdb_token:
@@ -31,8 +31,7 @@ class LibraryConfig(BaseModel):
     tv: str = ""
     movie_template: str = "{title} ({year})/{title} ({year}).{ext}"
     tv_template: str = (
-        "{title} ({year})/Season {season:02d}/"
-        "{title} - S{season:02d}E{episode:02d} - {episode_title}.{ext}"
+        "{title} ({year})/Season {season:02d}/{title} - S{season:02d}E{episode:02d} - {episode_title}.{ext}"
     )
     operation: str = "copy"
 

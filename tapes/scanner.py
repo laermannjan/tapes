@@ -6,13 +6,9 @@ import fnmatch
 import re
 from pathlib import Path
 
-VIDEO_EXTENSIONS: frozenset[str] = frozenset(
-    {".mkv", ".mp4", ".avi", ".mov", ".m4v", ".ts", ".m2ts", ".wmv", ".flv"}
-)
+VIDEO_EXTENSIONS: frozenset[str] = frozenset({".mkv", ".mp4", ".avi", ".mov", ".m4v", ".ts", ".m2ts", ".wmv", ".flv"})
 
-SAMPLE_RE = re.compile(
-    r"(?i)(^sample$|^sample[.\-_ ]|[.\-_ ]sample[.\-_ ]|[.\-_ ]sample$)"
-)
+SAMPLE_RE = re.compile(r"(?i)(^sample$|^sample[.\-_ ]|[.\-_ ]sample[.\-_ ]|[.\-_ ]sample$)")
 
 
 def _is_hidden_path(path: Path, root: Path) -> bool:
@@ -37,10 +33,7 @@ def _is_video(path: Path) -> bool:
 def _matches_ignore(path: Path, ignore_patterns: list[str]) -> bool:
     """Return True if the filename matches any of the ignore patterns."""
     name = path.name
-    for pattern in ignore_patterns:
-        if fnmatch.fnmatch(name, pattern):
-            return True
-    return False
+    return any(fnmatch.fnmatch(name, pattern) for pattern in ignore_patterns)
 
 
 def scan(

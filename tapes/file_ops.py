@@ -1,4 +1,5 @@
 """File operations: copy, move, link with dry-run support."""
+
 from __future__ import annotations
 
 import hashlib
@@ -9,15 +10,13 @@ from pathlib import Path
 def _sha256(path: Path) -> str:
     """Compute SHA-256 hex digest of a file."""
     h = hashlib.sha256()
-    with open(path, "rb") as f:
+    with path.open("rb") as f:
         for chunk in iter(lambda: f.read(8192), b""):
             h.update(chunk)
     return h.hexdigest()
 
 
-def process_file(
-    src: Path, dest: Path, operation: str, dry_run: bool = False
-) -> str:
+def process_file(src: Path, dest: Path, operation: str, dry_run: bool = False) -> str:
     """Process a single file with the given operation.
 
     Args:
@@ -44,22 +43,19 @@ def process_file(
     if operation == "copy":
         shutil.copy2(src, dest)
         return f"Copied {src} -> {dest}"
-    elif operation == "move":
+    if operation == "move":
         src_hash = _sha256(src)
         shutil.copy2(src, dest)
         if _sha256(dest) == src_hash:
             src.unlink()
         else:
             dest.unlink()
-            raise OSError(
-                f"SHA-256 mismatch after copy: {src} -> {dest} (dest removed)"
-            )
+            raise OSError(f"SHA-256 mismatch after copy: {src} -> {dest} (dest removed)")
         return f"Moved {src} -> {dest}"
-    elif operation == "link":
+    if operation == "link":
         dest.symlink_to(src.resolve())
         return f"Linked {dest} -> {src.resolve()}"
-    else:
-        raise ValueError(f"Unknown operation: {operation!r}")
+    raise ValueError(f"Unknown operation: {operation!r}")
 
 
 def process_staged(
@@ -85,6 +81,6 @@ def process_staged(
         try:
             msg = process_file(src, dest, operation, dry_run=dry_run)
             results.append(msg)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             results.append(f"Error processing {src}: {exc}")
     return results

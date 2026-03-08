@@ -19,6 +19,7 @@ class FileMetadata:
     part: int | None = None
     raw: dict = field(default_factory=dict)
 
+
 # guessit key -> normalized key
 _RENAME_KEYS: dict[str, str] = {
     "video_codec": "codec",
@@ -36,9 +37,7 @@ def _normalize_raw(data: dict) -> dict:
     return result
 
 
-def extract_metadata(
-    filename: str, folder_name: str | None = None
-) -> FileMetadata:
+def extract_metadata(filename: str, folder_name: str | None = None) -> FileMetadata:
     """Extract metadata from a filename (and optionally a folder name).
 
     Runs guessit on the filename, normalizes field names, and returns

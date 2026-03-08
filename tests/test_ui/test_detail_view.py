@@ -1,4 +1,5 @@
 """Tests for detail_render and detail_view modules."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -128,7 +129,7 @@ class TestRenderDetailGrid:
         node = _make_node()
         lines = render_detail_grid(node, TEMPLATE)
         # Find the title row
-        title_line = [l for l in lines if "title" in l.lower()[:15]]
+        title_line = [line for line in lines if "title" in line.lower()[:15]]
         assert len(title_line) == 1
         assert "Breaking Bad" in title_line[0]
 
@@ -163,7 +164,7 @@ class TestRenderDetailGrid:
         node = _make_node()
         # filename source (index 0) has no year
         lines = render_detail_grid(node, TEMPLATE, source_index=0)
-        year_line = [l for l in lines if l.strip().startswith("year")]
+        year_line = [line for line in lines if line.strip().startswith("year")]
         assert len(year_line) == 1
         assert "?" in year_line[0]
 
@@ -557,10 +558,7 @@ class TestIsMultiValue:
 
 
 MOVIE_TPL = "{title} ({year})/{title} ({year}).{ext}"
-TV_TPL = (
-    "{title} ({year})/Season {season:02d}/"
-    "{title} - S{season:02d}E{episode:02d} - {episode_title}.{ext}"
-)
+TV_TPL = "{title} ({year})/Season {season:02d}/{title} - S{season:02d}E{episode:02d} - {episode_title}.{ext}"
 
 
 class TestClearField:
@@ -619,10 +617,7 @@ class TestResetFieldToGuessit:
 
 
 MOVIE_TEMPLATE = "{title} ({year})/{title} ({year}).{ext}"
-TV_TEMPLATE = (
-    "{title} ({year})/Season {season:02d}/"
-    "{title} - S{season:02d}E{episode:02d} - {episode_title}.{ext}"
-)
+TV_TEMPLATE = "{title} ({year})/Season {season:02d}/{title} - S{season:02d}E{episode:02d} - {episode_title}.{ext}"
 
 
 class TestDetailViewTemplateSelection:
@@ -634,7 +629,9 @@ class TestDetailViewTemplateSelection:
             result={"title": "Inception", "year": 2010, "media_type": "movie"},
         )
         view = DetailView(
-            node, MOVIE_TEMPLATE, TV_TEMPLATE,
+            node,
+            MOVIE_TEMPLATE,
+            TV_TEMPLATE,
         )
         view.fields = get_display_fields(view._active_template())
         # Movie template has title, year
@@ -656,7 +653,9 @@ class TestDetailViewTemplateSelection:
             },
         )
         view = DetailView(
-            node, MOVIE_TEMPLATE, TV_TEMPLATE,
+            node,
+            MOVIE_TEMPLATE,
+            TV_TEMPLATE,
         )
         view.fields = get_display_fields(view._active_template())
         assert "season" in view.fields
@@ -680,7 +679,9 @@ class TestDetailViewTemplateSelection:
             },
         )
         view = DetailView(
-            movie_node, MOVIE_TEMPLATE, TV_TEMPLATE,
+            movie_node,
+            MOVIE_TEMPLATE,
+            TV_TEMPLATE,
         )
         view.fields = get_display_fields(view._active_template())
         assert "season" not in view.fields
@@ -720,7 +721,7 @@ class TestTreeDetailIntegration:
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
-            tv = app.query_one(TreeView)
+            app.query_one(TreeView)
             dv = app.query_one(DetailView)
 
             # Initially detail is not shown
@@ -769,7 +770,7 @@ class TestMultiFileDetailIntegration:
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
-            tv = app.query_one(TreeView)
+            app.query_one(TreeView)
             dv = app.query_one(DetailView)
 
             # Start range and select both files

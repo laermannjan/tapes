@@ -1,8 +1,8 @@
 """Tests for tapes.tmdb module."""
+
 from __future__ import annotations
 
 import httpx
-import pytest
 import respx
 
 from tapes.tmdb import (
@@ -120,9 +120,7 @@ class TestSearchMulti:
 
     @respx.mock
     def test_empty_results(self) -> None:
-        respx.get(f"{BASE_URL}/search/multi").mock(
-            return_value=httpx.Response(200, json={"results": []})
-        )
+        respx.get(f"{BASE_URL}/search/multi").mock(return_value=httpx.Response(200, json={"results": []}))
         results = search_multi("Nonexistent", TOKEN)
         assert results == []
 
@@ -136,25 +134,19 @@ class TestSearchMulti:
 
     @respx.mock
     def test_http_error_returns_empty(self) -> None:
-        respx.get(f"{BASE_URL}/search/multi").mock(
-            return_value=httpx.Response(500)
-        )
+        respx.get(f"{BASE_URL}/search/multi").mock(return_value=httpx.Response(500))
         results = search_multi("Dune", TOKEN)
         assert results == []
 
     @respx.mock
     def test_network_error_returns_empty(self) -> None:
-        respx.get(f"{BASE_URL}/search/multi").mock(
-            side_effect=httpx.ConnectError("Connection refused")
-        )
+        respx.get(f"{BASE_URL}/search/multi").mock(side_effect=httpx.ConnectError("Connection refused"))
         results = search_multi("Dune", TOKEN)
         assert results == []
 
     @respx.mock
     def test_year_param_passed(self) -> None:
-        route = respx.get(f"{BASE_URL}/search/multi").mock(
-            return_value=httpx.Response(200, json={"results": []})
-        )
+        route = respx.get(f"{BASE_URL}/search/multi").mock(return_value=httpx.Response(200, json={"results": []}))
         search_multi("Dune", TOKEN, year=2021)
         assert route.called
         request = route.calls[0].request
@@ -208,9 +200,7 @@ class TestGetMovie:
 
     @respx.mock
     def test_http_error(self) -> None:
-        respx.get(f"{BASE_URL}/movie/999999").mock(
-            return_value=httpx.Response(404)
-        )
+        respx.get(f"{BASE_URL}/movie/999999").mock(return_value=httpx.Response(404))
         assert get_movie(999999, TOKEN) == {}
 
 
@@ -246,9 +236,7 @@ class TestGetShow:
 
     @respx.mock
     def test_http_error(self) -> None:
-        respx.get(f"{BASE_URL}/tv/999999").mock(
-            return_value=httpx.Response(404)
-        )
+        respx.get(f"{BASE_URL}/tv/999999").mock(return_value=httpx.Response(404))
         assert get_show(999999, TOKEN) == {}
 
 
@@ -266,9 +254,7 @@ class TestGetSeasonEpisodes:
                 },
             )
         )
-        episodes = get_season_episodes(
-            1396, 1, TOKEN, show_title="Breaking Bad", show_year=2008
-        )
+        episodes = get_season_episodes(1396, 1, TOKEN, show_title="Breaking Bad", show_year=2008)
         assert len(episodes) == 2
         assert episodes[0] == {
             "tmdb_id": 1396,
@@ -287,7 +273,5 @@ class TestGetSeasonEpisodes:
 
     @respx.mock
     def test_http_error(self) -> None:
-        respx.get(f"{BASE_URL}/tv/1396/season/1").mock(
-            return_value=httpx.Response(404)
-        )
+        respx.get(f"{BASE_URL}/tv/1396/season/1").mock(return_value=httpx.Response(404))
         assert get_season_episodes(1396, 1, TOKEN) == []

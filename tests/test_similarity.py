@@ -1,4 +1,5 @@
 """Tests for tapes.similarity module."""
+
 from __future__ import annotations
 
 import pytest
@@ -294,12 +295,15 @@ class TestShouldAutoAccept:
         assert should_auto_accept([0.75, 0.70, 0.30]) is False  # margin 0.05
 
     def test_custom_thresholds(self) -> None:
-        assert should_auto_accept(
-            [0.6, 0.3],
-            threshold=0.9,
-            margin_threshold=0.5,
-            min_margin=0.2,
-        ) is True  # margin 0.3 >= 0.2, best 0.6 >= 0.5
+        assert (
+            should_auto_accept(
+                [0.6, 0.3],
+                threshold=0.9,
+                margin_threshold=0.5,
+                min_margin=0.2,
+            )
+            is True
+        )  # margin 0.3 >= 0.2, best 0.6 >= 0.5
 
     def test_must_be_sorted_descending(self) -> None:
         """Caller must sort descending. Function trusts the order."""

@@ -1,4 +1,5 @@
 """Tests for tapes.ui.tree_model."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -11,7 +12,6 @@ from tapes.ui.tree_model import (
     build_tree,
     compute_shared_fields,
 )
-
 
 # --- Source ---
 
@@ -281,10 +281,7 @@ class TestBuildTree:
         model = build_tree(files, tmp_path)
 
         root = model.root
-        names = [
-            c.name if isinstance(c, FolderNode) else c.path.name
-            for c in root.children
-        ]
+        names = [c.name if isinstance(c, FolderNode) else c.path.name for c in root.children]
         assert names == ["a_dir", "m_dir", "b_file.mkv", "z_file.mkv"]
 
     def test_root_name(self, tmp_path: Path) -> None:

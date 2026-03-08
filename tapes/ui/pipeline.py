@@ -1,9 +1,11 @@
 """Auto-pipeline: populate sources and auto-accept confident matches."""
+
 from __future__ import annotations
 
 import logging
 import threading
-from typing import TYPE_CHECKING, Any, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import httpx
@@ -117,10 +119,15 @@ def run_tmdb_pass(
     cache = _TmdbCache()
 
     with tmdb.create_client(token) as client:
+
         def query_one(node: FileNode) -> None:
             nonlocal done_count
             _query_tmdb_for_node(
-                node, token, confidence_threshold, cache=cache, client=client,
+                node,
+                token,
+                confidence_threshold,
+                cache=cache,
+                client=client,
             )
             with lock:
                 done_count += 1
@@ -195,9 +202,7 @@ def extract_guessit_fields(filename: str) -> dict[str, Any]:
         fields[EPISODE] = meta.episode
     if meta.media_type:
         fields[MEDIA_TYPE] = meta.media_type
-    for k, v in meta.raw.items():
-        if v is not None:
-            fields[k] = v
+    fields.update({k: v for k, v in meta.raw.items() if v is not None})
     return fields
 
 
@@ -220,18 +225,18 @@ def _populate_node_guessit(node: FileNode, extract_metadata_fn: Callable[[str], 
     if meta.media_type:
         filename_fields[MEDIA_TYPE] = meta.media_type
     # Add raw fields (codec, media_source, etc.)
-    for k, v in meta.raw.items():
-        if v is not None:
-            filename_fields[k] = v
+    filename_fields.update({k: v for k, v in meta.raw.items() if v is not None})
 
     node.result = dict(filename_fields)
     node.sources = []
 
 
 def _query_tmdb_for_node(
-    node: FileNode, token: str, threshold: float,
+    node: FileNode,
+    token: str,
+    threshold: float,
     cache: _TmdbCache | None = None,
-    client: "httpx.Client | None" = None,
+    client: httpx.Client | None = None,
 ) -> None:
     """Two-stage TMDB query for a single node.
 
@@ -288,6 +293,12 @@ def _query_tmdb_for_node(
     similarities = [s.confidence for s in tmdb_sources]
     best = tmdb_sources[0]
 
+    logger.debug(
+        "%s: candidates=%s",
+        node.path.name,
+        [(s.name, s.fields.get(TITLE), f"{s.confidence:.2f}") for s in tmdb_sources],
+    )
+
     if should_auto_accept(similarities, threshold=threshold):
         # Auto-accept: apply non-empty fields to result
         for field, val in best.fields.items():
@@ -305,9 +316,12 @@ def _query_tmdb_for_node(
 
 
 def _query_episodes(
-    node: FileNode, token: str, threshold: float, show_fields: dict,
+    node: FileNode,
+    token: str,
+    threshold: float,
+    show_fields: dict,
     cache: _TmdbCache | None = None,
-    client: "httpx.Client | None" = None,
+    client: httpx.Client | None = None,
 ) -> None:
     """Stage 2: fetch episode data for a TV show match."""
     from tapes import tmdb
@@ -321,9 +335,7 @@ def _query_episodes(
 
     # Get show info to know available seasons
     if cache is not None:
-        show_info = cache.get_or_fetch(
-            ("show", show_id), lambda: tmdb.get_show(show_id, token, client=client)
-        )
+        show_info = cache.get_or_fetch(("show", show_id), lambda: tmdb.get_show(show_id, token, client=client))
     else:
         show_info = tmdb.get_show(show_id, token, client=client)
     if not show_info:
@@ -342,22 +354,27 @@ def _query_episodes(
             seasons_to_try.append(s)
 
     all_episode_sources: list[Source] = []
-    best_match_found = False
 
     for season_num in seasons_to_try:
         if cache is not None:
             episodes = cache.get_or_fetch(
                 ("episodes", show_id, season_num),
                 lambda sn=season_num: tmdb.get_season_episodes(
-                    show_id, sn, token,
-                    show_title=show_title, show_year=show_year,
+                    show_id,
+                    sn,
+                    token,
+                    show_title=show_title,
+                    show_year=show_year,
                     client=client,
                 ),
             )
         else:
             episodes = tmdb.get_season_episodes(
-                show_id, season_num, token,
-                show_title=show_title, show_year=show_year,
+                show_id,
+                season_num,
+                token,
+                show_title=show_title,
+                show_year=show_year,
                 client=client,
             )
 
@@ -372,7 +389,6 @@ def _query_episodes(
 
         # If we found a match in this season, stop searching more
         if any(s.confidence >= threshold for s in all_episode_sources):
-            best_match_found = True
             break
 
     # Keep top 3 episode sources by confidence

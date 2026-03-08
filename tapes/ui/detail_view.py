@@ -1,6 +1,8 @@
 """Interactive Textual widget for the detail view with cursor and editing."""
+
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -11,7 +13,6 @@ from textual.widget import Widget
 
 from tapes.fields import INT_FIELDS
 from tapes.ui.detail_render import (
-    confidence_style,
     diff_style,
     display_val,
     get_display_fields,
@@ -45,7 +46,7 @@ class DetailView(Widget):
 
     can_focus = True
 
-    cursor_row: reactive[int] = reactive(0)   # 0+ = fields
+    cursor_row: reactive[int] = reactive(0)  # 0+ = fields
     source_index: reactive[int] = reactive(0)  # which TMDB source tab
     editing: reactive[bool] = reactive(False)
     quit_hint: reactive[str] = reactive("")
@@ -194,11 +195,7 @@ class DetailView(Widget):
         # Field rows
         label_w, val_w, src_w = self._compute_col_widths()
         for row_idx, field_name in enumerate(self.fields):
-            content.append(
-                self._render_field_row(
-                    row_idx, field_name, label_w, val_w, src_w, inner_width
-                )
-            )
+            content.append(self._render_field_row(row_idx, field_name, label_w, val_w, src_w, inner_width))
 
         # Blank line + footer hints
         content.append(Text())
@@ -206,7 +203,7 @@ class DetailView(Widget):
 
         return content
 
-    def _render_tab_bar(self, inner_width: int) -> Text:
+    def _render_tab_bar(self, inner_width: int) -> Text:  # noqa: ARG002
         """Render the tab bar with source tabs."""
         sources = self.node.sources
 
@@ -273,10 +270,11 @@ class DetailView(Widget):
                 "    enter to confirm \u00b7 esc to cancel",
                 style=f"italic {MUTED}",
             )
-        return Text(
-            "    enter to edit \u00b7 backspace to clear \u00b7 shift+enter to apply all from match \u00b7 f to extract from filename \u00b7 r to refresh \u00b7 c to confirm \u00b7 esc to discard",
-            style=f"italic {MUTED}",
+        hints = (
+            "    enter to edit \u00b7 backspace to clear \u00b7 shift+enter to apply all from match"
+            " \u00b7 f to extract from filename \u00b7 r to refresh \u00b7 c to confirm \u00b7 esc to discard"
         )
+        return Text(hints, style=f"italic {MUTED}")
 
     def _render_field_row(
         self,
@@ -319,10 +317,7 @@ class DetailView(Widget):
 
             line.append(COL_GAP)
 
-            if is_multi_value(result_raw):
-                base_style = "dim"
-            else:
-                base_style = diff_style(result_raw, src_raw)
+            base_style = "dim" if is_multi_value(result_raw) else diff_style(result_raw, src_raw)
             line.append(self._col(src_val, src_w), style=base_style)
 
         # Pad to full width and apply background highlight to cursor row
@@ -393,10 +388,8 @@ class DetailView(Widget):
         field_name = self.fields[self.cursor_row]
         val: str | int = self.edit_value
         if field_name in INT_FIELDS:
-            try:
+            with contextlib.suppress(ValueError):
                 val = int(val)
-            except ValueError:
-                pass
         for n in self.file_nodes:
             n.result[field_name] = val
             if field_name != "tmdb_id":

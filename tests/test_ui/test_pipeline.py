@@ -1,4 +1,5 @@
 """Tests for the auto-pipeline."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -22,6 +23,7 @@ def _make_model(*filenames: str) -> TreeModel:
 
 
 # --- Mock TMDB responses for pipeline tests ---
+
 
 def _mock_search_multi(query: str, token: str, year: int | None = None, **kwargs: object) -> list[dict]:
     """Mock search_multi returning known results."""
@@ -48,25 +50,52 @@ def _mock_search_multi(query: str, token: str, year: int | None = None, **kwargs
 def _mock_get_show(tmdb_id: int, token: str, **kwargs: object) -> dict:
     if tmdb_id == 1396:
         return {
-            "tmdb_id": 1396, "title": "Breaking Bad", "year": 2008,
-            "media_type": "episode", "seasons": [1, 2, 3, 4, 5],
+            "tmdb_id": 1396,
+            "title": "Breaking Bad",
+            "year": 2008,
+            "media_type": "episode",
+            "seasons": [1, 2, 3, 4, 5],
         }
     return {}
 
 
 def _mock_get_season_episodes(
-    show_id: int, season_number: int, token: str,
-    show_title: str = "", show_year: int | None = None,
+    show_id: int,
+    season_number: int,
+    token: str,
+    show_title: str = "",
+    show_year: int | None = None,
     **kwargs: object,
 ) -> list[dict]:
     if show_id == 1396 and season_number == 1:
         return [
-            {"tmdb_id": 1396, "title": "Breaking Bad", "year": 2008,
-             "media_type": "episode", "season": 1, "episode": 1, "episode_title": "Pilot"},
-            {"tmdb_id": 1396, "title": "Breaking Bad", "year": 2008,
-             "media_type": "episode", "season": 1, "episode": 2, "episode_title": "Cat's in the Bag..."},
-            {"tmdb_id": 1396, "title": "Breaking Bad", "year": 2008,
-             "media_type": "episode", "season": 1, "episode": 3, "episode_title": "...And the Bag's in the River"},
+            {
+                "tmdb_id": 1396,
+                "title": "Breaking Bad",
+                "year": 2008,
+                "media_type": "episode",
+                "season": 1,
+                "episode": 1,
+                "episode_title": "Pilot",
+            },
+            {
+                "tmdb_id": 1396,
+                "title": "Breaking Bad",
+                "year": 2008,
+                "media_type": "episode",
+                "season": 1,
+                "episode": 2,
+                "episode_title": "Cat's in the Bag...",
+            },
+            {
+                "tmdb_id": 1396,
+                "title": "Breaking Bad",
+                "year": 2008,
+                "media_type": "episode",
+                "season": 1,
+                "episode": 3,
+                "episode_title": "...And the Bag's in the River",
+            },
         ]
     return []
 
@@ -74,6 +103,7 @@ def _mock_get_season_episodes(
 def _make_config(token: str = ""):
     """Create a TapesConfig with the given token."""
     from tapes.config import TapesConfig
+
     return TapesConfig(metadata={"tmdb_token": token})
 
 
@@ -86,7 +116,7 @@ def _patch_tmdb():
     ]
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_tmdb():
     """Patch all tapes.tmdb functions used by pipeline."""
     patches = _patch_tmdb()
@@ -144,8 +174,8 @@ class TestRunAutoPipeline:
         )
         run_auto_pipeline(model, token=TOKEN)
         files = model.all_files()
-        assert files[0].staged is True   # Dune
-        assert files[1].staged is True   # Arrival
+        assert files[0].staged is True  # Dune
+        assert files[1].staged is True  # Arrival
         assert files[2].staged is False  # Unknown
 
     def test_guessit_populates_result_directly(self, mock_tmdb) -> None:
@@ -217,11 +247,15 @@ class TestTwoStageFlow:
         Uses low threshold because guessit doesn't extract year from
         'Breaking.Bad.S01E01.mkv', so show confidence is 0.7 (below 0.85).
         """
+
         def mock_empty_episodes(*args, **kwargs):
             return []
 
-        with _patch_tmdb()[0], _patch_tmdb()[1], \
-             patch("tapes.tmdb.get_season_episodes", side_effect=mock_empty_episodes):
+        with (
+            _patch_tmdb()[0],
+            _patch_tmdb()[1],
+            patch("tapes.tmdb.get_season_episodes", side_effect=mock_empty_episodes),
+        ):
             model = _make_model("Breaking.Bad.S01E01.mkv")
             run_auto_pipeline(model, token=TOKEN, confidence_threshold=0.5)
             node = model.all_files()[0]
@@ -375,7 +409,7 @@ class TestAutoPipelineIntegration:
             auto_pipeline=True,
             config=config_obj,
         )
-        async with app.run_test() as pilot:
+        async with app.run_test() as _pilot:
             await app.workers.wait_for_complete()
             node = model.all_files()[0]
             assert len(node.sources) >= 1
@@ -491,6 +525,7 @@ class TestTmdbCache:
     def test_exception_does_not_deadlock(self) -> None:
         """If fetch_fn raises, waiting threads should not hang."""
         import threading
+
         from tapes.ui.pipeline import _TmdbCache
 
         cache = _TmdbCache()
@@ -504,6 +539,7 @@ class TestTmdbCache:
 
         # Second call with same key should also raise (not deadlock)
         results: list[str] = []
+
         def try_fetch():
             try:
                 cache.get_or_fetch(("key",), bad_fetch)

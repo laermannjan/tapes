@@ -1,4 +1,5 @@
 """Pure rendering functions for the detail view grid."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -39,9 +40,7 @@ def render_detail_header(node: FileNode, template: str) -> list[str]:
     ]
 
 
-def render_detail_grid(
-    node: FileNode, template: str, source_index: int = 0
-) -> list[str]:
+def render_detail_grid(node: FileNode, template: str, source_index: int = 0) -> list[str]:
     """Render the field/source grid as plain-text lines.
 
     Shows result column and one source (selected by source_index).

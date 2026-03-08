@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import contextlib
 import copy
 import time
 from pathlib import Path
+from typing import ClassVar
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -27,7 +29,7 @@ from tapes.ui.tree_view import TreeView
 class TreeApp(App):
     """Interactive tree browser with cursor navigation."""
 
-    BINDINGS = [
+    BINDINGS: ClassVar[list[Binding]] = [
         Binding("j,down", "cursor_down", "Down"),
         Binding("k,up", "cursor_up", "Up"),
         Binding("h,left", "cursor_left", "Left"),
@@ -112,7 +114,7 @@ class TreeApp(App):
             self.tv_template,
             root_path=self.root_path,
         )
-        yield CommitView([], "copy", id="commit-view")
+        yield CommitView([], "copy", widget_id="commit-view")
         yield HelpView(id="help-view")
         yield BottomBar(id="bottom-bar")
 
@@ -120,10 +122,8 @@ class TreeApp(App):
         # Use ANSI theme for true terminal background transparency.
         # Only set at mount time -- headless test runners lack a real
         # terminal so the default dark theme is safer there.
-        try:
+        with contextlib.suppress(Exception):
             self.theme = "textual-ansi"
-        except Exception:
-            pass
 
         self.query_one(BottomBar).operation = self.config.library.operation
 
@@ -168,9 +168,7 @@ class TreeApp(App):
     def _show_detail(self, node: FileNode) -> None:
         """Switch from tree view to detail view for a file node."""
         self._in_detail = True
-        self._detail_snapshot = [
-            (node, copy.deepcopy(node.result), copy.deepcopy(node.sources), node.staged)
-        ]
+        self._detail_snapshot = [(node, copy.deepcopy(node.result), copy.deepcopy(node.sources), node.staged)]
         detail = self.query_one(DetailView)
         detail.set_node(node)
         # separator + tab_bar + blank + path + blank + fields + blank + hints
@@ -183,10 +181,7 @@ class TreeApp(App):
     def _show_detail_multi(self, nodes: list[FileNode]) -> None:
         """Switch from tree view to detail view for multiple file nodes."""
         self._in_detail = True
-        self._detail_snapshot = [
-            (n, copy.deepcopy(n.result), copy.deepcopy(n.sources), n.staged)
-            for n in nodes
-        ]
+        self._detail_snapshot = [(n, copy.deepcopy(n.result), copy.deepcopy(n.sources), n.staged) for n in nodes]
         detail = self.query_one(DetailView)
         detail.set_nodes(nodes)
         detail.styles.height = len(detail.fields) + 9
@@ -213,8 +208,8 @@ class TreeApp(App):
         staged = [f for f in self.model.all_files() if f.staged]
         bar = self.query_one(BottomBar)
         cv = self.query_one(CommitView)
-        cv._files = staged
-        cv._categories = categorize_staged(staged)
+        cv._files = staged  # noqa: SLF001
+        cv._categories = categorize_staged(staged)  # noqa: SLF001
         cv.operation = bar.operation
         cv.styles.height = cv.computed_height
         cv.styles.display = "block"
@@ -337,7 +332,7 @@ class TreeApp(App):
             elif cfg.library.movies:
                 library_root = Path(cfg.library.movies)
             else:
-                library_root = Path(".")
+                library_root = Path()
             dest_rel = compute_dest(node, tmpl)
             if dest_rel is not None:
                 pairs.append((node.path, library_root / dest_rel))
@@ -458,16 +453,12 @@ class TreeApp(App):
                 file_nodes = [n for n in nodes if isinstance(n, FileNode)]
                 if file_nodes:
                     for fn in file_nodes:
-                        refresh_tmdb_source(
-                            fn, token=token, confidence_threshold=threshold
-                        )
+                        refresh_tmdb_source(fn, token=token, confidence_threshold=threshold)
                 tv.clear_range_select()
             else:
                 node = tv.cursor_node()
                 if isinstance(node, FileNode):
-                    refresh_tmdb_source(
-                        node, token=token, confidence_threshold=threshold
-                    )
+                    refresh_tmdb_source(node, token=token, confidence_threshold=threshold)
             tv.refresh()
         self._update_footer()
 
@@ -643,7 +634,4 @@ class TreeApp(App):
         if self._searching:
             bar.hint_text = "enter to confirm \u00b7 esc to cancel"
         else:
-            bar.hint_text = (
-                "space to stage \u00b7 enter to expand \u00b7 "
-                "c to commit \u00b7 ? for help"
-            )
+            bar.hint_text = "space to stage \u00b7 enter to expand \u00b7 c to commit \u00b7 ? for help"

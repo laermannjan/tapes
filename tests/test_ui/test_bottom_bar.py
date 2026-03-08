@@ -1,4 +1,5 @@
 """Tests for the BottomBar widget."""
+
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -9,9 +10,7 @@ from tapes.ui.bottom_bar import OPERATIONS, BottomBar
 
 def _render_plain(widget, width: int = 80, height: int = 5) -> str:
     fake_size = SimpleNamespace(width=width, height=height)
-    with patch.object(
-        type(widget), "size", new_callable=lambda: PropertyMock(return_value=fake_size)
-    ):
+    with patch.object(type(widget), "size", new_callable=lambda: PropertyMock(return_value=fake_size)):
         rendered = widget.render()
     return rendered.plain
 

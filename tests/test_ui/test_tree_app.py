@@ -1,4 +1,5 @@
 """Tests for TreeView cursor navigation and TreeApp keybindings."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -13,7 +14,6 @@ from tapes.ui.tree_model import (
     accept_best_source,
 )
 from tapes.ui.tree_view import TreeView
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -419,7 +419,7 @@ class TestRangeSelection:
             result = view.render()
         # The cursor row (idx 2) has "on #36345a", range rows (idx 0, 1) have "on #2a2844"
         # We verify that the Text object has spans applied
-        assert len(result._spans) > 0  # noqa: SLF001
+        assert len(result._spans) > 0
 
     def test_space_in_range_mode_stages_and_exits(self) -> None:
         model = _expanded_model()
@@ -443,11 +443,11 @@ class TestRangeSelection:
 
 @pytest.mark.skipif(not HAS_PILOT, reason="textual pilot not available")
 class TestTreeAppKeys:
-    @pytest.fixture()
+    @pytest.fixture
     def model(self) -> TreeModel:
         return _simple_model()
 
-    @pytest.fixture()
+    @pytest.fixture
     def template(self) -> str:
         return "{title} ({year}).{ext}"
 
@@ -474,9 +474,7 @@ class TestTreeAppKeys:
             assert tv.cursor_index == 0
 
     @pytest.mark.asyncio()
-    async def test_down_arrow_moves_cursor(
-        self, model: TreeModel, template: str
-    ) -> None:
+    async def test_down_arrow_moves_cursor(self, model: TreeModel, template: str) -> None:
         from tapes.ui.tree_app import TreeApp
 
         app = TreeApp(model=model, movie_template=template, tv_template=template)
@@ -486,9 +484,7 @@ class TestTreeAppKeys:
             assert tv.cursor_index == 1
 
     @pytest.mark.asyncio()
-    async def test_up_arrow_moves_cursor(
-        self, model: TreeModel, template: str
-    ) -> None:
+    async def test_up_arrow_moves_cursor(self, model: TreeModel, template: str) -> None:
         from tapes.ui.tree_app import TreeApp
 
         app = TreeApp(model=model, movie_template=template, tv_template=template)
@@ -499,9 +495,7 @@ class TestTreeAppKeys:
             assert tv.cursor_index == 0
 
     @pytest.mark.asyncio()
-    async def test_enter_toggles_folder(
-        self, model: TreeModel, template: str
-    ) -> None:
+    async def test_enter_toggles_folder(self, model: TreeModel, template: str) -> None:
         from tapes.ui.tree_app import TreeApp
 
         app = TreeApp(model=model, movie_template=template, tv_template=template)
@@ -521,12 +515,10 @@ class TestTreeAppKeys:
             tv = app.query_one(TreeView)
             await pilot.press("v")
             assert tv.in_range_mode
-            assert tv._range_anchor == 0  # noqa: SLF001
+            assert tv._range_anchor == 0
 
     @pytest.mark.asyncio()
-    async def test_escape_exits_range_mode(
-        self, model: TreeModel, template: str
-    ) -> None:
+    async def test_escape_exits_range_mode(self, model: TreeModel, template: str) -> None:
         from tapes.ui.tree_app import TreeApp
 
         app = TreeApp(model=model, movie_template=template, tv_template=template)
@@ -538,9 +530,7 @@ class TestTreeAppKeys:
             assert not tv.in_range_mode
 
     @pytest.mark.asyncio()
-    async def test_space_toggles_staged_file(
-        self, model: TreeModel, template: str
-    ) -> None:
+    async def test_space_toggles_staged_file(self, model: TreeModel, template: str) -> None:
         from tapes.ui.tree_app import TreeApp
 
         app = TreeApp(model=model, movie_template=template, tv_template=template)
@@ -556,9 +546,7 @@ class TestTreeAppKeys:
             assert node.staged
 
     @pytest.mark.asyncio()
-    async def test_space_updates_status(
-        self, model: TreeModel, template: str
-    ) -> None:
+    async def test_space_updates_status(self, model: TreeModel, template: str) -> None:
         from tapes.ui.bottom_bar import BottomBar
         from tapes.ui.tree_app import TreeApp
 
@@ -572,9 +560,7 @@ class TestTreeAppKeys:
             assert "1 staged" in bar.stats_text
 
     @pytest.mark.asyncio()
-    async def test_space_in_range_stages_range(
-        self, model: TreeModel, template: str
-    ) -> None:
+    async def test_space_in_range_stages_range(self, model: TreeModel, template: str) -> None:
         from tapes.ui.tree_app import TreeApp
 
         # Use expanded model so files are visible
@@ -1063,7 +1049,7 @@ class TestSearchModeAsync:
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
-            tv = app.query_one(TreeView)
+            app.query_one(TreeView)
             await pilot.press("slash")
             await pilot.press("t", "o", "p")
             assert app._search_query == "top"
@@ -1246,9 +1232,8 @@ class TestDetailConfirmDiscard:
     @pytest.mark.asyncio()
     async def test_esc_during_edit_cancels_edit_not_detail(self) -> None:
         """Esc while editing cancels edit, doesn't discard detail changes."""
-        from tapes.ui.tree_app import TreeApp
-
         from tapes.ui.detail_view import DetailView
+        from tapes.ui.tree_app import TreeApp
 
         node = FileNode(
             path=Path("/media/test.mkv"),

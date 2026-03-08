@@ -1,4 +1,5 @@
 """Persistent bottom bar with search input, operation mode, and hints."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -46,9 +47,7 @@ class BottomBar(Widget):
         lines.append(Text())
 
         # Line 1: separator with stats
-        lines.append(
-            render_separator(w, right_text=self.stats_text or None, color=sep_color)
-        )
+        lines.append(render_separator(w, right_text=self.stats_text or None, color=sep_color))
 
         # Line 2: search input
         search_line = Text()

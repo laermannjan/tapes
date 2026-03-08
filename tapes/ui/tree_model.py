@@ -1,4 +1,5 @@
 """Tree data model for the TUI redesign."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -199,10 +200,7 @@ def _compress_single_child_dirs(folder: FolderNode) -> None:
         child = folder.children[i]
         if isinstance(child, FolderNode):
             # Merge while this child has exactly one child and it's a folder
-            while (
-                len(child.children) == 1
-                and isinstance(child.children[0], FolderNode)
-            ):
+            while len(child.children) == 1 and isinstance(child.children[0], FolderNode):
                 grandchild = child.children[0]
                 child.name = f"{child.name}/{grandchild.name}"
                 child.children = grandchild.children
@@ -219,9 +217,9 @@ def accept_best_source(node: FileNode) -> bool:
     best = max(node.sources, key=lambda s: s.confidence)
     if best.confidence == 0:
         return False
-    for field, val in best.fields.items():
+    for fname, val in best.fields.items():
         if val is not None:
-            node.result[field] = val
+            node.result[fname] = val
     return True
 
 
@@ -243,10 +241,7 @@ def compute_shared_fields(nodes: list[FileNode]) -> dict[str, Any]:
 
     result: dict[str, Any] = {}
     for key in sorted(all_keys):
-        values: list[Any] = []
-        for node in nodes:
-            if key in node.result:
-                values.append(node.result[key])
+        values: list[Any] = [node.result[key] for node in nodes if key in node.result]
 
         if not values:
             continue
@@ -255,7 +250,7 @@ def compute_shared_fields(nodes: list[FileNode]) -> dict[str, Any]:
         if all(v == first for v in values):
             result[key] = first
         else:
-            n_unique = len(set(str(v) for v in values))
+            n_unique = len({str(v) for v in values})
             result[key] = f"({n_unique} values)"
 
     return result

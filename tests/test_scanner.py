@@ -29,9 +29,7 @@ class TestScanFindsAllFiles:
         assert f2 in result
 
     def test_all_nine_video_extensions(self, tmp_path: Path) -> None:
-        files = []
-        for ext in sorted(VIDEO_EXTENSIONS):
-            files.append(_touch(tmp_path / f"video{ext}"))
+        files = [_touch(tmp_path / f"video{ext}") for ext in sorted(VIDEO_EXTENSIONS)]
         result = scan(tmp_path)
         assert len(result) == 9
         for f in files:

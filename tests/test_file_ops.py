@@ -1,4 +1,5 @@
 """Tests for file operations (copy, move, link, dry-run)."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -155,9 +156,7 @@ class TestProcessStaged:
         dest1 = tmp_path / "lib" / "a.mkv"
         dest2 = tmp_path / "lib" / "b.mkv"
 
-        results = process_staged(
-            [(src1, dest1), (src2, dest2)], "copy", dry_run=True
-        )
+        results = process_staged([(src1, dest1), (src2, dest2)], "copy", dry_run=True)
 
         assert len(results) == 2
         assert all("[dry-run]" in r for r in results)

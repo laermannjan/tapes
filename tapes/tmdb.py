@@ -1,4 +1,5 @@
 """TMDB API client using httpx."""
+
 from __future__ import annotations
 
 import logging
@@ -35,8 +36,11 @@ def create_client(token: str) -> httpx.Client:
 
 
 def search_multi(
-    query: str, token: str, year: int | None = None,
-    *, client: httpx.Client | None = None,
+    query: str,
+    token: str,
+    year: int | None = None,
+    *,
+    client: httpx.Client | None = None,
 ) -> list[dict]:
     """Search /search/multi. Returns up to 3 results.
 
@@ -102,8 +106,10 @@ def search_multi(
 
 
 def get_movie(
-    tmdb_id: int, token: str,
-    *, client: httpx.Client | None = None,
+    tmdb_id: int,
+    token: str,
+    *,
+    client: httpx.Client | None = None,
 ) -> dict:
     """GET /movie/{id}. Returns {tmdb_id, title, year, media_type: "movie"}."""
     if not token:
@@ -133,8 +139,10 @@ def get_movie(
 
 
 def get_show(
-    tmdb_id: int, token: str,
-    *, client: httpx.Client | None = None,
+    tmdb_id: int,
+    token: str,
+    *,
+    client: httpx.Client | None = None,
 ) -> dict:
     """GET /tv/{id}. Returns show info with seasons list."""
     if not token:
@@ -155,11 +163,7 @@ def get_show(
     data = resp.json()
     first_air = data.get("first_air_date", "") or ""
     yr = int(first_air[:4]) if len(first_air) >= 4 else None
-    seasons = [
-        s["season_number"]
-        for s in data.get("seasons", [])
-        if s.get("season_number") is not None
-    ]
+    seasons = [s["season_number"] for s in data.get("seasons", []) if s.get("season_number") is not None]
     return {
         TMDB_ID: data["id"],
         TITLE: data.get("name", ""),
@@ -175,7 +179,8 @@ def get_season_episodes(
     token: str,
     show_title: str = "",
     show_year: int | None = None,
-    *, client: httpx.Client | None = None,
+    *,
+    client: httpx.Client | None = None,
 ) -> list[dict]:
     """GET /tv/{show_id}/season/{season_number}. Returns list of episode dicts.
 
@@ -198,17 +203,15 @@ def get_season_episodes(
         return []
 
     data = resp.json()
-    episodes: list[dict] = []
-    for ep in data.get("episodes", []):
-        episodes.append(
-            {
-                TMDB_ID: show_id,
-                TITLE: show_title,
-                YEAR: show_year,
-                MEDIA_TYPE: MEDIA_TYPE_EPISODE,
-                SEASON: season_number,
-                EPISODE: ep.get("episode_number"),
-                EPISODE_TITLE: ep.get("name", ""),
-            }
-        )
-    return episodes
+    return [
+        {
+            TMDB_ID: show_id,
+            TITLE: show_title,
+            YEAR: show_year,
+            MEDIA_TYPE: MEDIA_TYPE_EPISODE,
+            SEASON: season_number,
+            EPISODE: ep.get("episode_number"),
+            EPISODE_TITLE: ep.get("name", ""),
+        }
+        for ep in data.get("episodes", [])
+    ]

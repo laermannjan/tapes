@@ -1,4 +1,5 @@
 """Tests for tree_render pure rendering functions."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -18,10 +19,7 @@ from tapes.ui.tree_render import (
 )
 
 MOVIE_TEMPLATE = "{title} ({year})/{title} ({year}).{ext}"
-TV_TEMPLATE = (
-    "{title} ({year})/Season {season:02d}/"
-    "{title} - S{season:02d}E{episode:02d} - {episode_title}.{ext}"
-)
+TV_TEMPLATE = "{title} ({year})/Season {season:02d}/{title} - S{season:02d}E{episode:02d} - {episode_title}.{ext}"
 
 
 # --- compute_dest ---
@@ -58,10 +56,7 @@ class TestComputeDest:
             },
         )
         result = compute_dest(node, TV_TEMPLATE)
-        assert result == (
-            "Breaking Bad (2008)/Season 01/"
-            "Breaking Bad - S01E02 - Cat's in the Bag....mkv"
-        )
+        assert result == ("Breaking Bad (2008)/Season 01/Breaking Bad - S01E02 - Cat's in the Bag....mkv")
 
 
 # --- render_dest ---
@@ -187,9 +182,7 @@ class TestRenderFileRow:
             path=Path("/media/movies/Inception.mkv"),
             result={"title": "Inception", "year": 2010},
         )
-        row = render_file_row(
-            node, MOVIE_TEMPLATE, TV_TEMPLATE, depth=3, flat_mode=True, root_path=root
-        )
+        row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE, depth=3, flat_mode=True, root_path=root)
         plain = row.plain
         # Flat mode: no indentation regardless of depth
         assert not plain.startswith(" " * 6)
@@ -261,13 +254,9 @@ class TestFlattenWithDepth:
     def test_correct_depths_for_nested_tree(self) -> None:
         """Build a tree and verify depth values."""
         inner_file = FileNode(path=Path("/root/sub/file.mkv"))
-        inner_folder = FolderNode(
-            name="sub", children=[inner_file], collapsed=False
-        )
+        inner_folder = FolderNode(name="sub", children=[inner_file], collapsed=False)
         top_file = FileNode(path=Path("/root/top.mkv"))
-        root = FolderNode(
-            name="root", children=[inner_folder, top_file], collapsed=False
-        )
+        root = FolderNode(name="root", children=[inner_folder, top_file], collapsed=False)
         model = TreeModel(root=root)
 
         items = flatten_with_depth(model)
@@ -282,12 +271,8 @@ class TestFlattenWithDepth:
 
     def test_collapsed_folder_hides_children(self) -> None:
         inner_file = FileNode(path=Path("/root/sub/file.mkv"))
-        inner_folder = FolderNode(
-            name="sub", children=[inner_file], collapsed=True
-        )
-        root = FolderNode(
-            name="root", children=[inner_folder], collapsed=False
-        )
+        inner_folder = FolderNode(name="sub", children=[inner_file], collapsed=True)
+        root = FolderNode(name="root", children=[inner_folder], collapsed=False)
         model = TreeModel(root=root)
 
         items = flatten_with_depth(model)

@@ -1,4 +1,5 @@
 """Pure rendering functions for the file tree."""
+
 from __future__ import annotations
 
 import re
@@ -24,17 +25,10 @@ RANGE_BG = "on #373737"
 
 def template_field_names(template: str) -> list[str]:
     """Extract unique field names referenced in a template string."""
-    return list(
-        dict.fromkeys(
-            m.group(1).split(":")[0]
-            for m in re.finditer(r"\{(\w+[^}]*)\}", template)
-        )
-    )
+    return list(dict.fromkeys(m.group(1).split(":")[0] for m in re.finditer(r"\{(\w+[^}]*)\}", template)))
 
 
-def select_template(
-    node: FileNode, movie_template: str, tv_template: str
-) -> str:
+def select_template(node: FileNode, movie_template: str, tv_template: str) -> str:
     """Select the appropriate template based on the node's media_type.
 
     Returns ``tv_template`` if ``media_type`` is ``"episode"``,

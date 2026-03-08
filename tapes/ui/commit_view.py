@@ -1,4 +1,5 @@
 """Inline commit confirmation view with file stats and operation selection."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -8,7 +9,7 @@ from textual.reactive import reactive
 from textual.widget import Widget
 
 from tapes.fields import MEDIA_TYPE, MEDIA_TYPE_EPISODE, MEDIA_TYPE_MOVIE
-from tapes.ui.bottom_bar import OPERATIONS, OP_COLORS
+from tapes.ui.bottom_bar import OP_COLORS, OPERATIONS
 from tapes.ui.tree_model import FileNode
 from tapes.ui.tree_render import MUTED, render_separator
 
@@ -74,8 +75,8 @@ class CommitView(Widget):
     operation: reactive[str] = reactive("copy")
     quit_hint: reactive[str] = reactive("")
 
-    def __init__(self, files: list[FileNode], operation: str, *, id: str | None = None) -> None:
-        super().__init__(id=id)
+    def __init__(self, files: list[FileNode], operation: str, *, widget_id: str | None = None) -> None:
+        super().__init__(id=widget_id)
         self._files = files
         self.operation = operation
         self._categories = categorize_staged(files)
@@ -124,7 +125,8 @@ class CommitView(Widget):
             n = cats["other"]
             line1_parts.append(f"{n} other")
         if line1_parts:
-            content.append(Text(f"  {' \u00b7 '.join(line1_parts)}"))
+            joined = " \u00b7 ".join(line1_parts)
+            content.append(Text(f"  {joined}"))
 
         # Stats line 2: shows, seasons, episodes
         line2_parts: list[str] = []
@@ -138,7 +140,8 @@ class CommitView(Widget):
             n = cats["episodes"]
             line2_parts.append(f"{n} {'episode' if n == 1 else 'episodes'}")
         if line2_parts:
-            content.append(Text(f"  {' \u00b7 '.join(line2_parts)}"))
+            joined = " \u00b7 ".join(line2_parts)
+            content.append(Text(f"  {joined}"))
 
         # Blank + total
         content.append(Text())

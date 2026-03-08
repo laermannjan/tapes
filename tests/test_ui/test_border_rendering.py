@@ -1,4 +1,5 @@
 """Tests for widget rendering (separators, no manual box-drawing)."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -11,10 +12,7 @@ from tapes.ui.tree_model import FileNode, FolderNode, Source, TreeModel
 from tapes.ui.tree_view import TreeView
 
 MOVIE_TEMPLATE = "{title} ({year})/{title} ({year}).{ext}"
-TV_TEMPLATE = (
-    "{title} ({year})/Season {season:02d}/"
-    "{title} - S{season:02d}E{episode:02d} - {episode_title}.{ext}"
-)
+TV_TEMPLATE = "{title} ({year})/Season {season:02d}/{title} - S{season:02d}E{episode:02d} - {episode_title}.{ext}"
 
 
 def _make_tree_view() -> TreeView:
@@ -46,9 +44,7 @@ def _make_detail_view() -> DetailView:
 
 def _render_plain(widget, width: int = 80, height: int = 20) -> str:
     fake_size = SimpleNamespace(width=width, height=height)
-    with patch.object(
-        type(widget), "size", new_callable=lambda: PropertyMock(return_value=fake_size)
-    ):
+    with patch.object(type(widget), "size", new_callable=lambda: PropertyMock(return_value=fake_size)):
         rendered = widget.render()
     return rendered.plain
 

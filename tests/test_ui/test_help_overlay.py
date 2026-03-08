@@ -1,4 +1,5 @@
 """Tests for the inline help view."""
+
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -10,9 +11,7 @@ from tapes.ui.tree_app import TreeApp
 
 def _render_plain(widget, width: int = 80, height: int = 40) -> str:
     fake_size = SimpleNamespace(width=width, height=height)
-    with patch.object(
-        type(widget), "size", new_callable=lambda: PropertyMock(return_value=fake_size)
-    ):
+    with patch.object(type(widget), "size", new_callable=lambda: PropertyMock(return_value=fake_size)):
         rendered = widget.render()
     return rendered.plain
 
