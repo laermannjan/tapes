@@ -99,6 +99,21 @@ def full_extension(path: Path) -> str:
     return ext
 
 
+_UNSAFE_PATH_CHARS = re.compile(r'[/\\:*?"<>|\x00-\x1f]')
+
+
+def _sanitize_field(value: Any) -> Any:
+    """Sanitize a template field value for safe use in file paths.
+
+    Replaces characters that are illegal or dangerous in filenames:
+    ``/ \\ : * ? " < > |`` and control characters (0x00-0x1F).
+    Only applies to string values; integers and other types pass through.
+    """
+    if not isinstance(value, str):
+        return value
+    return _UNSAFE_PATH_CHARS.sub("_", value).strip(". ")
+
+
 def compute_dest(node: FileNode, template: str) -> str | None:
     """Compute the destination path for a file node using a template.
 
@@ -108,8 +123,11 @@ def compute_dest(node: FileNode, template: str) -> str | None:
     Format specs (e.g. ``{season:02d}``) are applied when all fields are
     present. If a field with a format spec is missing, the spec is dropped
     and ``?`` is shown instead so the user can see partial progress.
+
+    String field values are sanitized to remove characters that are illegal
+    in filenames (``/ \\ : * ? " < > |`` and control characters).
     """
-    fields: dict[str, Any] = dict(node.result)
+    fields: dict[str, Any] = {k: _sanitize_field(v) for k, v in node.result.items()}
     fields["ext"] = full_extension(node.path)
 
     needed = template_field_names(template)

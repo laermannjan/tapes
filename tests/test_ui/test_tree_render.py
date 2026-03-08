@@ -57,7 +57,8 @@ class TestComputeDest:
             },
         )
         result = compute_dest(node, TV_TEMPLATE)
-        assert result == ("Breaking Bad (2008)/Season 01/Breaking Bad - S01E02 - Cat's in the Bag....mkv")
+        # Trailing dots in episode_title stripped by sanitization
+        assert result == ("Breaking Bad (2008)/Season 01/Breaking Bad - S01E02 - Cat's in the Bag.mkv")
 
 
 # --- render_dest ---
@@ -342,7 +343,7 @@ class TestRenderFileRowDualTemplate:
         )
         row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
         assert "S01E02" in row.plain
-        assert "Cat's in the Bag..." in row.plain
+        assert "Cat's in the Bag" in row.plain
 
 
 # --- render_separator ---
@@ -393,3 +394,83 @@ class TestTemplateFieldNames:
     def test_template_field_names_escaped_braces(self) -> None:
         """Escaped braces should not be extracted as field names."""
         assert template_field_names("{{literal}} {title}/{year}") == ["title", "year"]
+
+
+# --- _sanitize_field ---
+
+
+class TestSanitizeField:
+    def test_slash_replaced(self) -> None:
+        from tapes.ui.tree_render import _sanitize_field
+
+        assert _sanitize_field("AC/DC") == "AC_DC"
+
+    def test_backslash_replaced(self) -> None:
+        from tapes.ui.tree_render import _sanitize_field
+
+        assert _sanitize_field("back\\slash") == "back_slash"
+
+    def test_colon_replaced(self) -> None:
+        from tapes.ui.tree_render import _sanitize_field
+
+        assert _sanitize_field("Title: Subtitle") == "Title_ Subtitle"
+
+    def test_multiple_unsafe_chars_replaced(self) -> None:
+        from tapes.ui.tree_render import _sanitize_field
+
+        assert _sanitize_field('a*b?c"d<e>f|g') == "a_b_c_d_e_f_g"
+
+    def test_control_chars_replaced(self) -> None:
+        from tapes.ui.tree_render import _sanitize_field
+
+        assert _sanitize_field("hello\x00world\x1f") == "hello_world_"
+
+    def test_leading_trailing_dots_stripped(self) -> None:
+        from tapes.ui.tree_render import _sanitize_field
+
+        assert _sanitize_field(".hidden.") == "hidden"
+
+    def test_leading_trailing_spaces_stripped(self) -> None:
+        from tapes.ui.tree_render import _sanitize_field
+
+        assert _sanitize_field("  padded  ") == "padded"
+
+    def test_integer_passes_through(self) -> None:
+        from tapes.ui.tree_render import _sanitize_field
+
+        assert _sanitize_field(2010) == 2010
+
+    def test_normal_string_unchanged(self) -> None:
+        from tapes.ui.tree_render import _sanitize_field
+
+        assert _sanitize_field("Inception") == "Inception"
+
+    def test_apostrophe_preserved(self) -> None:
+        from tapes.ui.tree_render import _sanitize_field
+
+        assert _sanitize_field("Cat's in the Bag") == "Cat's in the Bag"
+
+    def test_trailing_dots_stripped(self) -> None:
+        from tapes.ui.tree_render import _sanitize_field
+
+        assert _sanitize_field("Cat's in the Bag...") == "Cat's in the Bag"
+
+
+class TestComputeDestSanitization:
+    def test_slash_in_title_sanitized(self) -> None:
+        node = FileNode(
+            path=Path("/movies/acdc.mkv"),
+            result={"title": "AC/DC: Live", "year": 2010},
+        )
+        result = compute_dest(node, MOVIE_TEMPLATE)
+        assert result is not None
+        assert "/" not in result.split("/")[0]  # title part has no literal /
+        assert "AC_DC_ Live" in result
+
+    def test_integer_fields_unaffected(self) -> None:
+        node = FileNode(
+            path=Path("/movies/Inception.mkv"),
+            result={"title": "Inception", "year": 2010},
+        )
+        result = compute_dest(node, MOVIE_TEMPLATE)
+        assert result == "Inception (2010)/Inception (2010).mkv"
