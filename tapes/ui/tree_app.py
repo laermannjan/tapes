@@ -47,6 +47,8 @@ class TreeApp(App):
         Binding("equals_sign", "expand_all", "Expand All"),
         Binding("question_mark", "toggle_help", "Help"),
         Binding("shift+tab", "cycle_op", "Cycle Op", show=False),
+        Binding("d", "clear_field", "Clear Field", show=False),
+        Binding("g", "reset_guessit", "Reset Guessit", show=False),
     ]
 
     CSS = """
@@ -403,6 +405,16 @@ class TreeApp(App):
                 accept_best_source(node)
         tv.refresh()
         self._update_footer()
+
+    def action_clear_field(self) -> None:
+        if not self._in_detail:
+            return
+        self.query_one(DetailView).clear_field()
+
+    def action_reset_guessit(self) -> None:
+        if not self._in_detail:
+            return
+        self.query_one(DetailView).reset_field_to_guessit()
 
     def action_start_search(self) -> None:
         if self._in_detail:

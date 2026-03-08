@@ -618,6 +618,68 @@ class TestIsMultiValue:
         assert is_multi_value("(various)") is False
 
 
+# --- Clear field ---
+
+
+MOVIE_TPL = "{title} ({year})/{title} ({year}).{ext}"
+TV_TPL = (
+    "{title} ({year})/Season {season:02d}/"
+    "{title} - S{season:02d}E{episode:02d} - {episode_title}.{ext}"
+)
+
+
+class TestClearField:
+    def test_clear_field_removes_value(self) -> None:
+        node = FileNode(
+            path=Path("/media/Inception.2010.mkv"),
+            result={"title": "Inception", "year": 2010, "media_type": "movie"},
+        )
+        dv = DetailView(node, MOVIE_TPL, TV_TPL)
+        dv.fields = get_display_fields(dv._active_template())
+        dv.cursor_row = dv.fields.index("title")
+        dv.clear_field()
+        assert "title" not in node.result
+
+    def test_clear_field_noop_during_edit(self) -> None:
+        node = FileNode(
+            path=Path("/media/Inception.2010.mkv"),
+            result={"title": "Inception", "year": 2010, "media_type": "movie"},
+        )
+        dv = DetailView(node, MOVIE_TPL, TV_TPL)
+        dv.fields = get_display_fields(dv._active_template())
+        dv.cursor_row = dv.fields.index("title")
+        dv.editing = True
+        dv.clear_field()
+        assert node.result["title"] == "Inception"
+
+
+# --- Reset field to guessit ---
+
+
+class TestResetFieldToGuessit:
+    def test_reset_restores_guessit_value(self) -> None:
+        node = FileNode(
+            path=Path("/media/Inception.2010.mkv"),
+            result={"title": "Wrong Title", "year": 2010, "media_type": "movie"},
+        )
+        dv = DetailView(node, MOVIE_TPL, TV_TPL)
+        dv.fields = get_display_fields(dv._active_template())
+        dv.cursor_row = dv.fields.index("title")
+        dv.reset_field_to_guessit()
+        assert node.result["title"] == "Inception"
+
+    def test_reset_clears_field_if_not_in_filename(self) -> None:
+        node = FileNode(
+            path=Path("/media/Inception.2010.mkv"),
+            result={"title": "Inception", "year": 2010, "tmdb_id": 12345, "media_type": "movie"},
+        )
+        dv = DetailView(node, MOVIE_TPL, TV_TPL)
+        dv.fields = get_display_fields(dv._active_template())
+        dv.cursor_row = dv.fields.index("tmdb_id")
+        dv.reset_field_to_guessit()
+        assert "tmdb_id" not in node.result
+
+
 # --- Async integration: tree -> detail -> back ---
 
 

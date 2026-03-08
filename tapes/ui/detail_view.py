@@ -420,6 +420,31 @@ class DetailView(Widget):
         self.editing = False
         self.refresh()
 
+    def clear_field(self) -> None:
+        """Clear the current field (remove from result)."""
+        if self.editing:
+            return
+        field_name = self.fields[self.cursor_row]
+        for n in self.file_nodes:
+            n.result.pop(field_name, None)
+        self.refresh()
+
+    def reset_field_to_guessit(self) -> None:
+        """Reset the current field to its guessit-extracted value."""
+        if self.editing:
+            return
+        from tapes.ui.pipeline import extract_guessit_fields
+
+        field_name = self.fields[self.cursor_row]
+        for n in self.file_nodes:
+            guessit_fields = extract_guessit_fields(n.path.name)
+            val = guessit_fields.get(field_name)
+            if val is not None:
+                n.result[field_name] = val
+            else:
+                n.result.pop(field_name, None)
+        self.refresh()
+
     def on_key(self, event: events.Key) -> None:
         """Handle key events for inline editing."""
         if not self.editing:
