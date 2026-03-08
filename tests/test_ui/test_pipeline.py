@@ -106,20 +106,23 @@ class TestRunAutoPipeline:
         assert tmdb_sources[0].confidence == 1.0
         assert node.result["year"] == 2021
 
-    def test_confident_match_title_only_auto_stages(self, mock_tmdb) -> None:
+    def test_title_only_not_auto_staged(self, mock_tmdb) -> None:
+        """Without year in filename, confidence is below threshold; not auto-staged."""
         model = _make_model("Breaking.Bad.S01E01.720p.mkv")
         run_auto_pipeline(model, token=TOKEN)
         node = model.all_files()[0]
-        assert node.staged is True
+        assert node.staged is False
+        # TMDB sources still added for user curation
         tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
         assert len(tmdb_sources) >= 1
 
-    def test_confident_match_result_overwritten_by_tmdb(self, mock_tmdb) -> None:
+    def test_title_only_auto_stages_with_low_threshold(self, mock_tmdb) -> None:
+        """With a low threshold, title-only matches can auto-stage."""
         model = _make_model("Breaking.Bad.S01E01.720p.mkv")
-        run_auto_pipeline(model, token=TOKEN)
+        run_auto_pipeline(model, token=TOKEN, confidence_threshold=0.5)
         node = model.all_files()[0]
-        assert node.result["year"] == 2008
         assert node.staged is True
+        assert node.result["year"] == 2008
 
     def test_no_tmdb_match_no_sources(self, mock_tmdb) -> None:
         model = _make_model("Unknown.Movie.2024.mkv")
@@ -153,8 +156,9 @@ class TestRunAutoPipeline:
         assert len(filename_sources) == 0
 
     def test_tmdb_episode_data_merged(self, mock_tmdb) -> None:
+        """With low threshold, episode data is fetched and merged."""
         model = _make_model("Breaking.Bad.S01E01.mkv")
-        run_auto_pipeline(model, token=TOKEN)
+        run_auto_pipeline(model, token=TOKEN, confidence_threshold=0.5)
         node = model.all_files()[0]
         tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
         assert len(tmdb_sources) >= 1
@@ -203,14 +207,18 @@ class TestTwoStageFlow:
         assert node.result.get("episode_title") == "Pilot"
 
     def test_tv_show_no_episode_match(self) -> None:
-        """TV show match with no matching episode keeps show-level sources."""
+        """TV show match with no matching episode keeps show-level sources.
+
+        Uses low threshold because guessit doesn't extract year from
+        'Breaking.Bad.S01E01.mkv', so show confidence is 0.7 (below 0.85).
+        """
         def mock_empty_episodes(*args, **kwargs):
             return []
 
         with _patch_tmdb()[0], _patch_tmdb()[1], \
              patch("tapes.tmdb.get_season_episodes", side_effect=mock_empty_episodes):
             model = _make_model("Breaking.Bad.S01E01.mkv")
-            run_auto_pipeline(model, token=TOKEN)
+            run_auto_pipeline(model, token=TOKEN, confidence_threshold=0.5)
             node = model.all_files()[0]
             # Show match should still apply
             assert node.result["title"] == "Breaking Bad"
@@ -226,7 +234,7 @@ class TestRefreshTmdbSource:
     def test_updates_tmdb_source(self, mock_tmdb) -> None:
         node = FileNode(
             path=Path("/media/Dune.mkv"),
-            result={"title": "Dune"},
+            result={"title": "Dune", "year": 2021},
             sources=[],
         )
         refresh_tmdb_source(node, token=TOKEN)
@@ -234,10 +242,22 @@ class TestRefreshTmdbSource:
         assert len(tmdb_sources) == 1
         assert tmdb_sources[0].confidence == 1.0
 
-    def test_replaces_existing_tmdb_source(self, mock_tmdb) -> None:
+    def test_updates_tmdb_source_no_year(self, mock_tmdb) -> None:
+        """Without year, confidence is penalized (0.7, not 1.0)."""
         node = FileNode(
             path=Path("/media/Dune.mkv"),
             result={"title": "Dune"},
+            sources=[],
+        )
+        refresh_tmdb_source(node, token=TOKEN)
+        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
+        assert len(tmdb_sources) == 1
+        assert tmdb_sources[0].confidence == pytest.approx(0.7)
+
+    def test_replaces_existing_tmdb_source(self, mock_tmdb) -> None:
+        node = FileNode(
+            path=Path("/media/Dune.mkv"),
+            result={"title": "Dune", "year": 2021},
             sources=[
                 Source(name="TMDB #1", fields={"title": "Old"}, confidence=0.5),
             ],
@@ -260,23 +280,30 @@ class TestRefreshTmdbSource:
         tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
         assert len(tmdb_sources) == 0
 
-    def test_confident_auto_accepts(self, mock_tmdb) -> None:
+    def test_confident_auto_accepts_with_year(self, mock_tmdb) -> None:
         node = FileNode(
             path=Path("/media/Dune.mkv"),
-            result={"title": "Dune"},
+            result={"title": "Dune", "year": 2021},
             sources=[],
         )
         refresh_tmdb_source(node, token=TOKEN)
         assert node.result.get("year") == 2021
+        assert node.staged is True
 
-    def test_title_only_match_auto_accepts(self, mock_tmdb) -> None:
+    def test_title_only_no_auto_accept(self, mock_tmdb) -> None:
+        """Without year, confidence is 0.7 -- below threshold, no auto-accept."""
         node = FileNode(
             path=Path("/media/test.mkv"),
             result={"title": "Breaking Bad"},
             sources=[],
         )
         refresh_tmdb_source(node, token=TOKEN)
-        assert node.result.get("year") == 2008
+        # Year not merged because confidence < threshold
+        assert node.result.get("year") is None
+        assert node.staged is False
+        # But TMDB source is still available for manual curation
+        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
+        assert len(tmdb_sources) == 1
 
     def test_no_token_skips(self) -> None:
         node = FileNode(
@@ -328,7 +355,7 @@ class TestRefreshQueryIntegration:
 
         node = FileNode(
             path=Path("/media/Dune.mkv"),
-            result={"title": "Dune"},
+            result={"title": "Dune", "year": 2021},
             sources=[],
         )
         root = FolderNode(name="root", children=[node])
@@ -349,7 +376,7 @@ class TestRefreshQueryIntegration:
 
         node = FileNode(
             path=Path("/media/Arrival.mkv"),
-            result={"title": "Arrival"},
+            result={"title": "Arrival", "year": 2016},
             sources=[],
         )
         root = FolderNode(name="root", children=[node])

@@ -52,44 +52,42 @@ def _string_similarity(a: str, b: str) -> float:
 
 
 def compute_confidence(query: dict, result: dict) -> float:
-    """Compute a weighted confidence score between query and result metadata.
+    """Compute weighted confidence between query and result metadata.
 
-    Fields used:
-    - title (weight 0.7): fuzzy string similarity (rapidfuzz)
-    - year (weight 0.3): exact = 1.0, off by 1 = 0.5, else 0.0
+    Fields:
+    - tmdb_id: exact match overrides to 1.0
+    - title: rapidfuzz string similarity (weight SHOW_TITLE_WEIGHT)
+    - year: integer distance (weight SHOW_YEAR_WEIGHT)
 
-    If no title in either dict, returns 0.0.
-    If no year in either dict, title similarity alone (weight 1.0).
+    Missing fields score 0.0 (penalized, not redistributed).
     Returns 0.0-1.0.
     """
-    query_title = query.get(TITLE)
-    result_title = result.get(TITLE)
+    # tmdb_id override: definitive identification
+    q_id = query.get(TMDB_ID)
+    r_id = result.get(TMDB_ID)
+    if q_id is not None and r_id is not None and q_id == r_id:
+        return 1.0
 
-    if not query_title or not result_title:
+    # Title is required -- without it, no basis for comparison
+    q_title = query.get(TITLE)
+    r_title = result.get(TITLE)
+    if not q_title or not r_title:
         return 0.0
 
-    title_score = _string_similarity(str(query_title), str(result_title))
+    title_score = _string_similarity(str(q_title), str(r_title))
 
-    query_year = query.get(YEAR)
-    result_year = result.get(YEAR)
+    # Year scoring -- missing year scores 0.0 (penalized)
+    year_score = 0.0
+    q_year = query.get(YEAR)
+    r_year = result.get(YEAR)
+    if q_year is not None and r_year is not None:
+        try:
+            diff = abs(int(q_year) - int(r_year))
+            year_score = max(0.0, 1.0 - diff / YEAR_TOLERANCE)
+        except (ValueError, TypeError):
+            pass
 
-    if query_year is None or result_year is None:
-        return title_score
-
-    # Year scoring
-    try:
-        diff = abs(int(query_year) - int(result_year))
-    except (ValueError, TypeError):
-        return title_score
-
-    if diff == 0:
-        year_score = 1.0
-    elif diff == 1:
-        year_score = 0.5
-    else:
-        year_score = 0.0
-
-    return 0.7 * title_score + 0.3 * year_score
+    return SHOW_TITLE_WEIGHT * title_score + SHOW_YEAR_WEIGHT * year_score
 
 
 def compute_episode_confidence(query: dict, episode: dict) -> float:

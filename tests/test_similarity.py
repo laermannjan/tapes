@@ -76,35 +76,34 @@ class TestComputeConfidence:
         # 0.7 * 1.0 + 0.3 * 0.0 = 0.7
         assert score == pytest.approx(0.7)
 
-    def test_title_match_no_year_in_query(self) -> None:
+    def test_no_year_in_query_penalized(self) -> None:
         score = compute_confidence(
             {"title": "Dune"},
             {"title": "Dune", "year": 2021},
         )
-        # No year in query -> title only = 1.0
-        assert score == pytest.approx(1.0)
+        # NULL year scores 0.0: 0.7 * 1.0 + 0.3 * 0.0 = 0.7
+        assert score == pytest.approx(0.7)
 
-    def test_title_match_no_year_in_result(self) -> None:
+    def test_no_year_in_result_penalized(self) -> None:
         score = compute_confidence(
             {"title": "Dune", "year": 2021},
             {"title": "Dune"},
         )
-        # No year in result -> title only = 1.0
-        assert score == pytest.approx(1.0)
+        assert score == pytest.approx(0.7)
+
+    def test_no_year_below_auto_accept(self) -> None:
+        """Missing year must keep score below auto-accept threshold."""
+        score = compute_confidence(
+            {"title": "Dune"},
+            {"title": "Dune"},
+        )
+        assert score < DEFAULT_AUTO_ACCEPT_THRESHOLD
 
     def test_no_title_in_query(self) -> None:
-        score = compute_confidence(
-            {"year": 2021},
-            {"title": "Dune", "year": 2021},
-        )
-        assert score == 0.0
+        assert compute_confidence({"year": 2021}, {"title": "Dune", "year": 2021}) == 0.0
 
     def test_no_title_in_result(self) -> None:
-        score = compute_confidence(
-            {"title": "Dune", "year": 2021},
-            {"year": 2021},
-        )
-        assert score == 0.0
+        assert compute_confidence({"title": "Dune", "year": 2021}, {"year": 2021}) == 0.0
 
     def test_both_empty_dicts(self) -> None:
         assert compute_confidence({}, {}) == 0.0
@@ -115,23 +114,51 @@ class TestComputeConfidence:
     def test_none_title_in_result(self) -> None:
         assert compute_confidence({"title": "Dune"}, {"title": None}) == 0.0
 
-    def test_partial_title_with_year(self) -> None:
+    def test_article_difference_with_year(self) -> None:
         score = compute_confidence(
             {"title": "Dark Knight", "year": 2008},
             {"title": "The Dark Knight", "year": 2008},
         )
-        # rapidfuzz WRatio scores "Dark Knight" vs "The Dark Knight" ~0.95
-        # year: exact = 1.0
-        # 0.7 * title_score + 0.3 * 1.0
-        assert score > 0.9
+        # rapidfuzz handles articles well; score should auto-accept
+        assert score > DEFAULT_AUTO_ACCEPT_THRESHOLD
 
-    def test_no_overlap_title(self) -> None:
+    def test_no_overlap_title_same_year(self) -> None:
         score = compute_confidence(
             {"title": "Dune", "year": 2021},
             {"title": "Arrival", "year": 2021},
         )
-        # title: 0.0, year: 1.0 -> 0.7 * 0 + 0.3 * 1.0 = 0.3
-        assert score == pytest.approx(0.3)
+        # Low title similarity + year match
+        assert score < 0.7
+
+    def test_tmdb_id_match_overrides(self) -> None:
+        score = compute_confidence(
+            {"title": "Wrong", "year": 1900, "tmdb_id": 12345},
+            {"title": "Different", "year": 2024, "tmdb_id": 12345},
+        )
+        assert score == 1.0
+
+    def test_tmdb_id_mismatch_scores_normally(self) -> None:
+        score = compute_confidence(
+            {"title": "Dune", "year": 2021, "tmdb_id": 111},
+            {"title": "Dune", "year": 2021, "tmdb_id": 222},
+        )
+        # Different IDs, fall through to normal scoring
+        assert score == pytest.approx(1.0)
+
+    def test_tmdb_id_only_in_query_no_override(self) -> None:
+        score = compute_confidence(
+            {"title": "Dune", "year": 2021, "tmdb_id": 12345},
+            {"title": "Dune", "year": 2021},
+        )
+        # tmdb_id absent from result, score normally
+        assert score == pytest.approx(1.0)
+
+    def test_tmdb_id_only_in_result_no_override(self) -> None:
+        score = compute_confidence(
+            {"title": "Dune", "year": 2021},
+            {"title": "Dune", "year": 2021, "tmdb_id": 12345},
+        )
+        assert score == pytest.approx(1.0)
 
 
 class TestComputeEpisodeConfidence:
