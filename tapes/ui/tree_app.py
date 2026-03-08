@@ -174,6 +174,7 @@ class TreeApp(App):
                 token=token,
                 confidence_threshold=threshold,
                 on_progress=on_progress,
+                post_update=self.call_from_thread,
             )
             self.call_from_thread(self._on_tmdb_done)
 
