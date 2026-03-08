@@ -165,7 +165,7 @@ def import_cmd(
     from tapes.ui.tree_app import TreeApp
 
     resolved = path.resolve()
-    files = scan(resolved, ignore_patterns=cfg.scan.ignore_patterns)
+    files = scan(resolved, ignore_patterns=cfg.scan.ignore_patterns, video_extensions=cfg.scan.video_extensions)
     if not files:
         console.print("No files found.")
         return
@@ -267,7 +267,7 @@ def tree_cmd(
     from tapes.ui.tree_app import TreeApp
 
     resolved = path.resolve()
-    files = scan(resolved, ignore_patterns=cfg.scan.ignore_patterns)
+    files = scan(resolved, ignore_patterns=cfg.scan.ignore_patterns, video_extensions=cfg.scan.video_extensions)
     if not files:
         console.print("No files found.")
         return

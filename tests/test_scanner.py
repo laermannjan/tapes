@@ -238,3 +238,39 @@ class TestVideoExtensions:
         assert ".mkv" in VIDEO_EXTENSIONS
         assert ".mp4" in VIDEO_EXTENSIONS
         assert len(VIDEO_EXTENSIONS) == 9
+
+
+class TestScanCustomVideoExtensions:
+    """scan() respects custom video_extensions for sample filtering."""
+
+    def test_custom_video_extensions_changes_sample_filtering(self, tmp_path: Path) -> None:
+        """Custom video_extensions changes which files count as video for sample filtering."""
+        _touch(tmp_path / "movie.mkv")
+        _touch(tmp_path / "movie.webm")
+        _touch(tmp_path / "sample.mkv")
+        _touch(tmp_path / "sample.webm")
+
+        # Default: .webm not in VIDEO_EXTENSIONS, so sample.webm is NOT filtered as video sample
+        files = scan(tmp_path)
+        names = {f.name for f in files}
+        assert "sample.webm" in names
+
+        # Custom extensions including .webm: sample.webm IS filtered
+        files2 = scan(tmp_path, video_extensions=[".mkv", ".webm"])
+        names2 = {f.name for f in files2}
+        assert "sample.webm" not in names2
+
+    def test_custom_video_extensions_none_uses_default(self, tmp_path: Path) -> None:
+        """Passing None falls back to the default VIDEO_EXTENSIONS."""
+        _touch(tmp_path / "sample.mkv")
+        # sample.mkv is filtered with default extensions
+        files = scan(tmp_path, video_extensions=None)
+        assert len(files) == 0
+
+    def test_custom_video_extensions_single_file(self, tmp_path: Path) -> None:
+        """Custom video_extensions works for single file mode too."""
+        f = _touch(tmp_path / "sample.webm")
+        # Default: .webm not a video, so sample.webm is kept
+        assert scan(f) == [f]
+        # Custom: .webm is a video, so sample.webm is filtered
+        assert scan(f, video_extensions=[".webm"]) == []

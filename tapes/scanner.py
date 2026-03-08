@@ -17,9 +17,9 @@ def _is_sample(path: Path) -> bool:
     return SAMPLE_RE.search(path.stem) is not None
 
 
-def _is_video(path: Path) -> bool:
+def _is_video(path: Path, extensions: frozenset[str] = VIDEO_EXTENSIONS) -> bool:
     """Return True if the file has a video extension (case-insensitive)."""
-    return path.suffix.lower() in VIDEO_EXTENSIONS
+    return path.suffix.lower() in extensions
 
 
 def _matches_ignore(path: Path, ignore_patterns: list[str]) -> bool:
@@ -31,6 +31,7 @@ def _matches_ignore(path: Path, ignore_patterns: list[str]) -> bool:
 def scan(
     root: Path,
     ignore_patterns: list[str] | None = None,
+    video_extensions: list[str] | None = None,
 ) -> list[Path]:
     """Find files recursively under *root*.
 
@@ -40,14 +41,19 @@ def scan(
     - Excludes files inside hidden directories (starting with '.').
     - If *root* is a single file, checks it directly.
     - Returns a sorted list of Path objects.
+
+    *video_extensions*, if provided, overrides the default ``VIDEO_EXTENSIONS``
+    for determining which files count as video (used for sample filtering).
     """
     if ignore_patterns is None:
         ignore_patterns = []
 
+    ext_set: frozenset[str] = frozenset(video_extensions) if video_extensions is not None else VIDEO_EXTENSIONS
+
     if root.is_file():
         if _matches_ignore(root, ignore_patterns):
             return []
-        if _is_video(root) and _is_sample(root):
+        if _is_video(root, ext_set) and _is_sample(root):
             return []
         return [root]
 
@@ -63,7 +69,7 @@ def scan(
             path = Path(dirpath) / name
             if _matches_ignore(path, ignore_patterns):
                 continue
-            if _is_video(path) and _is_sample(path):
+            if _is_video(path, ext_set) and _is_sample(path):
                 continue
             results.append(path)
 
