@@ -20,6 +20,7 @@ from tapes.ui.detail_render import (
     is_multi_value,
 )
 from tapes.ui.tree_render import (
+    ACCENT,
     CURSOR_BG,
     MUTED,
     compute_dest,
@@ -31,8 +32,6 @@ from tapes.ui.tree_render import (
 if TYPE_CHECKING:
     from rich.console import RenderableType
 
-# Accent color for focused panel and active tab.
-ACCENT = "#B1B9F9"
 # Column gap between field names, values, and source values.
 COL_GAP = "   "
 

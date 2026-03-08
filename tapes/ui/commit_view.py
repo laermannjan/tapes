@@ -10,13 +10,11 @@ from textual.widget import Widget
 
 from tapes.categorize import categorize_staged
 from tapes.tree_model import FileNode
-from tapes.ui.bottom_bar import OP_COLORS, OPERATIONS
-from tapes.ui.tree_render import MUTED, render_separator
+from tapes.ui.bottom_bar import OP_COLORS, cycle_operation_index
+from tapes.ui.tree_render import ACCENT, MUTED, render_separator
 
 if TYPE_CHECKING:
     from rich.console import RenderableType
-
-ACCENT = "#B1B9F9"
 
 
 class CommitView(Widget):
@@ -121,5 +119,4 @@ class CommitView(Widget):
 
     def cycle_operation(self, delta: int = 1) -> None:
         """Cycle to next/previous operation."""
-        idx = OPERATIONS.index(self.operation)
-        self.operation = OPERATIONS[(idx + delta) % len(OPERATIONS)]
+        self.operation = cycle_operation_index(self.operation, delta)

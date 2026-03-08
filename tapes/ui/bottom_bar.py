@@ -8,24 +8,25 @@ from rich.text import Text
 from textual.reactive import reactive
 from textual.widget import Widget
 
-from tapes.ui.tree_render import MUTED, render_separator
+from tapes.ui.tree_render import ACCENT, EMBER, INACTIVE, MUTED, SOFT_BLUE, SOFT_GREEN, render_separator
 
 if TYPE_CHECKING:
     from rich.console import RenderableType
 
-# Accent color for active search separator.
-ACCENT = "#B1B9F9"
-# Inactive separator color.
-INACTIVE = "#555555"
-
 OPERATIONS = ["copy", "move", "link", "hardlink"]
 
 OP_COLORS: dict[str, str] = {
-    "copy": "#86E89A",
-    "move": "#E07A47",
-    "link": "#7AB8FF",
-    "hardlink": "#7AB8FF",
+    "copy": SOFT_GREEN,
+    "move": EMBER,
+    "link": SOFT_BLUE,
+    "hardlink": SOFT_BLUE,
 }
+
+
+def cycle_operation_index(current: str, delta: int = 1) -> str:
+    """Return the next operation after cycling by delta."""
+    idx = OPERATIONS.index(current)
+    return OPERATIONS[(idx + delta) % len(OPERATIONS)]
 
 
 class BottomBar(Widget):
@@ -78,5 +79,4 @@ class BottomBar(Widget):
 
     def cycle_operation(self, delta: int = 1) -> None:
         """Cycle to next/previous operation."""
-        idx = OPERATIONS.index(self.operation)
-        self.operation = OPERATIONS[(idx + delta) % len(OPERATIONS)]
+        self.operation = cycle_operation_index(self.operation, delta)
