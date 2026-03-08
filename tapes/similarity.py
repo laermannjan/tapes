@@ -47,8 +47,8 @@ def _string_similarity(a: str, b: str) -> float:
     return STRICT_WEIGHT * strict + (1 - STRICT_WEIGHT) * lenient
 
 
-def compute_confidence(query: dict, result: dict) -> float:
-    """Compute weighted confidence between query and result metadata.
+def compute_similarity(query: dict, result: dict) -> float:
+    """Compute weighted similarity between query and result metadata.
 
     Fields:
     - tmdb_id: exact match overrides to 1.0

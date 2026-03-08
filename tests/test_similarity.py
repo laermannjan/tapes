@@ -6,8 +6,8 @@ import pytest
 from tapes.config import DEFAULT_AUTO_ACCEPT_THRESHOLD
 from tapes.similarity import (
     _string_similarity,
-    compute_confidence,
     compute_episode_confidence,
+    compute_similarity,
 )
 
 
@@ -58,16 +58,16 @@ class TestStringSimilarity:
         assert exact > partial
 
 
-class TestComputeConfidence:
+class TestComputeSimilarity:
     def test_exact_title_and_year(self) -> None:
-        score = compute_confidence(
+        score = compute_similarity(
             {"title": "Dune", "year": 2021},
             {"title": "Dune", "year": 2021},
         )
         assert score == pytest.approx(1.0)
 
     def test_title_match_year_off_by_one(self) -> None:
-        score = compute_confidence(
+        score = compute_similarity(
             {"title": "Dune", "year": 2021},
             {"title": "Dune", "year": 2020},
         )
@@ -75,7 +75,7 @@ class TestComputeConfidence:
         assert score == pytest.approx(0.85)
 
     def test_title_match_year_mismatch(self) -> None:
-        score = compute_confidence(
+        score = compute_similarity(
             {"title": "Dune", "year": 2021},
             {"title": "Dune", "year": 1984},
         )
@@ -83,7 +83,7 @@ class TestComputeConfidence:
         assert score == pytest.approx(0.7)
 
     def test_no_year_in_query_penalized(self) -> None:
-        score = compute_confidence(
+        score = compute_similarity(
             {"title": "Dune"},
             {"title": "Dune", "year": 2021},
         )
@@ -91,7 +91,7 @@ class TestComputeConfidence:
         assert score == pytest.approx(0.7)
 
     def test_no_year_in_result_penalized(self) -> None:
-        score = compute_confidence(
+        score = compute_similarity(
             {"title": "Dune", "year": 2021},
             {"title": "Dune"},
         )
@@ -99,29 +99,29 @@ class TestComputeConfidence:
 
     def test_no_year_below_auto_accept(self) -> None:
         """Missing year must keep score below auto-accept threshold."""
-        score = compute_confidence(
+        score = compute_similarity(
             {"title": "Dune"},
             {"title": "Dune"},
         )
         assert score < DEFAULT_AUTO_ACCEPT_THRESHOLD
 
     def test_no_title_in_query(self) -> None:
-        assert compute_confidence({"year": 2021}, {"title": "Dune", "year": 2021}) == 0.0
+        assert compute_similarity({"year": 2021}, {"title": "Dune", "year": 2021}) == 0.0
 
     def test_no_title_in_result(self) -> None:
-        assert compute_confidence({"title": "Dune", "year": 2021}, {"year": 2021}) == 0.0
+        assert compute_similarity({"title": "Dune", "year": 2021}, {"year": 2021}) == 0.0
 
     def test_both_empty_dicts(self) -> None:
-        assert compute_confidence({}, {}) == 0.0
+        assert compute_similarity({}, {}) == 0.0
 
     def test_none_title_in_query(self) -> None:
-        assert compute_confidence({"title": None}, {"title": "Dune"}) == 0.0
+        assert compute_similarity({"title": None}, {"title": "Dune"}) == 0.0
 
     def test_none_title_in_result(self) -> None:
-        assert compute_confidence({"title": "Dune"}, {"title": None}) == 0.0
+        assert compute_similarity({"title": "Dune"}, {"title": None}) == 0.0
 
     def test_article_difference_with_year(self) -> None:
-        score = compute_confidence(
+        score = compute_similarity(
             {"title": "Dark Knight", "year": 2008},
             {"title": "The Dark Knight", "year": 2008},
         )
@@ -129,7 +129,7 @@ class TestComputeConfidence:
         assert score > DEFAULT_AUTO_ACCEPT_THRESHOLD
 
     def test_no_overlap_title_same_year(self) -> None:
-        score = compute_confidence(
+        score = compute_similarity(
             {"title": "Dune", "year": 2021},
             {"title": "Arrival", "year": 2021},
         )
@@ -137,14 +137,14 @@ class TestComputeConfidence:
         assert score < 0.7
 
     def test_tmdb_id_match_overrides(self) -> None:
-        score = compute_confidence(
+        score = compute_similarity(
             {"title": "Wrong", "year": 1900, "tmdb_id": 12345},
             {"title": "Different", "year": 2024, "tmdb_id": 12345},
         )
         assert score == 1.0
 
     def test_tmdb_id_mismatch_scores_normally(self) -> None:
-        score = compute_confidence(
+        score = compute_similarity(
             {"title": "Dune", "year": 2021, "tmdb_id": 111},
             {"title": "Dune", "year": 2021, "tmdb_id": 222},
         )
@@ -152,7 +152,7 @@ class TestComputeConfidence:
         assert score == pytest.approx(1.0)
 
     def test_tmdb_id_only_in_query_no_override(self) -> None:
-        score = compute_confidence(
+        score = compute_similarity(
             {"title": "Dune", "year": 2021, "tmdb_id": 12345},
             {"title": "Dune", "year": 2021},
         )
@@ -160,7 +160,7 @@ class TestComputeConfidence:
         assert score == pytest.approx(1.0)
 
     def test_tmdb_id_only_in_result_no_override(self) -> None:
-        score = compute_confidence(
+        score = compute_similarity(
             {"title": "Dune", "year": 2021},
             {"title": "Dune", "year": 2021, "tmdb_id": 12345},
         )

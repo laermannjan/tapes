@@ -17,7 +17,7 @@ from tapes.fields import (
     TMDB_ID,
     YEAR,
 )
-from tapes.similarity import compute_confidence, compute_episode_confidence
+from tapes.similarity import compute_episode_confidence, compute_similarity
 from tapes.ui.tree_model import FileNode, Source, TreeModel
 
 logger = logging.getLogger(__name__)
@@ -273,7 +273,7 @@ def _query_tmdb_for_node(
     # Create sources for each search result
     tmdb_sources: list[Source] = []
     for i, sr in enumerate(search_results[:3]):
-        confidence = compute_confidence(node.result, sr)
+        confidence = compute_similarity(node.result, sr)
         source = Source(
             name=f"TMDB #{i + 1}",
             fields=dict(sr),
