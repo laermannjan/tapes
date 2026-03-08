@@ -303,3 +303,91 @@ def test_library_config_custom() -> None:
     cfg = TapesConfig(library=LibraryConfig(operation="move", movie_template="{title}.{ext}"))
     assert cfg.library.operation == "move"
     assert cfg.library.movie_template == "{title}.{ext}"
+
+
+# ---------------------------------------------------------------------------
+# Validation tests
+# ---------------------------------------------------------------------------
+
+
+class TestFieldValidation:
+    """Test Field constraints on numeric config values."""
+
+    def test_threshold_below_zero_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            MetadataConfig(auto_accept_threshold=-0.1)
+
+    def test_threshold_above_one_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            MetadataConfig(auto_accept_threshold=1.5)
+
+    def test_threshold_boundary_values(self) -> None:
+        assert MetadataConfig(auto_accept_threshold=0.0).auto_accept_threshold == 0.0
+        assert MetadataConfig(auto_accept_threshold=1.0).auto_accept_threshold == 1.0
+
+    def test_margin_threshold_out_of_range(self) -> None:
+        with pytest.raises(ValidationError):
+            MetadataConfig(margin_accept_threshold=2.0)
+
+    def test_min_accept_margin_out_of_range(self) -> None:
+        with pytest.raises(ValidationError):
+            MetadataConfig(min_accept_margin=-0.5)
+
+    def test_max_results_zero_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            MetadataConfig(max_results=0)
+
+    def test_max_workers_zero_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            AdvancedConfig(max_workers=0)
+
+    def test_tmdb_timeout_zero_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            AdvancedConfig(tmdb_timeout=0.0)
+
+    def test_tmdb_timeout_negative_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            AdvancedConfig(tmdb_timeout=-1.0)
+
+    def test_tmdb_retries_zero_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            AdvancedConfig(tmdb_retries=0)
+
+
+class TestTemplateValidation:
+    """Test that templates only reference known field names."""
+
+    def test_default_templates_valid(self) -> None:
+        # Should not raise
+        LibraryConfig()
+
+    def test_valid_custom_template(self) -> None:
+        cfg = LibraryConfig(movie_template="{title} ({year})/{title}.{ext}")
+        assert "{title}" in cfg.movie_template
+
+    def test_unknown_field_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="unknown template field"):
+            LibraryConfig(movie_template="{titl}/{title}.{ext}")
+
+    def test_tv_template_unknown_field_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="unknown template field"):
+            LibraryConfig(tv_template="{show_name}/{title}.{ext}")
+
+    def test_literal_braces_accepted(self) -> None:
+        """Doubled braces produce literal braces and should not be rejected."""
+        cfg = LibraryConfig(movie_template="{title} {{{year}}}.{ext}")
+        assert cfg.movie_template == "{title} {{{year}}}.{ext}"
+
+    def test_guessit_fields_accepted(self) -> None:
+        """Fields from guessit (codec, media_source, etc.) are valid."""
+        cfg = LibraryConfig(movie_template="{title} [{codec}].{ext}")
+        assert "{codec}" in cfg.movie_template
+
+    def test_all_known_fields_accepted(self) -> None:
+        """Every field in KNOWN_TEMPLATE_FIELDS can be used."""
+        from tapes.config import KNOWN_TEMPLATE_FIELDS
+
+        for field in KNOWN_TEMPLATE_FIELDS:
+            tmpl = f"{{{field}}}.txt"
+            cfg = LibraryConfig(movie_template=tmpl)
+            assert cfg.movie_template == tmpl

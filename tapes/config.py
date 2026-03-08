@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import os
+import string
 from pathlib import Path
 from typing import Any, Literal
 
 import yaml
 from platformdirs import user_config_dir
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
 
@@ -22,10 +23,40 @@ DEFAULT_AUTO_ACCEPT_THRESHOLD: float = 0.85
 
 class MetadataConfig(BaseModel):
     tmdb_token: str = ""
-    auto_accept_threshold: float = DEFAULT_AUTO_ACCEPT_THRESHOLD
-    margin_accept_threshold: float = 0.6
-    min_accept_margin: float = 0.15
-    max_results: int = 3
+    auto_accept_threshold: float = Field(default=DEFAULT_AUTO_ACCEPT_THRESHOLD, ge=0.0, le=1.0)
+    margin_accept_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
+    min_accept_margin: float = Field(default=0.15, ge=0.0, le=1.0)
+    max_results: int = Field(default=3, ge=1)
+
+
+# Known template fields. Templates may only reference these (plus "ext" which
+# is always injected from the file suffix).
+KNOWN_TEMPLATE_FIELDS: frozenset[str] = frozenset(
+    {
+        "title",
+        "year",
+        "season",
+        "episode",
+        "episode_title",
+        "media_type",
+        "tmdb_id",
+        "ext",
+        "codec",
+        "media_source",
+        "audio",
+        "resolution",
+        "release_group",
+    }
+)
+
+
+def _validate_template(template: str) -> str:
+    """Check that a template string only references known field names."""
+    for _, field_name, _, _ in string.Formatter().parse(template):
+        if field_name is not None and field_name not in KNOWN_TEMPLATE_FIELDS:
+            msg = f"unknown template field {{{field_name}}}; valid fields: {sorted(KNOWN_TEMPLATE_FIELDS)}"
+            raise ValueError(msg)
+    return template
 
 
 class LibraryConfig(BaseModel):
@@ -37,11 +68,16 @@ class LibraryConfig(BaseModel):
     )
     operation: Literal["copy", "move", "link", "hardlink"] = "copy"
 
+    @field_validator("movie_template", "tv_template")
+    @classmethod
+    def _check_template_fields(cls, v: str) -> str:
+        return _validate_template(v)
+
 
 class AdvancedConfig(BaseModel):
-    max_workers: int = 4
-    tmdb_timeout: float = 10.0
-    tmdb_retries: int = 3
+    max_workers: int = Field(default=4, ge=1)
+    tmdb_timeout: float = Field(default=10.0, gt=0.0)
+    tmdb_retries: int = Field(default=3, ge=1)
 
 
 # Module-level store for YAML data injected by load_config before TapesConfig

@@ -15,7 +15,12 @@ library:
   # tv: /media/tv
 
   # Path templates. Available fields: title, year, season, episode,
-  # episode_title, ext, plus any guessit fields (codec, media_source, audio).
+  # episode_title, media_type, tmdb_id, ext, codec, media_source, audio,
+  # resolution, release_group.
+  #
+  # Use Python format syntax: {field} or {field:spec} (e.g. {season:02d}).
+  # For literal braces in output, double them: {{{year}}} produces {2024}.
+  # Unknown field names are rejected at startup.
   # movie_template: "{title} ({year})/{title} ({year}).{ext}"
   # tv_template: "{title} ({year})/Season {season:02d}/{title} - S{season:02d}E{episode:02d} - {episode_title}.{ext}"
 

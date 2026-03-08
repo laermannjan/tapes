@@ -270,3 +270,37 @@ class TestAlwaysUsesLoadConfig:
             runner.invoke(app, ["import", "--operation", "move", str(scan_dir)])
             _kwargs = mock_app_cls.call_args[1]
             assert _kwargs["config"].library.operation == "move"
+
+    def test_import_library_movies_flag_reaches_config(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """--library-movies flag sets cfg.library.movies."""
+        monkeypatch.delenv("TAPES_CONFIG", raising=False)
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+
+        scan_dir = tmp_path / "media"
+        scan_dir.mkdir()
+        (scan_dir / "test.mkv").write_text("fake")
+
+        from unittest.mock import patch
+
+        with patch("tapes.ui.tree_app.TreeApp") as mock_app_cls:
+            mock_app_cls.return_value.run.return_value = None
+            runner.invoke(app, ["import", "--library-movies", "/my/movies", str(scan_dir)])
+            _kwargs = mock_app_cls.call_args[1]
+            assert _kwargs["config"].library.movies == "/my/movies"
+
+    def test_import_library_tv_flag_reaches_config(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """--library-tv flag sets cfg.library.tv."""
+        monkeypatch.delenv("TAPES_CONFIG", raising=False)
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+
+        scan_dir = tmp_path / "media"
+        scan_dir.mkdir()
+        (scan_dir / "test.mkv").write_text("fake")
+
+        from unittest.mock import patch
+
+        with patch("tapes.ui.tree_app.TreeApp") as mock_app_cls:
+            mock_app_cls.return_value.run.return_value = None
+            runner.invoke(app, ["import", "--library-tv", "/my/tv", str(scan_dir)])
+            _kwargs = mock_app_cls.call_args[1]
+            assert _kwargs["config"].library.tv == "/my/tv"
