@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
@@ -15,25 +14,25 @@ console = Console(highlight=False)
 
 
 @app.callback()
-def main() -> None:
+def main(
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Debug logging"),
+) -> None:
     """Tapes -- organise your movie and TV show files."""
+    import logging
+
+    if verbose:
+        logging.basicConfig(level=logging.WARNING)
+        logging.getLogger("tapes").setLevel(logging.DEBUG)
 
 
 @app.command("import")
 def import_cmd(
     path: Path = typer.Argument(..., help="Directory or file to import"),
-    dry_run: bool = typer.Option(
-        False, "--dry-run", help="Preview only, no file operations ever"
-    ),
-    config_file: Optional[Path] = typer.Option(
-        None, "--config", "-c", help="Path to config file"
-    ),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Preview only, no file operations ever"),
+    config_file: Path | None = typer.Option(None, "--config", "-c", help="Path to config file"),
 ) -> None:
     """Import video files into the library."""
-    if config_file is not None:
-        cfg = load_config(config_file)
-    else:
-        cfg = TapesConfig()
+    cfg = load_config(config_file) if config_file is not None else TapesConfig()
 
     if dry_run:
         cfg.dry_run = True
@@ -65,15 +64,13 @@ def import_cmd(
 @app.command("tree")
 def tree_cmd(
     path: Path = typer.Argument(..., help="Directory to scan"),
-    config_file: Optional[Path] = typer.Option(
-        None, "--config", "-c", help="Path to config file"
-    ),
+    config_file: Path | None = typer.Option(None, "--config", "-c", help="Path to config file"),
 ) -> None:
     """Launch the tree TUI (dev command)."""
     from tapes.scanner import scan
+    from tapes.ui.pipeline import run_guessit_pass
     from tapes.ui.tree_app import TreeApp
     from tapes.ui.tree_model import build_tree
-    from tapes.ui.pipeline import run_guessit_pass
 
     cfg = load_config(config_file) if config_file else TapesConfig()
     resolved = path.resolve()

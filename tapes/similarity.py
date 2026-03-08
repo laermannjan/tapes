@@ -3,12 +3,17 @@
 Uses rapidfuzz for string similarity. Each field has its own matching
 strategy (fuzzy, integer distance, exact) and weight.
 """
+
 from __future__ import annotations
+
+import logging
 
 from rapidfuzz import fuzz, utils
 
 from tapes.config import DEFAULT_AUTO_ACCEPT_THRESHOLD
 from tapes.fields import EPISODE, EPISODE_TITLE, SEASON, TITLE, TMDB_ID, YEAR
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Configuration -- all tuning parameters in one place
@@ -32,8 +37,8 @@ EPISODE_TITLE_WEIGHT = 0.10
 YEAR_TOLERANCE = 2
 
 # Two-tier auto-accept thresholds
-MARGIN_ACCEPT_THRESHOLD = 0.6   # minimum similarity for tier 2
-MIN_ACCEPT_MARGIN = 0.15        # minimum gap between best and second
+MARGIN_ACCEPT_THRESHOLD = 0.6  # minimum similarity for tier 2
+MIN_ACCEPT_MARGIN = 0.15  # minimum gap between best and second
 
 
 def _string_similarity(a: str, b: str) -> float:
@@ -49,7 +54,9 @@ def _string_similarity(a: str, b: str) -> float:
         return 0.0
     strict = fuzz.ratio(a, b, processor=utils.default_process) / 100.0
     lenient = fuzz.token_set_ratio(a, b, processor=utils.default_process) / 100.0
-    return STRICT_WEIGHT * strict + (1 - STRICT_WEIGHT) * lenient
+    blend = STRICT_WEIGHT * strict + (1 - STRICT_WEIGHT) * lenient
+    logger.debug("string_sim %r vs %r: ratio=%.2f tset=%.2f blend=%.2f", a, b, strict, lenient, blend)
+    return blend
 
 
 def compute_similarity(query: dict, result: dict) -> float:
@@ -88,7 +95,16 @@ def compute_similarity(query: dict, result: dict) -> float:
         except (ValueError, TypeError):
             pass
 
-    return SHOW_TITLE_WEIGHT * title_score + SHOW_YEAR_WEIGHT * year_score
+    total = SHOW_TITLE_WEIGHT * title_score + SHOW_YEAR_WEIGHT * year_score
+    logger.debug(
+        "similarity %r vs %r: title=%.2f year=%.2f -> %.2f",
+        q_title,
+        r_title,
+        title_score,
+        year_score,
+        total,
+    )
+    return total
 
 
 def compute_episode_similarity(query: dict, episode: dict) -> float:
@@ -131,7 +147,16 @@ def compute_episode_similarity(query: dict, episode: dict) -> float:
     if q_title and e_title:
         score += EPISODE_TITLE_WEIGHT * _string_similarity(str(q_title), str(e_title))
 
-    return min(score, 1.0)
+    score = min(score, 1.0)
+    logger.debug(
+        "episode_sim S%sE%s vs S%sE%s: %.2f",
+        query.get(SEASON, "?"),
+        query.get(EPISODE, "?"),
+        episode.get(SEASON, "?"),
+        episode.get(EPISODE, "?"),
+        score,
+    )
+    return score
 
 
 def should_auto_accept(
@@ -157,9 +182,28 @@ def should_auto_accept(
         return False
     best = similarities[0]
     if best >= threshold:
+        logger.debug("auto-accept tier 1: best=%.2f >= threshold=%.2f", best, threshold)
         return True
     if len(similarities) >= 2 and best >= margin_threshold:
         margin = best - similarities[1]
         if margin >= min_margin:
+            logger.debug(
+                "auto-accept tier 2: best=%.2f, margin=%.2f (%.2f - %.2f)",
+                best,
+                margin,
+                best,
+                similarities[1],
+            )
             return True
+        logger.debug(
+            "auto-accept rejected: margin=%.2f < %.2f (best=%.2f, second=%.2f)",
+            margin,
+            min_margin,
+            best,
+            similarities[1],
+        )
+    elif len(similarities) == 1:
+        logger.debug("auto-accept rejected: single candidate best=%.2f < threshold=%.2f", best, threshold)
+    else:
+        logger.debug("auto-accept rejected: best=%.2f < margin_threshold=%.2f", best, margin_threshold)
     return False
