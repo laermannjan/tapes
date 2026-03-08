@@ -190,3 +190,37 @@ def import_cmd(
         config=cfg,
     )
     tui.run()
+
+
+def _start_server(command: str, host: str, port: int) -> None:
+    """Start the textual-serve server. Extracted for testability."""
+    from textual_serve.server import Server
+
+    server = Server(command, host=host, port=port, title="tapes")
+    server.serve()
+
+
+@app.command("serve")
+def serve_cmd(
+    import_path: Path | None = typer.Option(None, "--import-path", help="Directory to import"),
+    host: str = typer.Option("0.0.0.0", "--host", help="Bind address"),  # noqa: S104
+    port: int = typer.Option(8080, "--port", help="Port number"),
+    config_file: Path | None = typer.Option(None, "--config", "-c", help="Path to config file"),
+) -> None:
+    """Serve the tapes TUI over the browser."""
+    import shlex
+
+    cfg = load_config(config_path=config_file)
+
+    # Resolve import path: --import-path flag > config
+    resolved_path = import_path or (Path(cfg.scan.import_path) if cfg.scan.import_path else None)
+    if resolved_path is None:
+        console.print("[red]Error:[/red] No import path. Use --import-path or set TAPES_SCAN__IMPORT_PATH.")
+        raise typer.Exit(code=1)
+
+    cmd = f"tapes import {shlex.quote(str(resolved_path))}"
+    if config_file:
+        cmd += f" --config {shlex.quote(str(config_file))}"
+
+    console.print(f"Serving tapes on http://{host}:{port}")
+    _start_server(cmd, host, port)

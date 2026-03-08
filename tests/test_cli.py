@@ -302,3 +302,80 @@ class TestImportPathFallback:
 
         result = runner.invoke(app, ["import"])
         assert result.exit_code != 0
+
+
+# ---------------------------------------------------------------------------
+# Serve command
+# ---------------------------------------------------------------------------
+
+
+def test_serve_help():
+    result = runner.invoke(app, ["serve", "--help"])
+    assert result.exit_code == 0
+    assert "--host" in result.output
+    assert "--port" in result.output
+    assert "--import-path" in result.output
+
+
+class TestServeCommand:
+    def test_serve_errors_when_no_import_path(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("TAPES_CONFIG", raising=False)
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+        result = runner.invoke(app, ["serve"])
+        assert result.exit_code != 0
+
+    def test_serve_constructs_command(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("TAPES_CONFIG", raising=False)
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+
+        from unittest.mock import patch
+
+        with patch("tapes.cli._start_server") as mock_start:
+            runner.invoke(app, ["serve", "--import-path", "/media/incoming"])
+            mock_start.assert_called_once()
+            cmd, host, port = mock_start.call_args[0]
+            assert "/media/incoming" in cmd
+            assert host == "0.0.0.0"  # noqa: S104
+            assert port == 8080
+
+    def test_serve_custom_host_port(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("TAPES_CONFIG", raising=False)
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+
+        from unittest.mock import patch
+
+        with patch("tapes.cli._start_server") as mock_start:
+            runner.invoke(app, ["serve", "--import-path", "/media", "--host", "127.0.0.1", "--port", "3000"])
+            mock_start.assert_called_once()
+            _cmd, host, port = mock_start.call_args[0]
+            assert host == "127.0.0.1"
+            assert port == 3000
+
+    def test_serve_uses_config_import_path(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("TAPES_CONFIG", raising=False)
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+        monkeypatch.setenv("TAPES_SCAN__IMPORT_PATH", "/configured/path")
+
+        from unittest.mock import patch
+
+        with patch("tapes.cli._start_server") as mock_start:
+            runner.invoke(app, ["serve"])
+            mock_start.assert_called_once()
+            cmd = mock_start.call_args[0][0]
+            assert "/configured/path" in cmd
+
+    def test_serve_passes_config_file(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("TAPES_CONFIG", raising=False)
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text("scan:\n  import_path: /media\n")
+
+        from unittest.mock import patch
+
+        with patch("tapes.cli._start_server") as mock_start:
+            runner.invoke(app, ["serve", "--config", str(config_file)])
+            mock_start.assert_called_once()
+            cmd = mock_start.call_args[0][0]
+            assert "--config" in cmd
+            assert str(config_file) in cmd
