@@ -537,18 +537,23 @@ def _query_episodes(
     for i, src in enumerate(top_sources):
         src.name = f"TMDB #{i + 1}"
 
-    # Always apply the best episode's fields to the result.
-    # We're only here because the show was confidently matched,
-    # so the best episode data should be used regardless of its
-    # confidence score.
+    # Auto-apply episode only if confident; otherwise just add sources for curation
+    ep_similarities = [s.confidence for s in top_sources]
     _top_copy = list(top_sources)
 
-    def _apply_episode(_n: FileNode = node, _top: list[Source] = _top_copy) -> None:
-        if _top:
-            best_ep = _top[0]
-            for field, val in best_ep.fields.items():
+    if should_auto_accept(ep_similarities, threshold=threshold):
+        _best_fields = dict(top_sources[0].fields)
+
+        def _apply_episode(_n: FileNode = node, _f: dict = _best_fields, _top: list[Source] = _top_copy) -> None:
+            for field, val in _f.items():
                 if val is not None:
                     _n.result[field] = val
-        _n.sources.extend(_top)
+            _n.sources.extend(_top)
 
-    _post(_apply_episode)
+        _post(_apply_episode)
+    else:
+
+        def _add_episode_sources(_n: FileNode = node, _top: list[Source] = _top_copy) -> None:
+            _n.sources.extend(_top)
+
+        _post(_add_episode_sources)

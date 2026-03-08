@@ -757,6 +757,51 @@ class TestTmdbIdShortcut:
             mock_search.assert_called_once()
 
 
+class TestEpisodeConfidenceGate:
+    """Episode application should respect confidence threshold."""
+
+    def test_low_confidence_episode_not_applied(self, mock_tmdb) -> None:
+        """When episode confidence is low, don't overwrite result fields."""
+        node = FileNode(
+            path=Path("/media/Breaking.Bad.S03E05.mkv"),
+            result={
+                "title": "Breaking Bad",
+                "year": 2008,
+                "tmdb_id": 1396,
+                "media_type": "episode",
+                "season": 3,
+                "episode": 5,
+            },
+            sources=[],
+        )
+        # Mock returns only season 1 episodes. Season 3 won't match,
+        # so episode confidence will be low (season mismatch).
+        refresh_tmdb_source(node, token=TOKEN)
+        # Season/episode should NOT be overwritten to S01E01
+        assert node.result["season"] == 3
+        assert node.result["episode"] == 5
+        # But episode sources should still be added for curation
+        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
+        assert len(tmdb_sources) >= 1
+
+    def test_high_confidence_episode_applied(self, mock_tmdb) -> None:
+        """When episode confidence is high, apply as before."""
+        node = FileNode(
+            path=Path("/media/Breaking.Bad.S01E01.mkv"),
+            result={
+                "title": "Breaking Bad",
+                "year": 2008,
+                "tmdb_id": 1396,
+                "media_type": "episode",
+                "season": 1,
+                "episode": 1,
+            },
+            sources=[],
+        )
+        refresh_tmdb_source(node, token=TOKEN)
+        assert node.result.get("episode_title") == "Pilot"
+
+
 class TestApplySourceAllClear:
     """Tests for DetailView.apply_source_all_clear preserving per-file fields."""
 
