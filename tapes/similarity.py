@@ -93,43 +93,41 @@ def compute_confidence(query: dict, result: dict) -> float:
 def compute_episode_confidence(query: dict, episode: dict) -> float:
     """Score an episode match against a query.
 
-    Considers:
-    - Season number match (exact = 0.25 boost)
-    - Episode number match (exact = 0.65 boost)
-    - Episode title similarity (weight 0.1, if available in query)
+    Fields:
+    - season: exact integer match (weight EPISODE_SEASON_WEIGHT)
+    - episode: exact integer match (weight EPISODE_NUMBER_WEIGHT)
+    - episode_title: rapidfuzz similarity (weight EPISODE_TITLE_WEIGHT)
 
-    Season + episode match = 0.9, well above the 0.85 threshold.
-    This is important because guessit never provides episode_title,
-    so the title bonus rarely applies during auto-pipeline.
-
+    Missing fields score 0.0 (penalized).
+    Season + episode match = 0.9, above the 0.85 auto-accept threshold.
     Returns 0.0-1.0.
     """
     score = 0.0
 
-    # Season number match
+    # Season number (exact match)
     q_season = query.get(SEASON)
     e_season = episode.get(SEASON)
     if q_season is not None and e_season is not None:
         try:
             if int(q_season) == int(e_season):
-                score += 0.25
+                score += EPISODE_SEASON_WEIGHT
         except (ValueError, TypeError):
             pass
 
-    # Episode number match (most important)
+    # Episode number (exact match, most important)
     q_ep = query.get(EPISODE)
     e_ep = episode.get(EPISODE)
     if q_ep is not None and e_ep is not None:
         try:
             if int(q_ep) == int(e_ep):
-                score += 0.65
+                score += EPISODE_NUMBER_WEIGHT
         except (ValueError, TypeError):
             pass
 
-    # Episode title similarity (if query has episode_title)
+    # Episode title (fuzzy match)
     q_title = query.get(EPISODE_TITLE, "")
     e_title = episode.get(EPISODE_TITLE, "")
     if q_title and e_title:
-        score += 0.1 * _string_similarity(str(q_title), str(e_title))
+        score += EPISODE_TITLE_WEIGHT * _string_similarity(str(q_title), str(e_title))
 
     return min(score, 1.0)

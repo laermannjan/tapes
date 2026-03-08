@@ -167,7 +167,6 @@ class TestComputeEpisodeConfidence:
             {"season": 1, "episode": 1},
             {"season": 1, "episode": 1},
         )
-        # 0.65 (ep) + 0.25 (season) = 0.9
         assert score == pytest.approx(0.9)
 
     def test_episode_match_only(self) -> None:
@@ -191,12 +190,11 @@ class TestComputeEpisodeConfidence:
         )
         assert score == pytest.approx(0.0)
 
-    def test_episode_title_similarity(self) -> None:
+    def test_episode_title_exact(self) -> None:
         score = compute_episode_confidence(
             {"season": 1, "episode": 1, "episode_title": "Pilot"},
             {"season": 1, "episode": 1, "episode_title": "Pilot"},
         )
-        # 0.65 (ep) + 0.25 (season) + 0.1 * 1.0 (title) = 1.0
         assert score == pytest.approx(1.0)
 
     def test_episode_title_partial(self) -> None:
@@ -204,16 +202,12 @@ class TestComputeEpisodeConfidence:
             {"season": 1, "episode": 1, "episode_title": "The Pilot Episode"},
             {"season": 1, "episode": 1, "episode_title": "Pilot"},
         )
-        # 0.65 + 0.25 + 0.1 * rapidfuzz("The Pilot Episode", "Pilot")
-        # rapidfuzz WRatio scores this ~0.9, so total ~0.99
+        # Season (0.25) + episode (0.65) + title_weight * WRatio > 0.95
         assert score > 0.95
+        assert score <= 1.0
 
     def test_empty_query(self) -> None:
-        score = compute_episode_confidence(
-            {},
-            {"season": 1, "episode": 1},
-        )
-        assert score == pytest.approx(0.0)
+        assert compute_episode_confidence({}, {"season": 1, "episode": 1}) == pytest.approx(0.0)
 
     def test_wrong_episode_right_season(self) -> None:
         score = compute_episode_confidence(
@@ -223,12 +217,31 @@ class TestComputeEpisodeConfidence:
         assert score == pytest.approx(0.25)
 
     def test_capped_at_1(self) -> None:
-        # Even with all fields matching, should not exceed 1.0
         score = compute_episode_confidence(
             {"season": 1, "episode": 1, "episode_title": "Pilot"},
             {"season": 1, "episode": 1, "episode_title": "Pilot"},
         )
         assert score <= 1.0
+
+    def test_missing_season_in_query(self) -> None:
+        """No season in query -- still matches on episode."""
+        score = compute_episode_confidence(
+            {"episode": 5},
+            {"season": 2, "episode": 5},
+        )
+        assert score == pytest.approx(0.65)
+
+    def test_no_episode_title_no_penalty_beyond_weight(self) -> None:
+        """Missing episode_title contributes 0.0 (weight 0.10)."""
+        with_title = compute_episode_confidence(
+            {"season": 1, "episode": 1, "episode_title": "Pilot"},
+            {"season": 1, "episode": 1, "episode_title": "Pilot"},
+        )
+        without_title = compute_episode_confidence(
+            {"season": 1, "episode": 1},
+            {"season": 1, "episode": 1},
+        )
+        assert with_title - without_title == pytest.approx(0.10)
 
 
 class TestDefaultThreshold:
