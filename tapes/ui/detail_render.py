@@ -3,10 +3,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from rich.text import Text
-
-from tapes.ui.tree_model import FileNode, FolderNode, collect_files
-from tapes.ui.tree_render import MUTED, compute_dest, render_dest, template_field_names
+from tapes.ui.tree_model import FileNode
+from tapes.ui.tree_render import MUTED, compute_dest, template_field_names
 
 LABEL_WIDTH = 16
 COL_WIDTH = 28
@@ -128,79 +126,3 @@ def col(text: str) -> str:
     if len(text) > COL_WIDTH:
         return text[: COL_WIDTH - 1] + "\u2026"
     return text.ljust(COL_WIDTH)
-
-
-def render_compact_preview(node: FileNode, template: str) -> Text:
-    """Render a 2-line compact preview for a file node.
-
-    Line 1: filename + " -> " + destination (same styling as tree view)
-    Line 2: tmdb_id + confidence (only when tmdb_id is set)
-    """
-    # Line 1: filename -> destination
-    line1 = Text()
-    line1.append(f" {node.path.name}", style="bold")
-    line1.append("  ")
-    line1.append("\u2192 ", style=MUTED)
-    dest = compute_dest(node, template)
-    line1.append_text(render_dest(dest))
-
-    # Line 2: tmdb status
-    line2 = Text()
-    line2.append(" ")
-
-    result = node.result
-    tmdb_id = result.get("tmdb_id")
-    line2.append("tmdb: ", style=MUTED)
-    if tmdb_id is not None:
-        line2.append(str(tmdb_id))
-        # Show confidence from best source
-        best_conf = 0.0
-        for src in node.sources:
-            if src.confidence > best_conf:
-                best_conf = src.confidence
-        if best_conf > 0:
-            line2.append(f"  {best_conf:.0%}", style=confidence_style(best_conf))
-    else:
-        line2.append("?", style=MUTED)
-
-    result_text = Text()
-    result_text.append_text(line1)
-    result_text.append("\n")
-    result_text.append_text(line2)
-    return result_text
-
-
-def render_folder_preview(folder: FolderNode) -> Text:
-    """Render a 2-line compact preview for a folder node.
-
-    Line 1: folder name + "/" (bold white)
-    Line 2: "N files . N unstaged . N ignored" (dim), omitting zero counts.
-    """
-    line1 = Text()
-    line1.append(f" {folder.name}/", style="bold")
-
-    files = collect_files(folder)
-    total = len(files)
-    unstaged = sum(1 for f in files if not f.staged and not f.ignored)
-    ignored = sum(1 for f in files if f.ignored)
-
-    parts: list[str] = []
-    if total > 0:
-        parts.append(f"{total} file{'s' if total != 1 else ''}")
-    if unstaged > 0:
-        parts.append(f"{unstaged} unstaged")
-    if ignored > 0:
-        parts.append(f"{ignored} ignored")
-
-    line2 = Text()
-    line2.append(" ")
-    if parts:
-        line2.append(" \u00b7 ".join(parts), style=MUTED)
-    else:
-        line2.append("empty", style=MUTED)
-
-    result_text = Text()
-    result_text.append_text(line1)
-    result_text.append("\n")
-    result_text.append_text(line2)
-    return result_text
