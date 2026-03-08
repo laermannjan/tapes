@@ -6,7 +6,7 @@ import pytest
 from tapes.config import DEFAULT_AUTO_ACCEPT_THRESHOLD
 from tapes.similarity import (
     _string_similarity,
-    compute_episode_confidence,
+    compute_episode_similarity,
     compute_similarity,
 )
 
@@ -167,44 +167,44 @@ class TestComputeSimilarity:
         assert score == pytest.approx(1.0)
 
 
-class TestComputeEpisodeConfidence:
+class TestComputeEpisodeSimilarity:
     def test_exact_episode_and_season(self) -> None:
-        score = compute_episode_confidence(
+        score = compute_episode_similarity(
             {"season": 1, "episode": 1},
             {"season": 1, "episode": 1},
         )
         assert score == pytest.approx(0.9)
 
     def test_episode_match_only(self) -> None:
-        score = compute_episode_confidence(
+        score = compute_episode_similarity(
             {"episode": 3},
             {"season": 1, "episode": 3},
         )
         assert score == pytest.approx(0.65)
 
     def test_season_match_only(self) -> None:
-        score = compute_episode_confidence(
+        score = compute_episode_similarity(
             {"season": 2},
             {"season": 2, "episode": 5},
         )
         assert score == pytest.approx(0.25)
 
     def test_no_match(self) -> None:
-        score = compute_episode_confidence(
+        score = compute_episode_similarity(
             {"season": 1, "episode": 1},
             {"season": 2, "episode": 5},
         )
         assert score == pytest.approx(0.0)
 
     def test_episode_title_exact(self) -> None:
-        score = compute_episode_confidence(
+        score = compute_episode_similarity(
             {"season": 1, "episode": 1, "episode_title": "Pilot"},
             {"season": 1, "episode": 1, "episode_title": "Pilot"},
         )
         assert score == pytest.approx(1.0)
 
     def test_episode_title_partial(self) -> None:
-        score = compute_episode_confidence(
+        score = compute_episode_similarity(
             {"season": 1, "episode": 1, "episode_title": "The Pilot Episode"},
             {"season": 1, "episode": 1, "episode_title": "Pilot"},
         )
@@ -213,17 +213,17 @@ class TestComputeEpisodeConfidence:
         assert score <= 1.0
 
     def test_empty_query(self) -> None:
-        assert compute_episode_confidence({}, {"season": 1, "episode": 1}) == pytest.approx(0.0)
+        assert compute_episode_similarity({}, {"season": 1, "episode": 1}) == pytest.approx(0.0)
 
     def test_wrong_episode_right_season(self) -> None:
-        score = compute_episode_confidence(
+        score = compute_episode_similarity(
             {"season": 1, "episode": 1},
             {"season": 1, "episode": 5},
         )
         assert score == pytest.approx(0.25)
 
     def test_capped_at_1(self) -> None:
-        score = compute_episode_confidence(
+        score = compute_episode_similarity(
             {"season": 1, "episode": 1, "episode_title": "Pilot"},
             {"season": 1, "episode": 1, "episode_title": "Pilot"},
         )
@@ -231,7 +231,7 @@ class TestComputeEpisodeConfidence:
 
     def test_missing_season_in_query(self) -> None:
         """No season in query -- still matches on episode."""
-        score = compute_episode_confidence(
+        score = compute_episode_similarity(
             {"episode": 5},
             {"season": 2, "episode": 5},
         )
@@ -239,11 +239,11 @@ class TestComputeEpisodeConfidence:
 
     def test_no_episode_title_no_penalty_beyond_weight(self) -> None:
         """Missing episode_title contributes 0.0 (weight 0.10)."""
-        with_title = compute_episode_confidence(
+        with_title = compute_episode_similarity(
             {"season": 1, "episode": 1, "episode_title": "Pilot"},
             {"season": 1, "episode": 1, "episode_title": "Pilot"},
         )
-        without_title = compute_episode_confidence(
+        without_title = compute_episode_similarity(
             {"season": 1, "episode": 1},
             {"season": 1, "episode": 1},
         )

@@ -86,7 +86,7 @@ def compute_similarity(query: dict, result: dict) -> float:
     return SHOW_TITLE_WEIGHT * title_score + SHOW_YEAR_WEIGHT * year_score
 
 
-def compute_episode_confidence(query: dict, episode: dict) -> float:
+def compute_episode_similarity(query: dict, episode: dict) -> float:
     """Score an episode match against a query.
 
     Fields:
