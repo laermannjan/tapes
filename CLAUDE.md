@@ -36,13 +36,16 @@ User flow:  scan -> identify -> curate (TUI) -> process
 CLI
   tapes/cli.py              -- typer app, `tapes import` is the main command
 
-TUI (textual, lazygit-inspired)
-  tapes/ui/tree_app.py      -- main Textual App with keybindings
-  tapes/ui/tree_view.py     -- file tree widget with cursor, staging, filtering
+TUI (textual, Claude Code-inspired layout)
+  tapes/ui/tree_app.py      -- main Textual App, keybindings, inline view management
+  tapes/ui/tree_view.py     -- file tree widget with cursor, staging, filtering, scroll indicators
   tapes/ui/tree_model.py    -- FileNode, FolderNode, TreeModel, Source
-  tapes/ui/tree_render.py   -- pure rendering (compute_dest, flatten, render_row, select_template)
-  tapes/ui/detail_view.py   -- detail view for metadata curation
+  tapes/ui/tree_render.py   -- pure rendering (compute_dest, flatten, render_row, render_separator, full_extension)
+  tapes/ui/detail_view.py   -- inline detail view for metadata curation (confirm/discard model)
   tapes/ui/detail_render.py -- detail view rendering (header, grid, field display)
+  tapes/ui/commit_view.py   -- inline commit confirmation view with file categorization
+  tapes/ui/help_overlay.py  -- inline help view with workflow guide
+  tapes/ui/bottom_bar.py    -- persistent bottom bar (stats, search, operation mode, hints)
   tapes/ui/pipeline.py      -- auto-pipeline (guessit + two-stage TMDB per file)
 
 Core
@@ -60,9 +63,14 @@ Core
 
 **Current and authoritative:**
 - `docs/plans/2026-03-06-tui-redesign.md` -- UI/UX design spec (the source of truth)
-- `docs/plans/2026-03-06-tui-redesign-milestones.md` -- implementation milestones
+- `docs/plans/2026-03-06-tui-redesign-milestones.md` -- implementation milestones (M1-M16, all complete)
 - `docs/plans/2026-03-07-tui-visual-design.md` -- visual design spec (colors, layout, rendering)
-- `docs/plans/2026-03-08-visual-fixes-remaining.md` -- **active** remaining visual issues and handoff notes
+- `docs/plans/2026-03-08-visual-fixes-remaining.md` -- visual fixes summary (completed)
+
+**Completed implementation plans:**
+- `docs/plans/2026-03-08-layout-overhaul.md` -- layout overhaul (separators, BottomBar, inline views)
+- `docs/plans/2026-03-08-visual-and-commit-fixes.md` -- visual fixes + inline CommitView
+- `docs/plans/2026-03-08-code-review-fixes.md` -- confirm/discard model, keybinding overhaul
 
 **Mockups and references:**
 - `docs/mockups/color-swatches.html` -- color palette reference (all Claude palettes)
@@ -115,14 +123,17 @@ Core
 
 ## Current status
 
-**Pre-alpha. TUI + core pipeline complete (465 tests passing).**
+**Pre-alpha. TUI + core pipeline complete (452 tests passing).**
 
 Implemented: TUI (M1-M16), real TMDB integration (two-stage search),
 similarity/confidence scoring, template selection, broadened scanner,
-file processing on commit, config wiring, visual design overhaul.
-Upgraded to textual 8, rich 14, pytest-asyncio 1.x. Modals use
-ModalScreen. Focus styling uses CSS pseudo-classes.
+file processing on commit, config wiring. Visual design overhaul
+complete: Claude Code-inspired layout with horizontal separators,
+inline views (detail, commit, help), persistent bottom bar, scroll
+indicators, confirm/discard editing model, double ctrl+c quit.
 
-Active work: visual polish iteration (see `docs/plans/2026-03-08-visual-fixes-remaining.md`).
+No modals remain. All views are inline widgets toggled via display CSS.
+UndoManager removed; detail edits use snapshot/restore on discard.
+
 Next up: revisit similarity scoring, end-to-end manual testing,
 error handling.
