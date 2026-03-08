@@ -218,6 +218,11 @@ def serve_cmd(
         console.print("[red]Error:[/red] No import path. Use --import-path or set TAPES_SCAN__IMPORT_PATH.")
         raise typer.Exit(code=1)
 
+    if cfg.metadata.tmdb_token:
+        console.print(f"TMDB token: configured ({len(cfg.metadata.tmdb_token)} chars)")
+    else:
+        console.print("[yellow]Warning:[/yellow] No TMDB token configured. Set TAPES_METADATA__TMDB_TOKEN.")
+
     cmd = f"tapes import {shlex.quote(str(resolved_path))}"
     if config_file:
         cmd += f" --config {shlex.quote(str(config_file))}"
