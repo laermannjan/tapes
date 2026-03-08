@@ -66,7 +66,7 @@ def search_multi(
             with create_client(token) as c:
                 resp = c.get("/search/multi", params=params)
                 resp.raise_for_status()
-    except (httpx.HTTPError, httpx.HTTPStatusError) as exc:
+    except httpx.HTTPError as exc:
         logger.warning("TMDB search_multi failed: %s", exc)
         return []
 
@@ -125,7 +125,7 @@ def get_show(
             with create_client(token) as c:
                 resp = c.get(f"/tv/{tmdb_id}")
                 resp.raise_for_status()
-    except (httpx.HTTPError, httpx.HTTPStatusError) as exc:
+    except httpx.HTTPError as exc:
         logger.warning("TMDB get_show failed: %s", exc)
         return {}
 
@@ -167,7 +167,7 @@ def get_season_episodes(
             with create_client(token) as c:
                 resp = c.get(f"/tv/{show_id}/season/{season_number}")
                 resp.raise_for_status()
-    except (httpx.HTTPError, httpx.HTTPStatusError) as exc:
+    except httpx.HTTPError as exc:
         logger.warning("TMDB get_season_episodes failed: %s", exc)
         return []
 

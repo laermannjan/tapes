@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import shutil
 from collections.abc import Callable
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 _COPY_BUFSIZE = 1024 * 1024  # 1 MB
 
@@ -114,6 +117,7 @@ def process_staged(
         try:
             msg = process_file(src, dest, operation, dry_run=dry_run)
             results.append(msg)
-        except Exception as exc:  # noqa: BLE001
-            results.append(f"Error processing {src}: {exc}")
+        except Exception:
+            logger.exception("Error processing %s", src)
+            results.append(f"Error processing {src}")
     return results
