@@ -1,19 +1,15 @@
 """Textual App for the tree-based file browser."""
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from pathlib import Path
 
-from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.events import Key
-from textual.reactive import reactive
-from textual.widgets import Static
 
 from tapes.config import TapesConfig
 from tapes.fields import MEDIA_TYPE, MEDIA_TYPE_EPISODE
+from tapes.ui.bottom_bar import BottomBar
 from tapes.ui.commit_modal import CommitScreen
 from tapes.ui.detail_view import DetailView
 from tapes.ui.help_overlay import HelpScreen
@@ -25,34 +21,6 @@ from tapes.ui.tree_model import (
     accept_best_source,
 )
 from tapes.ui.tree_view import TreeView
-
-if TYPE_CHECKING:
-    from rich.console import RenderableType
-
-
-class StatusFooter(Static):
-    """Context-aware footer showing relevant keybinding hints."""
-
-    mode: reactive[str] = reactive("tree")
-
-    def render(self) -> RenderableType:
-        """Build styled keybinding hints based on current mode."""
-        muted = "#888888"
-        if self.mode == "detail":
-            return Text(
-                " Enter to edit \u00b7 a to apply \u00b7 \u21e7Enter to apply all \u00b7 \u2190/\u2192 to cycle sources \u00b7 Esc to go back",
-                style=f"italic {muted}",
-            )
-        if self.mode == "edit":
-            return Text(
-                " Enter to confirm \u00b7 Esc to cancel",
-                style=f"italic {muted}",
-            )
-        # Default: tree mode
-        return Text(
-            " Space to stage \u00b7 Enter for details \u00b7 a to accept \u00b7 c to commit \u00b7 ? for help",
-            style=f"italic {muted}",
-        )
 
 
 class TreeApp(App):
@@ -79,31 +47,24 @@ class TreeApp(App):
         Binding("minus", "collapse_all", "Collapse All"),
         Binding("equals_sign", "expand_all", "Expand All"),
         Binding("question_mark", "toggle_help", "Help"),
+        Binding("shift+tab", "cycle_op", "Cycle Op", show=False),
     ]
 
     CSS = """
     TreeView {
         height: 1fr;
-        border: round #555555;
         padding: 0 1;
-    }
-    TreeView:focus {
-        border: round #7AB8FF;
     }
     TreeView.dimmed {
         color: #555555;
     }
     DetailView {
-        height: 5;
-        border: round #555555;
+        display: none;
         padding: 0 1;
     }
-    DetailView:focus {
-        border: round #7AB8FF;
-    }
-    StatusFooter {
+    BottomBar {
         dock: bottom;
-        height: 1;
+        height: 4;
     }
     """
 
@@ -144,16 +105,18 @@ class TreeApp(App):
             self.tv_template,
             root_path=self.root_path,
         )
-        yield StatusFooter(id="footer")
+        yield BottomBar(id="bottom-bar")
 
     def on_mount(self) -> None:
         # Use ANSI theme for true terminal background transparency.
-        # Only set at mount time — headless test runners lack a real
+        # Only set at mount time -- headless test runners lack a real
         # terminal so the default dark theme is safer there.
         try:
             self.theme = "textual-ansi"
         except Exception:
             pass
+
+        self.query_one(BottomBar).operation = self.config.library.operation
 
         if self._auto_pipeline:
             from tapes.ui.pipeline import run_guessit_pass
@@ -161,7 +124,6 @@ class TreeApp(App):
             run_guessit_pass(self.model)
             self.query_one(TreeView).refresh_tree()
             self._update_footer()
-            self._update_preview()
 
             token = self.config.metadata.tmdb_token
             if token:
@@ -173,7 +135,6 @@ class TreeApp(App):
                 )
         else:
             self._update_footer()
-            self._update_preview()
 
     def _run_tmdb_worker(self, token: str) -> object:
         """Return a callable that runs TMDB queries in a background thread."""
@@ -201,13 +162,12 @@ class TreeApp(App):
         detail = self.query_one(DetailView)
         detail.set_node(node)
         detail.on_before_mutate = self._snapshot_before_mutate
-        detail.on_editing_changed = self._on_detail_editing_changed
-        # Compute height: tab_bar + blank + path + blank + fields + border(2)
-        detail.styles.height = len(detail._fields) + 6
-        detail.add_class("expanded")
+        # separator + tab_bar + blank + path + blank + fields + blank + hints
+        detail.styles.height = len(detail._fields) + 7
+        detail.styles.display = "block"
         self.query_one(TreeView).add_class("dimmed")
+        self.query_one(BottomBar).styles.display = "none"
         detail.focus()
-        self.query_one(StatusFooter).mode = "detail"
 
     def _show_detail_multi(self, nodes: list[FileNode]) -> None:
         """Switch from tree view to detail view for multiple file nodes."""
@@ -215,42 +175,27 @@ class TreeApp(App):
         detail = self.query_one(DetailView)
         detail.set_nodes(nodes)
         detail.on_before_mutate = self._snapshot_before_mutate
-        detail.on_editing_changed = self._on_detail_editing_changed
-        # Compute height: tab_bar + blank + path + blank + fields + border(2)
-        detail.styles.height = len(detail._fields) + 6
-        detail.add_class("expanded")
+        detail.styles.height = len(detail._fields) + 7
+        detail.styles.display = "block"
         self.query_one(TreeView).add_class("dimmed")
+        self.query_one(BottomBar).styles.display = "none"
         detail.focus()
-        self.query_one(StatusFooter).mode = "detail"
 
     def _snapshot_before_mutate(self, nodes: list[FileNode]) -> None:
         """Save undo snapshot before a mutation."""
         self._undo.snapshot(nodes)
 
-    def _on_detail_editing_changed(self, editing: bool) -> None:
-        """Update footer mode when detail view enters/exits edit mode."""
-        footer = self.query_one(StatusFooter)
-        footer.mode = "edit" if editing else "detail"
-
     def _show_tree(self) -> None:
         """Switch from detail view back to tree view."""
         self._in_detail = False
         detail = self.query_one(DetailView)
-        detail.remove_class("expanded")
-        detail.styles.height = None  # reset to CSS default
+        detail.styles.display = "none"
         tv = self.query_one(TreeView)
         tv.remove_class("dimmed")
+        self.query_one(BottomBar).styles.display = "block"
         tv.focus()
         tv.refresh()
-        self.query_one(StatusFooter).mode = "tree"
         self._update_footer()
-        self._update_preview()
-
-    def _update_preview(self) -> None:
-        """Update the detail panel's compact preview with the current cursor node."""
-        tv = self.query_one(TreeView)
-        node = tv.cursor_node()
-        self.query_one(DetailView).set_preview_node(node)
 
     def action_toggle_help(self) -> None:
         """Show the help screen."""
@@ -261,14 +206,12 @@ class TreeApp(App):
             self.query_one(DetailView).move_cursor(row_delta=1)
         else:
             self.query_one(TreeView).move_cursor(1)
-            self._update_preview()
 
     def action_cursor_up(self) -> None:
         if self._in_detail:
             self.query_one(DetailView).move_cursor(row_delta=-1)
         else:
             self.query_one(TreeView).move_cursor(-1)
-            self._update_preview()
 
     def action_cursor_left(self) -> None:
         if self._in_detail:
@@ -284,6 +227,11 @@ class TreeApp(App):
         tv = self.query_one(TreeView)
         tv.toggle_staged_at_cursor()
         self._update_footer()
+
+    def action_cycle_op(self) -> None:
+        if self._in_detail:
+            return
+        self.query_one(BottomBar).cycle_operation()
 
     def _compute_file_pairs(
         self, staged: list[FileNode]
@@ -365,12 +313,12 @@ class TreeApp(App):
             return
         tv = self.query_one(TreeView)
         if tv.staged_count == 0:
-            tv.set_status("No staged files to commit")
+            self.notify("No staged files to commit")
             return
-
         count = tv.staged_count
+        bar = self.query_one(BottomBar)
         self.push_screen(
-            CommitScreen(count, self.config.library.operation),
+            CommitScreen(count, bar.operation),
             callback=self._on_commit_result,
         )
 
@@ -451,17 +399,23 @@ class TreeApp(App):
             return
         self._searching = True
         self._search_query = ""
-        self._update_search_status()
+        bar = self.query_one(BottomBar)
+        bar.search_active = True
+        bar.search_query = ""
+        self._update_footer()
 
     def _update_search_status(self) -> None:
-        """Update the status bar to show the search query."""
-        self.query_one(TreeView).set_status(f"/{self._search_query}")
+        """Update the bottom bar to show the search query."""
+        self.query_one(BottomBar).search_query = self._search_query
 
     def _finish_search(self, keep_filter: bool) -> None:
         """Exit search mode. If keep_filter is False, clear the filter."""
         self._searching = False
+        bar = self.query_one(BottomBar)
+        bar.search_active = False
         if not keep_filter:
             self._search_query = ""
+            bar.search_query = ""
             self.query_one(TreeView).clear_filter()
         self._update_footer()
 
@@ -500,20 +454,17 @@ class TreeApp(App):
             return
         self.model.collapse_all()
         self.query_one(TreeView).refresh_tree()
-        self._update_preview()
 
     def action_expand_all(self) -> None:
         if self._in_detail:
             return
         self.model.expand_all()
         self.query_one(TreeView).refresh_tree()
-        self._update_preview()
 
     def action_toggle_flat(self) -> None:
         if self._in_detail:
             return
         self.query_one(TreeView).toggle_flat_mode()
-        self._update_preview()
 
     def action_undo(self) -> None:
         if self._undo.undo():
@@ -539,17 +490,31 @@ class TreeApp(App):
             self.query_one(DetailView).refresh()
         else:
             self.query_one(TreeView).refresh()
-            self._update_preview()
         self._update_footer()
 
     def _update_footer(self) -> None:
+        bar = self.query_one(BottomBar)
         tv = self.query_one(TreeView)
-        ignored = tv.ignored_count
-        parts = [f"{tv.staged_count} staged"]
-        if ignored:
-            parts.append(f"{ignored} ignored")
-        parts.append(f"{tv.total_count} total")
-        if self._tmdb_querying:
-            done, total = self._tmdb_progress
-            parts.append(f"TMDB {done}/{total}")
-        tv.set_status(" / ".join(parts))
+
+        # Stats
+        if tv.filter_text:
+            bar.stats_text = f"{tv.item_count} matched \u00b7 {tv.total_count} total"
+        else:
+            ignored = tv.ignored_count
+            parts = [f"{tv.staged_count} staged"]
+            if ignored:
+                parts.append(f"{ignored} ignored")
+            parts.append(f"{tv.total_count} total")
+            if self._tmdb_querying:
+                done, total = self._tmdb_progress
+                parts.append(f"TMDB {done}/{total}")
+            bar.stats_text = " \u00b7 ".join(parts)
+
+        # Hints
+        if self._searching:
+            bar.hint_text = "Enter to confirm \u00b7 Esc to cancel"
+        else:
+            bar.hint_text = (
+                "Space to stage \u00b7 Enter for details \u00b7 a to accept \u00b7 "
+                "\u21e7Tab op \u00b7 c to commit \u00b7 ? for help"
+            )
