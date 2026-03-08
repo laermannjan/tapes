@@ -248,60 +248,6 @@ class TestDetailViewCursor:
         assert view.source_index == 0
 
 
-# --- DetailView apply_source_field ---
-
-
-class TestDetailViewApply:
-    def _make_view(self) -> DetailView:
-        node = _make_node()
-        view = DetailView(node, TEMPLATE, TEMPLATE)
-        view.fields = get_display_fields(TEMPLATE)
-        return view
-
-    def test_copies_source_value_to_result(self) -> None:
-        view = self._make_view()
-        # source_index=0 (filename source), cursor on title row
-        view.cursor_row = 0
-        view.source_index = 0
-        view.apply_source_field()
-        assert view.node.result["title"] == "Breaking Bad"
-
-    def test_copies_none_source_leaves_result_unchanged(self) -> None:
-        view = self._make_view()
-        # filename source has no year
-        view.cursor_row = 1  # year
-        view.source_index = 0  # filename source
-        original = view.node.result["year"]
-        view.apply_source_field()
-        assert view.node.result["year"] == original
-
-    def test_apply_source_field_applies_single_field(self) -> None:
-        view = self._make_view()
-        view.node.result = {}
-        # source_index=1 (TMDB #1), cursor on title (row 1, tmdb_id at 0)
-        view.cursor_row = 1
-        view.source_index = 1
-        view.apply_source_field()
-        assert view.node.result["title"] == "Breaking Bad"
-        # Other fields should NOT be applied
-        assert "year" not in view.node.result
-
-    def test_enter_on_result_starts_edit_no_sources(self) -> None:
-        node = FileNode(path=Path("/test.mkv"), result={"title": "Test"}, sources=[])
-        view = DetailView(node, TEMPLATE, TEMPLATE)
-        view.fields = get_display_fields(TEMPLATE)
-        view.cursor_row = 0
-        view.apply_source_field()
-        assert view.editing is True
-
-    def test_apply_with_sources_does_not_start_edit(self) -> None:
-        view = self._make_view()
-        view.cursor_row = 0
-        view.source_index = 0
-        view.apply_source_field()
-        assert view.editing is False
-
-
 # --- DetailView editing ---
 
 
@@ -520,18 +466,6 @@ class TestMultiFileDetail:
         view.commit_edit()
         assert node1.result["title"] == "Better Call Saul"
         assert node2.result["title"] == "Better Call Saul"
-
-    def test_applying_source_applies_to_all_nodes(self) -> None:
-        view, node1, node2 = self._make_multi_view()
-        # Clear years to test applying source
-        node1.result.pop("year", None)
-        node2.result.pop("year", None)
-        # Move to year field, source_index=0 (TMDB source)
-        view.cursor_row = 2  # year (tmdb_id at 0, title at 1)
-        view.source_index = 0  # TMDB source (only one source per node)
-        view.apply_source_field()
-        assert node1.result["year"] == 2008
-        assert node2.result["year"] == 2008
 
     def test_apply_source_all_applies_to_all_nodes(self) -> None:
         view, node1, node2 = self._make_multi_view()

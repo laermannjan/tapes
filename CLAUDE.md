@@ -39,7 +39,7 @@ CLI
 TUI (textual, lazygit-inspired)
   tapes/ui/tree_app.py      -- main Textual App with keybindings
   tapes/ui/tree_view.py     -- file tree widget with cursor, staging, filtering
-  tapes/ui/tree_model.py    -- FileNode, FolderNode, TreeModel, Source, UndoManager
+  tapes/ui/tree_model.py    -- FileNode, FolderNode, TreeModel, Source
   tapes/ui/tree_render.py   -- pure rendering (compute_dest, flatten, render_row, select_template)
   tapes/ui/detail_view.py   -- detail view for metadata curation
   tapes/ui/detail_render.py -- detail view rendering (header, grid, field display)

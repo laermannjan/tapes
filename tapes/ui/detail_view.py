@@ -345,27 +345,6 @@ class DetailView(Widget):
         new_idx = self.source_index + delta
         self.source_index = max(0, min(max_idx, new_idx))
 
-    def apply_source_field(self) -> None:
-        """Apply the current source field value to the result.
-
-        If no sources exist, starts inline edit instead.
-        """
-        sources = self.node.sources
-        if not sources:
-            self.start_edit()
-            return
-
-        src_idx = self.source_index
-        if src_idx >= len(sources):
-            return
-
-        field_name = self.fields[self.cursor_row]
-        val = sources[src_idx].fields.get(field_name)
-        if val is not None:
-            for n in self.file_nodes:
-                n.result[field_name] = val
-        self.refresh()
-
     def apply_source_all_clear(self) -> None:
         """Handle shift-enter: apply all fields from current source."""
         sources = self.node.sources
