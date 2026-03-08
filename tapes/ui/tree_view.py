@@ -243,25 +243,6 @@ class TreeView(Widget):
 
         return Text("\n").join(content_lines)
 
-    def render_tree(self) -> str:
-        """Render the full tree to a plain string (no cursor highlighting).
-
-        Kept for backward compatibility with M2.
-        """
-        lines: list[str] = []
-        for node, depth in self._items:
-            effective_depth = 0 if self.flat_mode else depth
-            row = render_row(
-                node,
-                self.movie_template,
-                self.tv_template,
-                depth=effective_depth,
-                flat_mode=self.flat_mode,
-                root_path=self.root_path,
-            )
-            lines.append(row.plain)
-        return "\n".join(lines)
-
     def move_cursor(self, delta: int) -> None:
         """Move the cursor by *delta* positions, clamping to bounds."""
         if not self._items:

@@ -42,26 +42,6 @@ class TreeModel:
 
     root: FolderNode
 
-    def flatten(self) -> list[FileNode | FolderNode]:
-        """Iterate the tree respecting collapsed state.
-
-        The root folder itself is NOT included. Collapsed folders appear
-        but their children do not.
-        """
-        result: list[FileNode | FolderNode] = []
-        self._flatten_children(self.root, result)
-        return result
-
-    def _flatten_children(
-        self,
-        folder: FolderNode,
-        result: list[FileNode | FolderNode],
-    ) -> None:
-        for child in folder.children:
-            result.append(child)
-            if isinstance(child, FolderNode) and not child.collapsed:
-                self._flatten_children(child, result)
-
     def toggle_staged(self, node: FileNode) -> None:
         """Toggle staged flag on a file node."""
         node.staged = not node.staged
@@ -205,22 +185,6 @@ def _compress_single_child_dirs(folder: FolderNode) -> None:
                 child.name = f"{child.name}/{grandchild.name}"
                 child.children = grandchild.children
         i += 1
-
-
-def accept_best_source(node: FileNode) -> bool:
-    """Apply the highest-confidence source's non-empty fields to result.
-
-    Returns True if a source was applied.
-    """
-    if not node.sources:
-        return False
-    best = max(node.sources, key=lambda s: s.confidence)
-    if best.confidence == 0:
-        return False
-    for fname, val in best.fields.items():
-        if val is not None:
-            node.result[fname] = val
-    return True
 
 
 def compute_shared_fields(nodes: list[FileNode]) -> dict[str, Any]:

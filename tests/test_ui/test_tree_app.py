@@ -11,7 +11,6 @@ from tapes.tree_model import (
     FolderNode,
     Source,
     TreeModel,
-    accept_best_source,
 )
 from tapes.ui.tree_view import TreeView
 
@@ -170,14 +169,6 @@ class TestTreeViewCursor:
         view.refresh_tree()
         assert view.item_count == 4
 
-    def test_render_tree_backward_compat(self) -> None:
-        """render_tree() returns a plain string (M2 compat)."""
-        view = _make_view()
-        text = view.render_tree()
-        assert isinstance(text, str)
-        lines = text.strip().split("\n")
-        assert len(lines) == 3
-
 
 class TestTreeViewStaging:
     def test_toggle_staged_on_file(self) -> None:
@@ -216,20 +207,6 @@ class TestTreeViewStaging:
         view.toggle_staged_at_cursor()
         assert view.staged_count == 1
         assert view.total_count == 3
-
-    def test_staged_file_in_render(self) -> None:
-        view = _make_view()
-        view.move_cursor(2)  # top.mkv
-        view.toggle_staged_at_cursor()
-        output = view.render_tree()
-        # Staged file should still appear in output
-        assert "top.mkv" in output
-
-    def test_unstaged_file_in_render(self) -> None:
-        view = _make_view()
-        output = view.render_tree()
-        # Unstaged files appear in output
-        assert "top.mkv" in output
 
 
 class TestTreeViewRender:
@@ -633,18 +610,6 @@ class TestIgnoreToggle:
         assert files[0].ignored  # file_a
         assert files[1].ignored  # file_b
 
-    def test_ignored_file_renders_with_dot_marker(self) -> None:
-        model = _expanded_model()
-        view = _make_view(model)
-        files = model.all_files()
-        files[0].ignored = True
-        output = view.render_tree()
-        lines = output.split("\n")
-        # file_a is at index 1 in flattened view
-        file_a_line = lines[1]
-        # Ignored file should still appear in output
-        assert "file_a.mkv" in file_a_line
-
     def test_ignored_count(self) -> None:
         model = _expanded_model()
         view = _make_view(model)
@@ -771,39 +736,6 @@ class TestFlatTreeToggle:
         node_after = view.cursor_node()
         assert node_after is node_before
 
-    def test_flat_mode_renders_relative_paths(self) -> None:
-        model = _expanded_model()
-        view = TreeView(
-            model=model,
-            movie_template=TEMPLATE,
-            tv_template=TEMPLATE,
-            root_path=Path("/root"),
-        )
-        view.toggle_flat_mode()
-        output = view.render_tree()
-        # In flat mode with root_path, files show relative paths
-        assert "folderA/file_a.mkv" in output
-        assert "folderB/file_b.mkv" in output
-
-    def test_tree_mode_renders_with_indentation(self) -> None:
-        model = _expanded_model()
-        view = _make_view(model)
-        output = view.render_tree()
-        lines = output.split("\n")
-        # file_a.mkv should be indented (child of folderA)
-        file_a_line = lines[1]
-        assert file_a_line.startswith("  ")  # indented
-
-    def test_flat_mode_no_indentation(self) -> None:
-        model = _expanded_model()
-        view = _make_view(model)
-        view.toggle_flat_mode()
-        output = view.render_tree()
-        lines = output.split("\n")
-        # No indentation in flat mode
-        for line in lines:
-            assert not line.startswith("  ")
-
     def test_cursor_clamps_when_toggling_from_folder(self) -> None:
         model = _simple_model()  # all collapsed
         view = _make_view(model)
@@ -832,58 +764,6 @@ class TestFlatTreeToggleAsync:
             assert tv.flat_mode
             await pilot.press("grave_accent")
             assert not tv.flat_mode
-
-
-# ---------------------------------------------------------------------------
-# Accept best source (M9) unit tests
-# ---------------------------------------------------------------------------
-
-
-class TestAcceptBestSource:
-    def test_applies_highest_confidence_source(self) -> None:
-        node = FileNode(
-            path=Path("/test.mkv"),
-            result={"title": "Old"},
-            sources=[
-                Source(name="src1", fields={"title": "Low", "year": 2000}, confidence=0.5),
-                Source(name="src2", fields={"title": "High", "year": 2020}, confidence=0.9),
-            ],
-        )
-        assert accept_best_source(node) is True
-        assert node.result["title"] == "High"
-        assert node.result["year"] == 2020
-
-    def test_noop_when_no_sources(self) -> None:
-        node = FileNode(path=Path("/test.mkv"), result={"title": "Original"})
-        assert accept_best_source(node) is False
-        assert node.result["title"] == "Original"
-
-    def test_noop_when_all_zero_confidence(self) -> None:
-        node = FileNode(
-            path=Path("/test.mkv"),
-            result={"title": "Original"},
-            sources=[
-                Source(name="src1", fields={"title": "Other"}, confidence=0.0),
-            ],
-        )
-        assert accept_best_source(node) is False
-        assert node.result["title"] == "Original"
-
-    def test_skips_none_values(self) -> None:
-        node = FileNode(
-            path=Path("/test.mkv"),
-            result={"title": "Keep", "year": 2000},
-            sources=[
-                Source(
-                    name="src1",
-                    fields={"title": "New", "year": None},
-                    confidence=0.8,
-                ),
-            ],
-        )
-        accept_best_source(node)
-        assert node.result["title"] == "New"
-        assert node.result["year"] == 2000  # Not overwritten by None
 
 
 # ---------------------------------------------------------------------------
