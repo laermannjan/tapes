@@ -5,53 +5,51 @@ import pytest
 
 from tapes.config import DEFAULT_AUTO_ACCEPT_THRESHOLD
 from tapes.similarity import (
+    _string_similarity,
     compute_confidence,
     compute_episode_confidence,
-    title_similarity,
 )
 
 
-class TestTitleSimilarity:
+class TestStringSimilarity:
     def test_exact_match(self) -> None:
-        assert title_similarity("Dune", "Dune") == 1.0
+        assert _string_similarity("Dune", "Dune") == pytest.approx(1.0)
 
     def test_case_insensitive(self) -> None:
-        assert title_similarity("dune", "DUNE") == 1.0
+        assert _string_similarity("dune", "DUNE") == pytest.approx(1.0)
 
-    def test_no_overlap(self) -> None:
-        assert title_similarity("Dune", "Arrival") == 0.0
+    def test_empty_a(self) -> None:
+        assert _string_similarity("", "Dune") == 0.0
 
-    def test_partial_overlap(self) -> None:
-        # "The Dark Knight" vs "Dark Knight Rises" -> intersection {dark, knight} / union {the, dark, knight, rises}
-        score = title_similarity("The Dark Knight", "Dark Knight Rises")
-        assert score == pytest.approx(2.0 / 4.0)
-
-    def test_subset(self) -> None:
-        # "Dune" vs "Dune Part Two" -> intersection {dune} / union {dune, part, two}
-        score = title_similarity("Dune", "Dune Part Two")
-        assert score == pytest.approx(1.0 / 3.0)
-
-    def test_extra_words_reduce_score(self) -> None:
-        exact = title_similarity("Dune", "Dune")
-        partial = title_similarity("Dune", "Dune Part Two")
-        assert exact > partial
-
-    def test_empty_string_a(self) -> None:
-        assert title_similarity("", "Dune") == 0.0
-
-    def test_empty_string_b(self) -> None:
-        assert title_similarity("Dune", "") == 0.0
+    def test_empty_b(self) -> None:
+        assert _string_similarity("Dune", "") == 0.0
 
     def test_both_empty(self) -> None:
-        assert title_similarity("", "") == 0.0
+        assert _string_similarity("", "") == 0.0
 
     def test_multi_word_exact(self) -> None:
-        assert title_similarity("Breaking Bad", "Breaking Bad") == 1.0
+        assert _string_similarity("Breaking Bad", "Breaking Bad") == pytest.approx(1.0)
 
-    def test_single_common_word(self) -> None:
-        # "The Matrix" vs "The Godfather" -> {the} / {the, matrix, godfather}
-        score = title_similarity("The Matrix", "The Godfather")
-        assert score == pytest.approx(1.0 / 3.0)
+    def test_article_difference_scores_high(self) -> None:
+        score = _string_similarity("The Dark Knight", "Dark Knight")
+        assert score > 0.8
+
+    def test_subset_scores_high(self) -> None:
+        score = _string_similarity("Dune", "Dune Part Two")
+        assert score > 0.6
+
+    def test_no_overlap_scores_low(self) -> None:
+        score = _string_similarity("Dune", "Arrival")
+        assert score < 0.5
+
+    def test_word_order_irrelevant(self) -> None:
+        score = _string_similarity("Batman v Superman", "Superman v Batman")
+        assert score > 0.9
+
+    def test_exact_beats_partial(self) -> None:
+        exact = _string_similarity("Dune", "Dune")
+        partial = _string_similarity("Dune", "Dune Part Two")
+        assert exact > partial
 
 
 class TestComputeConfidence:
@@ -122,10 +120,10 @@ class TestComputeConfidence:
             {"title": "Dark Knight", "year": 2008},
             {"title": "The Dark Knight", "year": 2008},
         )
-        # title: {dark, knight} / {the, dark, knight} = 2/3
+        # rapidfuzz WRatio scores "Dark Knight" vs "The Dark Knight" ~0.95
         # year: exact = 1.0
-        # 0.7 * (2/3) + 0.3 * 1.0 = 0.7666...
-        assert score == pytest.approx(0.7 * (2.0 / 3.0) + 0.3)
+        # 0.7 * title_score + 0.3 * 1.0
+        assert score > 0.9
 
     def test_no_overlap_title(self) -> None:
         score = compute_confidence(
@@ -179,9 +177,9 @@ class TestComputeEpisodeConfidence:
             {"season": 1, "episode": 1, "episode_title": "The Pilot Episode"},
             {"season": 1, "episode": 1, "episode_title": "Pilot"},
         )
-        # 0.65 + 0.25 + 0.1 * (1/3) = 0.9 + 0.0333 = 0.9333
-        expected = 0.65 + 0.25 + 0.1 * (1.0 / 3.0)
-        assert score == pytest.approx(expected)
+        # 0.65 + 0.25 + 0.1 * rapidfuzz("The Pilot Episode", "Pilot")
+        # rapidfuzz WRatio scores this ~0.9, so total ~0.99
+        assert score > 0.95
 
     def test_empty_query(self) -> None:
         score = compute_episode_confidence(

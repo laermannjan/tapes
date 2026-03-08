@@ -1,35 +1,61 @@
-"""Simple token-based scoring for comparing metadata fields.
+"""Weighted confidence scoring for metadata matching.
 
-This is intentionally basic and will be revisited for more sophisticated
-matching (Levenshtein, phonetic, transliteration, etc.).
+Uses rapidfuzz for string similarity. Each field has its own matching
+strategy (fuzzy, integer distance, exact) and weight.
 """
 from __future__ import annotations
 
-from tapes.fields import EPISODE, EPISODE_TITLE, SEASON, TITLE, YEAR
+from rapidfuzz import fuzz, utils
+
+from tapes.fields import EPISODE, EPISODE_TITLE, SEASON, TITLE, TMDB_ID, YEAR
+
+# ---------------------------------------------------------------------------
+# Configuration -- all tuning parameters in one place
+# ---------------------------------------------------------------------------
+
+# Algorithm: "ratio", "token_sort_ratio", "token_set_ratio", "WRatio"
+SIMILARITY_ALGORITHM = "WRatio"
+
+# Show/movie scoring weights (must sum to 1.0)
+SHOW_TITLE_WEIGHT = 0.7
+SHOW_YEAR_WEIGHT = 0.3
+
+# Episode scoring weights (must sum to 1.0)
+EPISODE_SEASON_WEIGHT = 0.25
+EPISODE_NUMBER_WEIGHT = 0.65
+EPISODE_TITLE_WEIGHT = 0.10
+
+# Year tolerance: exact=1.0, off-by-1=0.5, off-by-2+=0.0
+YEAR_TOLERANCE = 2
+
+# ---------------------------------------------------------------------------
+# Algorithm map
+# ---------------------------------------------------------------------------
+
+_ALGORITHM_MAP = {
+    "ratio": fuzz.ratio,
+    "token_sort_ratio": fuzz.token_sort_ratio,
+    "token_set_ratio": fuzz.token_set_ratio,
+    "WRatio": fuzz.WRatio,
+}
 
 
-def title_similarity(a: str, b: str) -> float:
-    """Compute Jaccard similarity between two title strings.
+def _string_similarity(a: str, b: str) -> float:
+    """Compute string similarity using rapidfuzz (0.0-1.0).
 
-    Lowercases both, splits into word tokens, and returns
-    intersection / union of the token sets. Returns 0.0-1.0.
+    Algorithm is controlled by SIMILARITY_ALGORITHM constant.
     """
     if not a or not b:
         return 0.0
-    tokens_a = set(a.lower().split())
-    tokens_b = set(b.lower().split())
-    if not tokens_a or not tokens_b:
-        return 0.0
-    intersection = tokens_a & tokens_b
-    union = tokens_a | tokens_b
-    return len(intersection) / len(union)
+    fn = _ALGORITHM_MAP[SIMILARITY_ALGORITHM]
+    return fn(a, b, processor=utils.default_process) / 100.0
 
 
 def compute_confidence(query: dict, result: dict) -> float:
     """Compute a weighted confidence score between query and result metadata.
 
     Fields used:
-    - title (weight 0.7): Jaccard token similarity
+    - title (weight 0.7): fuzzy string similarity (rapidfuzz)
     - year (weight 0.3): exact = 1.0, off by 1 = 0.5, else 0.0
 
     If no title in either dict, returns 0.0.
@@ -42,7 +68,7 @@ def compute_confidence(query: dict, result: dict) -> float:
     if not query_title or not result_title:
         return 0.0
 
-    title_score = title_similarity(str(query_title), str(result_title))
+    title_score = _string_similarity(str(query_title), str(result_title))
 
     query_year = query.get(YEAR)
     result_year = result.get(YEAR)
@@ -106,6 +132,6 @@ def compute_episode_confidence(query: dict, episode: dict) -> float:
     q_title = query.get(EPISODE_TITLE, "")
     e_title = episode.get(EPISODE_TITLE, "")
     if q_title and e_title:
-        score += 0.1 * title_similarity(str(q_title), str(e_title))
+        score += 0.1 * _string_similarity(str(q_title), str(e_title))
 
     return min(score, 1.0)
