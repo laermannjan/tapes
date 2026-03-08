@@ -10,6 +10,7 @@ dependencies = [
     "pydantic-settings[yaml]>=2.7,<3",
     "platformdirs>=4,<5",
     "textual>=8,<9",
+    "textual-serve>=1.1,<2",
     "httpx>=0.27,<1",
     "rapidfuzz>=3,<4",
     "tenacity>=9,<10",

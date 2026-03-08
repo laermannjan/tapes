@@ -1444,6 +1444,7 @@ dependencies = [
     { name = "rich" },
     { name = "tenacity" },
     { name = "textual" },
+    { name = "textual-serve" },
     { name = "typer" },
 ]
 
@@ -1471,6 +1472,7 @@ requires-dist = [
     { name = "rich", specifier = ">=14,<15" },
     { name = "tenacity", specifier = ">=9,<10" },
     { name = "textual", specifier = ">=8,<9" },
+    { name = "textual-serve", specifier = ">=1.1,<2" },
     { name = "typer", specifier = ">=0.15,<1" },
 ]
 
