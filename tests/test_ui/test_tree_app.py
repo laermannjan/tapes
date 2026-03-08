@@ -560,6 +560,7 @@ class TestTreeAppKeys:
     async def test_space_updates_status(
         self, model: TreeModel, template: str
     ) -> None:
+        from tapes.ui.bottom_bar import BottomBar
         from tapes.ui.tree_app import TreeApp
 
         app = TreeApp(model=model, movie_template=template, tv_template=template)
@@ -568,8 +569,8 @@ class TestTreeAppKeys:
             await pilot.press("j")
             await pilot.press("j")
             await pilot.press("space")
-            tv = app.query_one(TreeView)
-            assert "1 staged" in tv._status_text
+            bar = app.query_one(BottomBar)
+            assert "1 staged" in bar.stats_text
 
     @pytest.mark.asyncio()
     async def test_space_in_range_stages_range(
@@ -823,9 +824,7 @@ class TestCommitAction:
 
         async with app.run_test() as pilot:
             await pilot.press("c")
-            tv = app.query_one(TreeView)
-            assert "No staged" in tv._status_text
-            # No screen pushed
+            # No screen pushed (commit is blocked)
             assert len(app.screen_stack) == 1
 
     @pytest.mark.asyncio()
@@ -891,6 +890,7 @@ class TestCommitAction:
 
     @pytest.mark.asyncio()
     async def test_footer_shows_ignored_count(self) -> None:
+        from tapes.ui.bottom_bar import BottomBar
         from tapes.ui.tree_app import TreeApp
 
         model = _expanded_model()
@@ -900,8 +900,8 @@ class TestCommitAction:
             # Move to file and ignore it
             await pilot.press("j")
             await pilot.press("x")
-            tv = app.query_one(TreeView)
-            assert "1 ignored" in tv._status_text
+            bar = app.query_one(BottomBar)
+            assert "1 ignored" in bar.stats_text
 
 
 # ---------------------------------------------------------------------------
@@ -1325,99 +1325,56 @@ class TestSearchModeAsync:
 
 
 # ---------------------------------------------------------------------------
-# StatusFooter tests
+# BottomBar tests
 # ---------------------------------------------------------------------------
 
 
-class TestStatusFooter:
-    """Tests for the context-aware StatusFooter widget."""
-
-    def test_render_tree_mode(self) -> None:
-        from tapes.ui.tree_app import StatusFooter
-
-        footer = StatusFooter()
-        footer.mode = "tree"
-        rendered = footer.render()
-        plain = rendered.plain
-        assert "stage" in plain
-        assert "detail" in plain
-        assert "accept" in plain
-        assert "commit" in plain
-
-    def test_render_detail_mode(self) -> None:
-        from tapes.ui.tree_app import StatusFooter
-
-        footer = StatusFooter()
-        footer.mode = "detail"
-        rendered = footer.render()
-        plain = rendered.plain
-        assert "apply" in plain
-        assert "sources" in plain
-        assert "back" in plain
-
-    def test_render_edit_mode(self) -> None:
-        from tapes.ui.tree_app import StatusFooter
-
-        footer = StatusFooter()
-        footer.mode = "edit"
-        rendered = footer.render()
-        plain = rendered.plain
-        assert "confirm" in plain
-        assert "cancel" in plain
-        # Should not contain tree-mode hints
-        assert "stage" not in plain
-        assert "commit" not in plain
+class TestBottomBar:
+    """Tests for the BottomBar integration in TreeApp."""
 
     @pytest.mark.asyncio()
-    async def test_footer_mode_changes_on_detail_entry(self) -> None:
-        from tapes.ui.tree_app import StatusFooter, TreeApp
+    async def test_bottom_bar_visible_on_launch(self) -> None:
+        from tapes.ui.bottom_bar import BottomBar
+        from tapes.ui.tree_app import TreeApp
 
-        node = FileNode(
-            path=Path("/media/test.mkv"),
-            result={"title": "Test"},
-        )
+        model = _expanded_model()
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
+
+        async with app.run_test():
+            bar = app.query_one(BottomBar)
+            assert bar is not None
+
+    @pytest.mark.asyncio()
+    async def test_bottom_bar_hidden_in_detail(self) -> None:
+        from tapes.ui.bottom_bar import BottomBar
+        from tapes.ui.tree_app import TreeApp
+
+        node = FileNode(path=Path("/media/test.mkv"), result={"title": "Test"})
         root = FolderNode(name="root", children=[node])
         model = TreeModel(root=root)
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
-            footer = app.query_one(StatusFooter)
-            assert footer.mode == "tree"
-
-            # Enter detail view
+            bar = app.query_one(BottomBar)
             await pilot.press("enter")
-            assert footer.mode == "detail"
+            assert str(bar.styles.display) == "none"
 
-            # Back to tree
             await pilot.press("escape")
-            assert footer.mode == "tree"
+            assert str(bar.styles.display) != "none"
 
     @pytest.mark.asyncio()
-    async def test_footer_mode_changes_on_edit(self) -> None:
-        from tapes.ui.tree_app import StatusFooter, TreeApp
+    async def test_cycle_operation_changes_bar(self) -> None:
+        from tapes.ui.bottom_bar import BottomBar
+        from tapes.ui.tree_app import TreeApp
 
-        node = FileNode(
-            path=Path("/media/test.mkv"),
-            result={"title": "Test"},
-            sources=[],  # No sources means enter triggers edit
-        )
-        root = FolderNode(name="root", children=[node])
-        model = TreeModel(root=root)
+        model = _expanded_model()
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
-        async with app.run_test() as pilot:
-            footer = app.query_one(StatusFooter)
-            # Enter detail view
-            await pilot.press("enter")
-            assert footer.mode == "detail"
-
-            # Enter edit mode (no sources, so enter starts edit)
-            await pilot.press("enter")
-            assert footer.mode == "edit"
-
-            # Cancel edit
-            await pilot.press("escape")
-            assert footer.mode == "detail"
+        async with app.run_test():
+            bar = app.query_one(BottomBar)
+            initial_op = bar.operation
+            bar.cycle_operation()
+            assert bar.operation != initial_op
 
 
 # ---------------------------------------------------------------------------
@@ -1431,9 +1388,10 @@ class TestVisualIntegration:
 
     @pytest.mark.asyncio()
     async def test_launch_tree_view_visible_with_border(self) -> None:
-        """Launch the app and verify TreeView and DetailView are composed."""
+        """Launch the app and verify TreeView, DetailView, and BottomBar are composed."""
+        from tapes.ui.bottom_bar import BottomBar
         from tapes.ui.detail_view import DetailView
-        from tapes.ui.tree_app import StatusFooter, TreeApp
+        from tapes.ui.tree_app import TreeApp
 
         model = _expanded_model()
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
@@ -1441,30 +1399,11 @@ class TestVisualIntegration:
         async with app.run_test():
             tv = app.query_one(TreeView)
             dv = app.query_one(DetailView)
-            footer = app.query_one(StatusFooter)
+            bar = app.query_one(BottomBar)
             # All three panels exist
             assert tv is not None
             assert dv is not None
-            assert footer is not None
-
-    @pytest.mark.asyncio()
-    async def test_cursor_move_updates_compact_preview(self) -> None:
-        """Moving the cursor in tree view updates the detail preview node."""
-        from tapes.ui.detail_view import DetailView
-        from tapes.ui.tree_app import TreeApp
-
-        model = _expanded_model()
-        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
-
-        async with app.run_test() as pilot:
-            dv = app.query_one(DetailView)
-            first_preview = dv._preview_node
-            # Move cursor down
-            await pilot.press("j")
-            second_preview = dv._preview_node
-            # Preview should update (may be different node or same if structure allows)
-            # The important thing is that _update_preview was called
-            assert second_preview is not None or first_preview is not None
+            assert bar is not None
 
     @pytest.mark.asyncio()
     async def test_question_mark_toggles_help(self) -> None:

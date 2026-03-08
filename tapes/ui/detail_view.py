@@ -119,7 +119,7 @@ class DetailView(Widget):
     def render(self) -> RenderableType:
         """Build Rich Text content (visibility controlled by CSS)."""
         inner_width = self.size.width
-        return Text("\n").join(self._render_content(inner_width))
+        return Text("\n").join(self._build_content(inner_width))
 
     def _compute_col_widths(self) -> tuple[int, int, int]:
         """Compute auto-sized column widths: (label_w, value_w, source_w).
@@ -169,7 +169,7 @@ class DetailView(Widget):
             return text[: width - 1] + "\u2026"
         return text.ljust(width)
 
-    def _render_content(self, inner_width: int) -> list[Text]:
+    def _build_content(self, inner_width: int) -> list[Text]:
         """Render the full detail view with separator and footer hints."""
         content: list[Text] = []
 
