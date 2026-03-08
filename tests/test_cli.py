@@ -34,12 +34,6 @@ def test_import_help():
     assert "import" in result.output.lower()
 
 
-def test_tree_help():
-    result = runner.invoke(app, ["tree", "--help"])
-    assert result.exit_code == 0
-    assert "tree" in result.output.lower()
-
-
 # ---------------------------------------------------------------------------
 # _build_overrides
 # ---------------------------------------------------------------------------
@@ -168,36 +162,6 @@ class TestImportFlags:
 
     def test_help_panels_present(self) -> None:
         result = runner.invoke(app, ["import", "--help"])
-        assert "Library" in result.output
-        assert "Metadata" in result.output
-        assert "Advanced" in result.output
-
-
-# ---------------------------------------------------------------------------
-# Tree command flags
-# ---------------------------------------------------------------------------
-
-
-class TestTreeFlags:
-    def test_operation_flag_in_help(self) -> None:
-        result = runner.invoke(app, ["tree", "--help"])
-        assert "--operation" in result.output
-
-    def test_tmdb_token_flag_in_help(self) -> None:
-        result = runner.invoke(app, ["tree", "--help"])
-        assert "--tmdb-token" in result.output
-
-    def test_max_workers_flag_in_help(self) -> None:
-        result = runner.invoke(app, ["tree", "--help"])
-        assert "--max-workers" in result.output
-
-    def test_library_flags_in_help(self) -> None:
-        result = runner.invoke(app, ["tree", "--help"])
-        assert "--library-movies" in result.output
-        assert "--library-tv" in result.output
-
-    def test_help_panels_present(self) -> None:
-        result = runner.invoke(app, ["tree", "--help"])
         assert "Library" in result.output
         assert "Metadata" in result.output
         assert "Advanced" in result.output
