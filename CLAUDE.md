@@ -18,17 +18,18 @@ GitHub: https://github.com/laermannjan/tapes
 ## Setup
 
 ```sh
-uv sync                                  # install deps
-git config core.hooksPath .githooks      # enable pre-commit hook
-uv run pytest                            # run all tests
-uv run tapes --help                      # verify CLI works
+uv sync                    # install deps
+uv run pre-commit install  # enable pre-commit hooks
+uv run pytest              # run all tests
+uv run tapes --help        # verify CLI works
 ```
 
 Requires Python 3.11+. Package manager is `uv`. Never use `pip` directly.
 Dependencies must always be pinned.
 
-**Pre-commit hook** (`.githooks/pre-commit`): runs `ruff check`, `ruff format --check`,
-and `ty check` on staged Python files. Activate with `git config core.hooksPath .githooks`.
+**Pre-commit hooks** (`.pre-commit-config.yaml`): runs `ruff check --fix`,
+`ruff format`, and `ty check` on staged Python files. Uses project dev deps
+(not pre-commit's isolated venvs) so versions stay in sync with `pyproject.toml`.
 
 ---
 
