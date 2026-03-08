@@ -41,7 +41,6 @@ class TreeView(Widget):
         self._range_anchor: int | None = None
         self._filter_text: str = ""
         self._scroll_offset: int = 0
-        self._status_text: str = ""
         self._arrow_col: int = 40
         self._refresh_items()
 
@@ -174,14 +173,6 @@ class TreeView(Widget):
         max_allowed = inner_width // 2
         return min(max_width + 3, max_allowed)
 
-    BORDER_TITLE = "Files"
-
-    def set_status(self, text: str) -> None:
-        """Set the status text displayed in the bottom border."""
-        self._status_text = text
-        self.border_subtitle = text
-        self.refresh()
-
     def render(self) -> RenderableType:
         """Render the visible window of the tree with cursor highlighting."""
         w = self.size.width
@@ -190,8 +181,7 @@ class TreeView(Widget):
         if not self._items:
             return Text("(empty)", style=MUTED)
 
-        # Viewport height = widget height minus CSS border (2 lines)
-        viewport_height = max(1, self.size.height - 2)
+        viewport_height = max(1, self.size.height)
 
         start = self._scroll_offset
         end = min(start + viewport_height, len(self._items))
@@ -298,7 +288,7 @@ class TreeView(Widget):
         """Adjust scroll offset so cursor stays visible with scrolloff."""
         if not self._items:
             return
-        viewport_height = self.size.height - 2  # account for CSS border
+        viewport_height = self.size.height
         if viewport_height <= 0:
             return
 
