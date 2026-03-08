@@ -16,17 +16,21 @@ from tapes.ui.detail_render import (
     display_val,
     get_display_fields,
     is_multi_value,
-    render_compact_preview,
-    render_folder_preview,
 )
-from tapes.ui.tree_model import FileNode, FolderNode, compute_shared_fields
-from tapes.ui.tree_render import MUTED, compute_dest, render_dest, select_template
+from tapes.ui.tree_model import FileNode, compute_shared_fields
+from tapes.ui.tree_render import (
+    MUTED,
+    compute_dest,
+    render_dest,
+    render_separator,
+    select_template,
+)
 
 if TYPE_CHECKING:
     from rich.console import RenderableType
 
 # Accent color for focused panel and active tab.
-ACCENT = "#C79BFF"
+ACCENT = "#B1B9F9"
 # Column gap between field names, values, and source values.
 COL_GAP = "   "
 
@@ -60,13 +64,6 @@ class DetailView(Widget):
         self._fields: list[str] = []
         self._edit_value: str = ""
         self.on_before_mutate: Callable[[list[FileNode]], None] | None = None
-        self.on_editing_changed: Callable[[bool], None] | None = None
-        self._preview_node: FileNode | FolderNode | None = None
-
-    def watch_editing(self, value: bool) -> None:
-        """Notify parent when editing state changes."""
-        if self.on_editing_changed is not None:
-            self.on_editing_changed(value)
 
     def _active_template(self, node: FileNode | None = None) -> str:
         """Return the template for the given (or primary) node."""
@@ -104,18 +101,11 @@ class DetailView(Widget):
         self.editing = False
         self.refresh()
 
-    def set_preview_node(self, node: FileNode | FolderNode | None) -> None:
-        """Set the node to show in compact preview mode."""
-        self._preview_node = node
-        self.refresh()
-
     def _shared_result(self) -> dict[str, Any]:
         """Compute the shared result for multi-node display."""
         if not self.is_multi:
             return self.node.result
         return compute_shared_fields(self._file_nodes)
-
-    BORDER_TITLE = "Info"
 
     def _display_path(self, node: FileNode) -> str:
         """Return the display path for a node (relative to root or just name)."""
@@ -127,39 +117,9 @@ class DetailView(Widget):
         return node.path.name
 
     def render(self) -> RenderableType:
-        """Build Rich Text content (borders handled by Textual CSS)."""
+        """Build Rich Text content (visibility controlled by CSS)."""
         inner_width = self.size.width
-
-        is_expanded = self.has_class("expanded")
-
-        if is_expanded:
-            content = self._render_expanded_content(inner_width)
-        else:
-            content = self._render_compact_content()
-
-        return Text("\n").join(content)
-
-    def _render_compact_content(self) -> list[Text]:
-        """Render 2-line compact preview for the hovered node."""
-        preview = self._preview_node
-        if preview is None:
-            return [Text(" (no file selected)", style=MUTED)]
-
-        if isinstance(preview, FolderNode):
-            preview_text = render_folder_preview(preview)
-        elif isinstance(preview, FileNode):
-            template = select_template(
-                preview, self.movie_template, self.tv_template
-            )
-            preview_text = render_compact_preview(preview, template)
-        else:
-            return [Text(" (no file selected)", style=MUTED)]
-
-        return list(preview_text.split("\n"))
-
-    # ------------------------------------------------------------------
-    # Expanded content rendering
-    # ------------------------------------------------------------------
+        return Text("\n").join(self._render_content(inner_width))
 
     def _compute_col_widths(self) -> tuple[int, int, int]:
         """Compute auto-sized column widths: (label_w, value_w, source_w).
@@ -209,17 +169,20 @@ class DetailView(Widget):
             return text[: width - 1] + "\u2026"
         return text.ljust(width)
 
-    def _render_expanded_content(self, inner_width: int) -> list[Text]:
-        """Render the full detail view with tab-based header."""
+    def _render_content(self, inner_width: int) -> list[Text]:
+        """Render the full detail view with separator and footer hints."""
         content: list[Text] = []
 
-        # Tab bar: "Info" title + source tabs
+        # Separator line
+        content.append(render_separator(inner_width, title="Info", color=ACCENT))
+
+        # Tab bar
         content.append(self._render_tab_bar(inner_width))
 
-        # Blank line after tab bar
+        # Blank line
         content.append(Text())
 
-        # File path -> destination (single line, or multi-file summary)
+        # File path -> destination
         if self.is_multi:
             content.append(self._render_multi_path_line())
         else:
@@ -234,6 +197,10 @@ class DetailView(Widget):
             content.append(
                 self._render_field_row(row_idx, field_name, label_w, val_w, src_w)
             )
+
+        # Blank line + footer hints
+        content.append(Text())
+        content.append(self._render_footer_hints())
 
         return content
 
@@ -296,6 +263,18 @@ class DetailView(Widget):
         else:
             line.append("(various destinations)", style=MUTED)
         return line
+
+    def _render_footer_hints(self) -> Text:
+        """Render contextual footer hints based on editing state."""
+        if self.editing:
+            return Text(
+                " Enter to confirm \u00b7 Esc to cancel",
+                style=f"italic {MUTED}",
+            )
+        return Text(
+            " Enter to edit \u00b7 a to apply \u00b7 \u21e7Enter to apply all \u00b7 \u2190/\u2192 sources \u00b7 Esc to back",
+            style=f"italic {MUTED}",
+        )
 
     def _render_field_row(
         self,

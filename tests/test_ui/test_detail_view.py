@@ -737,13 +737,12 @@ class TestTreeDetailIntegration:
             tv = app.query_one(TreeView)
             dv = app.query_one(DetailView)
 
-            # Initially detail is not expanded
-            assert "expanded" not in dv.classes
+            # Initially detail is not shown
+            assert app._in_detail is False
 
             # Enter on the file node opens detail
             await pilot.press("enter")
             assert app._in_detail is True
-            assert "expanded" in dv.classes
             assert dv.node is node
 
             # Navigate in detail view
@@ -755,7 +754,6 @@ class TestTreeDetailIntegration:
             # Escape returns to tree
             await pilot.press("escape")
             assert app._in_detail is False
-            assert "expanded" not in dv.classes
 
 
 @pytest.mark.skipif(not HAS_PILOT, reason="textual pilot not available")
