@@ -56,7 +56,7 @@ class TreeApp(App):
         padding: 0 1;
     }
     TreeView.dimmed {
-        color: #555555;
+        opacity: 0.4;
     }
     DetailView {
         display: none;
