@@ -7,12 +7,11 @@ from typing import TYPE_CHECKING
 from rich.text import Text
 from textual.widget import Widget
 
-from tapes.ui.tree_render import MUTED, render_separator
+from tapes.ui.tree_render import ACCENT, MUTED, render_separator
 
 if TYPE_CHECKING:
     from rich.console import RenderableType
 
-ACCENT = "#B1B9F9"
 KEY_COLOR = ACCENT
 # Help content line count (update if content changes).
 HELP_HEIGHT = 38

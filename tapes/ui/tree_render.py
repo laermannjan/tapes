@@ -23,6 +23,18 @@ STAGED_COLOR = "#4EBA65"
 CURSOR_BG = "on #373737"
 # Range selection background (matches cursor).
 RANGE_BG = "on #373737"
+# Accent color for focused separators, active tabs, and highlights.
+ACCENT = "#B1B9F9"
+# Inactive separator color.
+INACTIVE = "#555555"
+# Ember for diffs, warnings, and placeholder highlights.
+EMBER = "#E07A47"
+# Soft green for additions and copy operations.
+SOFT_GREEN = "#86E89A"
+# Soft red for low-confidence warnings.
+SOFT_RED = "#FF7A7A"
+# Soft blue for link operations.
+SOFT_BLUE = "#7AB8FF"
 
 
 @functools.lru_cache(maxsize=8)
@@ -180,7 +192,7 @@ def _append_with_yellow_placeholders(text: Text, s: str, base_style: str) -> Non
             # Collect consecutive ?
             while j < len(s) and s[j] == "?":
                 j += 1
-            text.append(s[i:j], style="#E07A47")
+            text.append(s[i:j], style=EMBER)
         else:
             # Collect non-? characters
             while j < len(s) and s[j] != "?":

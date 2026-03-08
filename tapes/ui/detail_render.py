@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from tapes.ui.tree_render import MUTED, template_field_names
+from tapes.ui.tree_render import EMBER, MUTED, SOFT_GREEN, SOFT_RED, template_field_names
 
 
 def get_display_fields(template: str) -> list[str]:
@@ -38,27 +38,29 @@ def diff_style(result_val: Any, source_val: Any) -> str:
     """Return a Rich style for a source value relative to the result.
 
     - Muted gray if source is None (missing) or matches the result.
-    - ``"green"`` if source fills an empty result slot.
-    - ``"#E07A47"`` (ember) if source differs from a non-empty result.
+    - Soft green if source fills an empty result slot.
+    - Ember if source differs from a non-empty result.
     """
+
     if source_val is None:
         return MUTED
     if result_val is None or result_val == "":
-        return "#86E89A"
+        return SOFT_GREEN
     if str(result_val) == str(source_val):
         return MUTED
-    return "#E07A47"
+    return EMBER
 
 
 def confidence_style(confidence: float) -> str:
     """Return a Rich style for a confidence percentage.
 
     - Muted for >= 80% (normal, nothing to worry about).
-    - ``"#E07A47"`` (ember) for 50-79%.
-    - ``"#FF7A7A"`` (soft red) for < 50%.
+    - Ember for 50-79%.
+    - Soft red for < 50%.
     """
+
     if confidence >= 0.8:
-        return "#888888"
+        return MUTED
     if confidence >= 0.5:
-        return "#E07A47"
-    return "#FF7A7A"
+        return EMBER
+    return SOFT_RED
