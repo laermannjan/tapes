@@ -6,8 +6,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import PropertyMock, patch
 
+from tapes.categorize import categorize_staged
 from tapes.tree_model import FileNode
-from tapes.ui.commit_view import CommitView, categorize_staged
+from tapes.ui.commit_view import CommitView
 
 
 def _render_plain(widget, width: int = 80, height: int = 20) -> str:

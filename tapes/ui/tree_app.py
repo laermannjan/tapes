@@ -12,6 +12,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.events import Key
 
+from tapes.categorize import categorize_staged
 from tapes.config import TapesConfig
 from tapes.fields import MEDIA_TYPE, MEDIA_TYPE_EPISODE
 from tapes.tree_model import (
@@ -20,7 +21,7 @@ from tapes.tree_model import (
     TreeModel,
 )
 from tapes.ui.bottom_bar import BottomBar
-from tapes.ui.commit_view import CommitView, categorize_staged
+from tapes.ui.commit_view import CommitView
 from tapes.ui.detail_view import DetailView
 from tapes.ui.help_overlay import HELP_HEIGHT, HelpView
 from tapes.ui.tree_view import TreeView
