@@ -27,7 +27,7 @@ REQUEST_TIMEOUT_S = 10.0
 MAX_TMDB_RESULTS = 3
 
 
-def create_client(token: str) -> httpx.Client:
+def create_client(token: str, timeout: float = REQUEST_TIMEOUT_S) -> httpx.Client:
     """Create an httpx client with TMDB auth headers.
 
     Caller is responsible for closing the client.
@@ -35,7 +35,7 @@ def create_client(token: str) -> httpx.Client:
     return httpx.Client(
         base_url=BASE_URL,
         headers={"Authorization": f"Bearer {token}"},
-        timeout=REQUEST_TIMEOUT_S,
+        timeout=timeout,
     )
 
 
@@ -57,28 +57,32 @@ def _retry_after_wait(retry_state: tenacity.RetryCallState) -> float:
     return tenacity.wait_exponential(multiplier=1, min=1, max=30)(retry_state)
 
 
-@tenacity.retry(
-    retry=tenacity.retry_if_exception(_is_retryable),
-    wait=_retry_after_wait,
-    stop=tenacity.stop_after_attempt(3),
-    reraise=True,
-)
 def _request(
     method: str,
     path: str,
     token: str,
     client: httpx.Client | None = None,
+    max_retries: int = 3,
     **kwargs: Any,
 ) -> httpx.Response:
     """Make a TMDB API request, reusing client if provided."""
-    if client is not None:
-        resp = client.request(method, path, **kwargs)
-        resp.raise_for_status()
-        return resp
-    with create_client(token) as c:
-        resp = c.request(method, path, **kwargs)
-        resp.raise_for_status()
-        return resp
+    retryer = tenacity.Retrying(
+        retry=tenacity.retry_if_exception(_is_retryable),
+        wait=_retry_after_wait,
+        stop=tenacity.stop_after_attempt(max_retries),
+        reraise=True,
+    )
+    for attempt in retryer:
+        with attempt:
+            if client is not None:
+                resp = client.request(method, path, **kwargs)
+                resp.raise_for_status()
+                return resp
+            with create_client(token) as c:
+                resp = c.request(method, path, **kwargs)
+                resp.raise_for_status()
+                return resp
+    raise RuntimeError("Unreachable: tenacity retry loop exited without return or raise")
 
 
 def search_multi(
@@ -87,8 +91,10 @@ def search_multi(
     year: int | None = None,
     *,
     client: httpx.Client | None = None,
+    max_results: int = MAX_TMDB_RESULTS,
+    max_retries: int = 3,
 ) -> list[dict]:
-    """Search /search/multi. Returns up to 3 results.
+    """Search /search/multi. Returns up to ``max_results`` results.
 
     Each result dict has: tmdb_id, title, year, media_type ("movie" or "episode").
     Movies come from results with media_type=="movie".
@@ -103,7 +109,7 @@ def search_multi(
         params["year"] = year
 
     try:
-        resp = _request("GET", "/search/multi", token, client=client, params=params)
+        resp = _request("GET", "/search/multi", token, client=client, max_retries=max_retries, params=params)
     except httpx.HTTPError as exc:
         logger.warning("TMDB search_multi failed: %s", exc)
         return []
@@ -139,7 +145,7 @@ def search_multi(
             )
         # Skip "person" and other types
 
-        if len(results) >= MAX_TMDB_RESULTS:
+        if len(results) >= max_results:
             break
 
     return results
@@ -150,13 +156,14 @@ def get_show(
     token: str,
     *,
     client: httpx.Client | None = None,
+    max_retries: int = 3,
 ) -> dict:
     """GET /tv/{id}. Returns show info with seasons list."""
     if not token:
         return {}
 
     try:
-        resp = _request("GET", f"/tv/{tmdb_id}", token, client=client)
+        resp = _request("GET", f"/tv/{tmdb_id}", token, client=client, max_retries=max_retries)
     except httpx.HTTPError as exc:
         logger.warning("TMDB get_show failed: %s", exc)
         return {}
@@ -182,6 +189,7 @@ def get_season_episodes(
     show_year: int | None = None,
     *,
     client: httpx.Client | None = None,
+    max_retries: int = 3,
 ) -> list[dict]:
     """GET /tv/{show_id}/season/{season_number}. Returns list of episode dicts.
 
@@ -192,7 +200,7 @@ def get_season_episodes(
         return []
 
     try:
-        resp = _request("GET", f"/tv/{show_id}/season/{season_number}", token, client=client)
+        resp = _request("GET", f"/tv/{show_id}/season/{season_number}", token, client=client, max_retries=max_retries)
     except httpx.HTTPError as exc:
         logger.warning("TMDB get_season_episodes failed: %s", exc)
         return []

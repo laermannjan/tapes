@@ -8,6 +8,7 @@ import respx
 
 from tapes.tmdb import (
     BASE_URL,
+    _request,
     get_season_episodes,
     get_show,
     search_multi,
@@ -251,7 +252,6 @@ class TestRequest:
     @respx.mock
     def test_retries_on_429(self) -> None:
         """_request should retry on 429 with Retry-After header."""
-        from tapes.tmdb import _request
 
         respx.get(f"{BASE_URL}/search/multi").mock(
             side_effect=[
@@ -265,7 +265,6 @@ class TestRequest:
     @respx.mock
     def test_retries_on_500(self) -> None:
         """_request should retry on 500 server errors."""
-        from tapes.tmdb import _request
 
         respx.get(f"{BASE_URL}/search/multi").mock(
             side_effect=[
@@ -279,7 +278,6 @@ class TestRequest:
     @respx.mock
     def test_gives_up_after_3_attempts(self) -> None:
         """_request should raise after 3 failed attempts."""
-        from tapes.tmdb import _request
 
         respx.get(f"{BASE_URL}/search/multi").mock(
             side_effect=[
@@ -294,9 +292,100 @@ class TestRequest:
     @respx.mock
     def test_no_retry_on_404(self) -> None:
         """_request should not retry on 404 (non-retryable status)."""
-        from tapes.tmdb import _request
 
         route = respx.get(f"{BASE_URL}/tv/999").mock(return_value=httpx.Response(404))
         with pytest.raises(httpx.HTTPStatusError):
             _request("GET", "/tv/999", "fake-token")
         assert route.call_count == 1
+
+    @respx.mock
+    def test_max_retries_1_only_retries_once(self) -> None:
+        """_request with max_retries=1 should not retry (1 attempt total)."""
+        route = respx.get(f"{BASE_URL}/search/multi").mock(
+            return_value=httpx.Response(429, headers={"Retry-After": "0"})
+        )
+        with pytest.raises(httpx.HTTPStatusError):
+            _request("GET", "/search/multi", "fake-token", max_retries=1, params={"query": "test"})
+        assert route.call_count == 1
+
+    @respx.mock
+    def test_max_retries_2_allows_one_retry(self) -> None:
+        """_request with max_retries=2 retries once then succeeds."""
+        respx.get(f"{BASE_URL}/search/multi").mock(
+            side_effect=[
+                httpx.Response(429, headers={"Retry-After": "0"}),
+                httpx.Response(200, json={"results": []}),
+            ]
+        )
+        resp = _request("GET", "/search/multi", "fake-token", max_retries=2, params={"query": "test"})
+        assert resp.status_code == 200
+
+
+class TestCreateClient:
+    def test_default_timeout(self) -> None:
+        """create_client uses REQUEST_TIMEOUT_S by default."""
+        from tapes.tmdb import REQUEST_TIMEOUT_S, create_client
+
+        client = create_client("fake-token")
+        assert client.timeout == httpx.Timeout(REQUEST_TIMEOUT_S)
+        client.close()
+
+    def test_custom_timeout(self) -> None:
+        """create_client accepts a custom timeout."""
+        from tapes.tmdb import create_client
+
+        client = create_client("fake-token", timeout=5.0)
+        assert client.timeout == httpx.Timeout(5.0)
+        client.close()
+
+
+class TestSearchMultiMaxResults:
+    @respx.mock
+    def test_max_results_limits_output(self) -> None:
+        """search_multi with max_results=2 returns at most 2 results."""
+        respx.get(f"{BASE_URL}/search/multi").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {"id": i, "media_type": "movie", "title": f"Movie {i}", "release_date": "2021-01-01"}
+                        for i in range(5)
+                    ]
+                },
+            )
+        )
+        results = search_multi("Movie", TOKEN, max_results=2)
+        assert len(results) == 2
+
+    @respx.mock
+    def test_max_results_default_is_3(self) -> None:
+        """search_multi without max_results uses the default (3)."""
+        respx.get(f"{BASE_URL}/search/multi").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {"id": i, "media_type": "movie", "title": f"Movie {i}", "release_date": "2021-01-01"}
+                        for i in range(10)
+                    ]
+                },
+            )
+        )
+        results = search_multi("Movie", TOKEN)
+        assert len(results) == 3
+
+    @respx.mock
+    def test_max_results_larger_than_available(self) -> None:
+        """search_multi with max_results=10 returns all available when fewer exist."""
+        respx.get(f"{BASE_URL}/search/multi").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {"id": 1, "media_type": "movie", "title": "Only One", "release_date": "2021-01-01"},
+                    ]
+                },
+            )
+        )
+        results = search_multi("Only", TOKEN, max_results=10)
+        assert len(results) == 1
