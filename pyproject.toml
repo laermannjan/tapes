@@ -20,6 +20,8 @@ dev = [
     "pytest-asyncio>=1,<2",
     "textual-dev>=1,<2",
     "respx>=0.22,<1",
+    "ruff>=0.11,<1",
+    "ty>=0.0.1a7",
 ]
 
 [project.scripts]
@@ -28,6 +30,48 @@ tapes = "tapes.cli:app"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "COM812",   # trailing comma -- conflicts with formatter
+    "ISC001",   # implicit string concat -- conflicts with formatter
+    "D",        # pydocstring -- add later when ready
+    "ANN",      # type annotations -- add later when ready
+    "FIX",      # fixme comments
+    "TD",       # todo comments
+    "ERA",      # commented-out code
+    "PLC0415",  # import-outside-top-level -- lazy imports are intentional
+    "FBT",      # boolean traps -- typer/textual use bools by design
+    "EM",       # exception message formatting -- too opinionated
+    "TRY003",   # raise-vanilla-args -- too opinionated
+    "B008",     # function-call-in-default-argument -- typer pattern
+    "INP001",   # implicit-namespace-package -- flat layout, no __init__.py needed
+    "PLR0913",  # too-many-arguments -- pipeline functions need many params
+    "C901",     # complex-structure -- pipeline logic is inherently complex
+    "PLR0912",  # too-many-branches -- same reason
+    "PLR0915",  # too-many-statements -- same reason
+    "TC",       # type-checking imports -- risky to move Path etc. to TYPE_CHECKING
+    "PLR2004",  # magic-value-comparison -- 2, 3, 4 are obvious in context
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "S101",     # assert -- expected in tests
+    "PLR2004",  # magic values -- expected in tests
+    "SLF001",   # private access -- needed for testing internals
+    "ARG",      # unused arguments -- mocks and fixtures
+    "S105",     # hardcoded passwords -- test tokens
+    "PT023",    # pytest-incorrect-mark-parentheses -- @pytest.mark.asyncio()
+]
+
+[tool.ty]
+# Most current errors are Textual/Pydantic/Rich framework false positives
+# (styles.display setter, dict coercion, render return types)
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
