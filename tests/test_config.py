@@ -42,6 +42,14 @@ def _clean_tapes_env(monkeypatch: pytest.MonkeyPatch) -> None:
 class TestScanConfig:
     """Test ScanConfig defaults and customization."""
 
+    def test_import_path_default_empty(self) -> None:
+        cfg = ScanConfig()
+        assert cfg.import_path == ""
+
+    def test_import_path_custom(self) -> None:
+        cfg = ScanConfig(import_path="/media/incoming")
+        assert cfg.import_path == "/media/incoming"
+
     def test_ignore_patterns_defaults(self) -> None:
         cfg = ScanConfig()
         assert cfg.ignore_patterns == ["Thumbs.db", ".DS_Store", "desktop.ini"]
@@ -151,6 +159,11 @@ class TestEnvVarLoading:
         monkeypatch.setenv("TAPES_ADVANCED__MAX_WORKERS", "8")
         cfg = TapesConfig()
         assert cfg.advanced.max_workers == 8
+
+    def test_import_path_via_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("TAPES_SCAN__IMPORT_PATH", "/incoming")
+        cfg = TapesConfig()
+        assert cfg.scan.import_path == "/incoming"
 
 
 class TestTmdbTokenCompat:

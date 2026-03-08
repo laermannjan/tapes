@@ -14,6 +14,7 @@ from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, Settings
 
 
 class ScanConfig(BaseModel):
+    import_path: str = ""
     ignore_patterns: list[str] = ["Thumbs.db", ".DS_Store", "desktop.ini"]
     video_extensions: list[str] = [".mkv", ".mp4", ".avi", ".mov", ".m4v", ".ts", ".m2ts", ".wmv", ".flv"]
 

@@ -49,6 +49,9 @@ metadata:
 # Scan -- file discovery
 # ---------------------------------------------------------------------------
 scan:
+  # Default import directory (used by `tapes serve`).
+  # import_path: /media/incoming
+
   # Filename patterns to ignore (fnmatch syntax).
   # ignore_patterns: [Thumbs.db, .DS_Store, desktop.ini]
 
