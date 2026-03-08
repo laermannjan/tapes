@@ -64,6 +64,11 @@ class _TmdbCache:
             result = fetch_fn()
             with self._lock:
                 self._data[key] = result
+        except Exception:
+            with self._lock:
+                del self._pending[key]  # allow retry
+            raise
+        else:
             return result
         finally:
             event.set()

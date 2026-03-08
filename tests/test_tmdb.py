@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import httpx
+import pytest
 import respx
 
 from tapes.tmdb import (
@@ -244,3 +245,58 @@ class TestGetSeasonEpisodes:
     def test_http_error(self) -> None:
         respx.get(f"{BASE_URL}/tv/1396/season/1").mock(return_value=httpx.Response(404))
         assert get_season_episodes(1396, 1, TOKEN) == []
+
+
+class TestRequest:
+    @respx.mock
+    def test_retries_on_429(self) -> None:
+        """_request should retry on 429 with Retry-After header."""
+        from tapes.tmdb import _request
+
+        respx.get(f"{BASE_URL}/search/multi").mock(
+            side_effect=[
+                httpx.Response(429, headers={"Retry-After": "0"}),
+                httpx.Response(200, json={"results": []}),
+            ]
+        )
+        resp = _request("GET", "/search/multi", "fake-token", params={"query": "test"})
+        assert resp.status_code == 200
+
+    @respx.mock
+    def test_retries_on_500(self) -> None:
+        """_request should retry on 500 server errors."""
+        from tapes.tmdb import _request
+
+        respx.get(f"{BASE_URL}/search/multi").mock(
+            side_effect=[
+                httpx.Response(500),
+                httpx.Response(200, json={"results": []}),
+            ]
+        )
+        resp = _request("GET", "/search/multi", "fake-token", params={"query": "test"})
+        assert resp.status_code == 200
+
+    @respx.mock
+    def test_gives_up_after_3_attempts(self) -> None:
+        """_request should raise after 3 failed attempts."""
+        from tapes.tmdb import _request
+
+        respx.get(f"{BASE_URL}/search/multi").mock(
+            side_effect=[
+                httpx.Response(429, headers={"Retry-After": "0"}),
+                httpx.Response(429, headers={"Retry-After": "0"}),
+                httpx.Response(429, headers={"Retry-After": "0"}),
+            ]
+        )
+        with pytest.raises(httpx.HTTPStatusError):
+            _request("GET", "/search/multi", "fake-token", params={"query": "test"})
+
+    @respx.mock
+    def test_no_retry_on_404(self) -> None:
+        """_request should not retry on 404 (non-retryable status)."""
+        from tapes.tmdb import _request
+
+        route = respx.get(f"{BASE_URL}/tv/999").mock(return_value=httpx.Response(404))
+        with pytest.raises(httpx.HTTPStatusError):
+            _request("GET", "/tv/999", "fake-token")
+        assert route.call_count == 1

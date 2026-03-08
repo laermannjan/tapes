@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 import httpx
+import tenacity
 
 from tapes.fields import (
     EPISODE,
@@ -35,6 +37,48 @@ def create_client(token: str) -> httpx.Client:
     )
 
 
+def _is_retryable(exc: BaseException) -> bool:
+    """Return True for HTTP errors that warrant a retry."""
+    return isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code in {429, 500, 502, 503, 504}
+
+
+def _retry_after_wait(retry_state: tenacity.RetryCallState) -> float:
+    """Extract wait time from Retry-After header, falling back to exponential backoff."""
+    exc = retry_state.outcome.exception()  # type: ignore[union-attr]
+    if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 429:
+        retry_after = exc.response.headers.get("Retry-After")
+        if retry_after:
+            try:
+                return float(retry_after)
+            except ValueError:
+                pass
+    return tenacity.wait_exponential(multiplier=1, min=1, max=30)(retry_state)
+
+
+@tenacity.retry(
+    retry=tenacity.retry_if_exception(_is_retryable),
+    wait=_retry_after_wait,
+    stop=tenacity.stop_after_attempt(3),
+    reraise=True,
+)
+def _request(
+    method: str,
+    path: str,
+    token: str,
+    client: httpx.Client | None = None,
+    **kwargs: Any,
+) -> httpx.Response:
+    """Make a TMDB API request, reusing client if provided."""
+    if client is not None:
+        resp = client.request(method, path, **kwargs)
+        resp.raise_for_status()
+        return resp
+    with create_client(token) as c:
+        resp = c.request(method, path, **kwargs)
+        resp.raise_for_status()
+        return resp
+
+
 def search_multi(
     query: str,
     token: str,
@@ -57,13 +101,7 @@ def search_multi(
         params["year"] = year
 
     try:
-        if client is not None:
-            resp = client.get("/search/multi", params=params)
-            resp.raise_for_status()
-        else:
-            with create_client(token) as c:
-                resp = c.get("/search/multi", params=params)
-                resp.raise_for_status()
+        resp = _request("GET", "/search/multi", token, client=client, params=params)
     except (httpx.HTTPError, httpx.HTTPStatusError) as exc:
         logger.warning("TMDB search_multi failed: %s", exc)
         return []
@@ -116,13 +154,7 @@ def get_show(
         return {}
 
     try:
-        if client is not None:
-            resp = client.get(f"/tv/{tmdb_id}")
-            resp.raise_for_status()
-        else:
-            with create_client(token) as c:
-                resp = c.get(f"/tv/{tmdb_id}")
-                resp.raise_for_status()
+        resp = _request("GET", f"/tv/{tmdb_id}", token, client=client)
     except (httpx.HTTPError, httpx.HTTPStatusError) as exc:
         logger.warning("TMDB get_show failed: %s", exc)
         return {}
@@ -158,13 +190,7 @@ def get_season_episodes(
         return []
 
     try:
-        if client is not None:
-            resp = client.get(f"/tv/{show_id}/season/{season_number}")
-            resp.raise_for_status()
-        else:
-            with create_client(token) as c:
-                resp = c.get(f"/tv/{show_id}/season/{season_number}")
-                resp.raise_for_status()
+        resp = _request("GET", f"/tv/{show_id}/season/{season_number}", token, client=client)
     except (httpx.HTTPError, httpx.HTTPStatusError) as exc:
         logger.warning("TMDB get_season_episodes failed: %s", exc)
         return []
