@@ -62,12 +62,12 @@ class TestHelpTextContent:
     def test_contains_stage_key(self) -> None:
         text = _build_help_text()
         plain = text.plain
-        assert "Toggle staged" in plain
+        assert "toggle staged" in plain
 
-    def test_contains_apply_key(self) -> None:
+    def test_contains_edit_key(self) -> None:
         text = _build_help_text()
         plain = text.plain
-        assert "Apply field" in plain
+        assert "edit field inline" in plain
 
     def test_contains_close_hint(self) -> None:
         text = _build_help_text()
@@ -77,12 +77,12 @@ class TestHelpTextContent:
     def test_contains_commit_key(self) -> None:
         text = _build_help_text()
         plain = text.plain
-        assert "Commit staged" in plain
+        assert "commit staged" in plain
 
     def test_contains_sources_explanation(self) -> None:
         text = _build_help_text()
         plain = text.plain
-        assert "Sources provide metadata" in plain
+        assert "sources provide metadata" in plain
 
 
 # ---------------------------------------------------------------------------

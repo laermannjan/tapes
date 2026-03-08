@@ -532,9 +532,9 @@ class TreeApp(App):
 
         # Hints
         if self._searching:
-            bar.hint_text = "Enter to confirm \u00b7 Esc to cancel"
+            bar.hint_text = "enter to confirm \u00b7 esc to cancel"
         else:
             bar.hint_text = (
-                "Space to stage \u00b7 Enter for details \u00b7 a to accept \u00b7 "
-                "\u21e7Tab op \u00b7 c to commit \u00b7 ? for help"
+                "space stage \u00b7 enter details \u00b7 a accept \u00b7 "
+                "shift-tab op \u00b7 c commit \u00b7 ? help"
             )

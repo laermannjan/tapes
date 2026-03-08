@@ -30,7 +30,7 @@ def build_commit_text(count: int, operation: str) -> Text:
     result.append("  Operation: ")
     result.append(f"[{operation}]", style="bold")
     result.append("     ")
-    result.append("\u2190/\u2192 to change", style=f"italic {MUTED}")
+    result.append("h/l to change", style=f"italic {MUTED}")
     result.append("\n\n")
 
     # Footer with keybinding hints

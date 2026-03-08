@@ -75,8 +75,8 @@ class TestDetailViewRendering:
     def test_detail_render_has_footer_hints(self) -> None:
         view = _make_detail_view()
         plain = _render_plain(view, height=30)
-        assert "Enter to edit" in plain
-        assert "Esc to back" in plain
+        assert "enter edit" in plain
+        assert "esc discard" in plain
 
     def test_detail_render_no_manual_borders(self) -> None:
         view = _make_detail_view()

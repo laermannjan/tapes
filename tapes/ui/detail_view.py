@@ -226,7 +226,7 @@ class DetailView(Widget):
             if len(sources) > 1:
                 line.append("   ")
                 line.append(
-                    "\u2190/\u2192 to cycle",
+                    "h/l to cycle",
                     style=f"italic {MUTED}",
                 )
         else:
@@ -267,11 +267,11 @@ class DetailView(Widget):
         """Render contextual footer hints based on editing state."""
         if self.editing:
             return Text(
-                " Enter to confirm \u00b7 Esc to cancel",
+                " enter to confirm \u00b7 esc to cancel",
                 style=f"italic {MUTED}",
             )
         return Text(
-            " Enter to edit \u00b7 a to apply \u00b7 \u21e7Enter to apply all \u00b7 \u2190/\u2192 sources \u00b7 Esc to back",
+            " enter edit \u00b7 shift-enter apply all \u00b7 d clear \u00b7 g guessit \u00b7 tab sources \u00b7 c confirm \u00b7 esc discard",
             style=f"italic {MUTED}",
         )
 
