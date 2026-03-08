@@ -4,19 +4,48 @@ from __future__ import annotations
 
 import hashlib
 import shutil
+from collections.abc import Callable
 from pathlib import Path
+
+_COPY_BUFSIZE = 1024 * 1024  # 1 MB
 
 
 def _sha256(path: Path) -> str:
     """Compute SHA-256 hex digest of a file."""
-    h = hashlib.sha256()
     with path.open("rb") as f:
-        for chunk in iter(lambda: f.read(8192), b""):
-            h.update(chunk)
+        return hashlib.file_digest(f, "sha256").hexdigest()
+
+
+def _copy_and_hash(
+    src: Path,
+    dest: Path,
+    progress_callback: Callable[[int, int], None] | None = None,
+) -> str:
+    """Copy *src* to *dest* while computing SHA-256. Returns hex digest."""
+    total = src.stat().st_size
+    h = hashlib.sha256()
+    copied = 0
+    with src.open("rb") as fsrc, dest.open("wb") as fdst:
+        while True:
+            buf = fsrc.read(_COPY_BUFSIZE)
+            if not buf:
+                break
+            fdst.write(buf)
+            h.update(buf)
+            copied += len(buf)
+            if progress_callback is not None:
+                progress_callback(copied, total)
+    shutil.copystat(src, dest)
     return h.hexdigest()
 
 
-def process_file(src: Path, dest: Path, operation: str, dry_run: bool = False) -> str:
+def process_file(
+    src: Path,
+    dest: Path,
+    operation: str,
+    dry_run: bool = False,
+    progress_callback: Callable[[int, int], None] | None = None,
+) -> str:
     """Process a single file with the given operation.
 
     Args:
@@ -41,11 +70,10 @@ def process_file(src: Path, dest: Path, operation: str, dry_run: bool = False) -
     dest.parent.mkdir(parents=True, exist_ok=True)
 
     if operation == "copy":
-        shutil.copy2(src, dest)
+        _copy_and_hash(src, dest, progress_callback)
         return f"Copied {src} -> {dest}"
     if operation == "move":
-        src_hash = _sha256(src)
-        shutil.copy2(src, dest)
+        src_hash = _copy_and_hash(src, dest, progress_callback)
         if _sha256(dest) == src_hash:
             src.unlink()
         else:
