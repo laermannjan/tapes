@@ -5,7 +5,7 @@ tmdb_id override) exposed a deeper problem: "similarity" and
 "confidence" are different things, and our algorithm choice (WRatio)
 collapses the distinction.
 
-**Status:** design only. Not yet implemented.
+**Status:** implemented.
 
 ---
 
