@@ -1,6 +1,7 @@
 """Textual App for the tree-based file browser."""
 from __future__ import annotations
 
+import copy
 from pathlib import Path
 
 from textual.app import App, ComposeResult
@@ -83,6 +84,7 @@ class TreeApp(App):
         self.root_path = root_path
         self.config = config or TapesConfig()
         self._in_detail = False
+        self._detail_snapshot: list[tuple[FileNode, dict, list, bool]] | None = None
         self._auto_pipeline = auto_pipeline
         self._tmdb_querying = False
         self._tmdb_progress = (0, 0)
@@ -156,6 +158,9 @@ class TreeApp(App):
     def _show_detail(self, node: FileNode) -> None:
         """Switch from tree view to detail view for a file node."""
         self._in_detail = True
+        self._detail_snapshot = [
+            (node, copy.deepcopy(node.result), copy.deepcopy(node.sources), node.staged)
+        ]
         detail = self.query_one(DetailView)
         detail.set_node(node)
         # separator + tab_bar + blank + path + blank + fields + blank + hints
@@ -168,6 +173,10 @@ class TreeApp(App):
     def _show_detail_multi(self, nodes: list[FileNode]) -> None:
         """Switch from tree view to detail view for multiple file nodes."""
         self._in_detail = True
+        self._detail_snapshot = [
+            (n, copy.deepcopy(n.result), copy.deepcopy(n.sources), n.staged)
+            for n in nodes
+        ]
         detail = self.query_one(DetailView)
         detail.set_nodes(nodes)
         detail.styles.height = len(detail.fields) + 7
@@ -187,6 +196,21 @@ class TreeApp(App):
         tv.focus()
         tv.refresh()
         self._update_footer()
+
+    def _confirm_detail(self) -> None:
+        """Confirm detail view changes and return to tree."""
+        self._detail_snapshot = None
+        self._show_tree()
+
+    def _discard_detail(self) -> None:
+        """Discard detail view changes and return to tree."""
+        if self._detail_snapshot:
+            for node, result, sources, staged in self._detail_snapshot:
+                node.result = result
+                node.sources = sources
+                node.staged = staged
+            self._detail_snapshot = None
+        self._show_tree()
 
     def action_toggle_help(self) -> None:
         """Show the help screen."""
@@ -286,7 +310,7 @@ class TreeApp(App):
             if dv.editing:
                 dv.cancel_edit()
             else:
-                self._show_tree()
+                self._discard_detail()
             return
         tv = self.query_one(TreeView)
         if tv.in_range_mode:
@@ -301,6 +325,7 @@ class TreeApp(App):
 
     def action_commit(self) -> None:
         if self._in_detail:
+            self._confirm_detail()
             return
         tv = self.query_one(TreeView)
         if tv.staged_count == 0:
@@ -363,7 +388,6 @@ class TreeApp(App):
 
     def action_accept_best(self) -> None:
         if self._in_detail:
-            self.query_one(DetailView).apply_source_field()
             return
         tv = self.query_one(TreeView)
         if tv.in_range_mode:

@@ -1286,3 +1286,81 @@ class TestVisualIntegration:
             # Dismiss help (? is bound to dismiss on HelpScreen)
             await pilot.press("question_mark")
             assert len(app.screen_stack) == 1
+
+
+# ---------------------------------------------------------------------------
+# Detail confirm/discard tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(not HAS_PILOT, reason="textual pilot not available")
+class TestDetailConfirmDiscard:
+    """Tests for the confirm/discard model in detail view."""
+
+    @pytest.mark.asyncio()
+    async def test_esc_discards_changes(self) -> None:
+        from tapes.ui.tree_app import TreeApp
+
+        node = FileNode(
+            path=Path("/media/test.mkv"),
+            result={"title": "Original"},
+            sources=[Source(name="TMDB #1", fields={"title": "Changed"}, confidence=0.9)],
+        )
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
+
+        async with app.run_test() as pilot:
+            await pilot.press("enter")
+            assert app._in_detail
+            await pilot.press("shift+enter")
+            assert node.result["title"] == "Changed"
+            await pilot.press("escape")
+            assert not app._in_detail
+            assert node.result["title"] == "Original"
+
+    @pytest.mark.asyncio()
+    async def test_c_confirms_changes(self) -> None:
+        from tapes.ui.tree_app import TreeApp
+
+        node = FileNode(
+            path=Path("/media/test.mkv"),
+            result={"title": "Original"},
+            sources=[Source(name="TMDB #1", fields={"title": "Changed"}, confidence=0.9)],
+        )
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
+
+        async with app.run_test() as pilot:
+            await pilot.press("enter")
+            await pilot.press("shift+enter")
+            assert node.result["title"] == "Changed"
+            await pilot.press("c")
+            assert not app._in_detail
+            assert node.result["title"] == "Changed"
+
+    @pytest.mark.asyncio()
+    async def test_esc_during_edit_cancels_edit_not_detail(self) -> None:
+        """Esc while editing cancels edit, doesn't discard detail changes."""
+        from tapes.ui.tree_app import TreeApp
+
+        from tapes.ui.detail_view import DetailView
+
+        node = FileNode(
+            path=Path("/media/test.mkv"),
+            result={"title": "Original"},
+        )
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
+
+        async with app.run_test() as pilot:
+            await pilot.press("enter")
+            dv = app.query_one(DetailView)
+            assert app._in_detail
+            await pilot.press("enter")  # start edit
+            assert dv.editing
+            await pilot.press("escape")  # cancel edit
+            assert not dv.editing
+            assert app._in_detail  # still in detail
