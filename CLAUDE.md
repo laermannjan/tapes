@@ -27,9 +27,26 @@ uv run tapes --help        # verify CLI works
 Requires Python 3.11+. Package manager is `uv`. Never use `pip` directly.
 Dependencies must always be pinned.
 
-**Pre-commit hooks** (`.pre-commit-config.yaml`): runs `ruff check --fix`,
-`ruff format`, and `ty check` on staged Python files. Uses project dev deps
-(not pre-commit's isolated venvs) so versions stay in sync with `pyproject.toml`.
+### Code quality checks
+
+Two mechanisms enforce ruff + ty on all Python changes:
+
+**Pre-commit hooks** (`.pre-commit-config.yaml`) -- run on `git commit` on
+your machine. Uses `ruff-pre-commit` (official repo, version synced from
+`uv.lock` via `sync-with-uv`) for ruff, and a local `uv run ty check` hook
+for ty (no official pre-commit repo yet). `pre-commit-uv` plugin ensures
+pre-commit uses `uv` instead of `pip` for hook environments.
+
+**Claude Code hook** (`.claude/settings.json`) -- runs `ruff check --fix`,
+`ruff format`, and `ty check` after every Python file edit/write during Claude
+Code sessions. Uses `uv tool run` instead of `uv run` because the sandbox
+environment corrupts venv binaries during cross-filesystem hardlink fallback
+(the Rust binaries for ruff/ty become invalid). This is a sandbox-only issue;
+on a real machine `uv run` works fine. The `.claude/` directory is gitignored,
+so this hook config lives only in the sandbox. If missing, create
+`.claude/settings.json` with a `PostToolUse` hook on `Edit|Write` that runs
+`uv tool run ruff check --fix`, `uv tool run ruff format`, and
+`uv tool run ty check` on `.py` files.
 
 ---
 
