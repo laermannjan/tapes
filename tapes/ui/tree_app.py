@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import logging
 import time
+from enum import Enum
 from pathlib import Path
 from typing import ClassVar, NamedTuple
 
@@ -29,6 +30,19 @@ from tapes.ui.tree_view import TreeView
 logger = logging.getLogger(__name__)
 
 DETAIL_CHROME_LINES = 9
+
+
+class AppMode(Enum):
+    """Mutually exclusive UI modes for the tree app."""
+
+    TREE = "tree"
+    DETAIL = "detail"
+    COMMIT = "commit"
+    HELP = "help"
+    SEARCHING = "searching"
+
+
+_MODAL_MODES = frozenset({AppMode.COMMIT, AppMode.HELP})
 
 
 class _NodeSnapshot(NamedTuple):
@@ -102,16 +116,18 @@ class TreeApp(App):
         self.tv_template = tv_template
         self.root_path = root_path
         self.config = config or TapesConfig()
-        self._in_detail = False
+        self._mode = AppMode.TREE
         self._detail_snapshot: list[_NodeSnapshot] | None = None
         self._auto_pipeline = auto_pipeline
         self._tmdb_querying = False
         self._tmdb_progress = (0, 0)
-        self._searching = False
-        self._in_commit = False
-        self._in_help = False
         self._search_query = ""
         self._last_ctrl_c: float = 0.0
+
+    @property
+    def mode(self) -> AppMode:
+        """The current UI mode."""
+        return self._mode
 
     def compose(self) -> ComposeResult:
         yield TreeView(
@@ -182,7 +198,7 @@ class TreeApp(App):
 
     def _show_detail(self, node: FileNode) -> None:
         """Switch from tree view to detail view for a file node."""
-        self._in_detail = True
+        self._mode = AppMode.DETAIL
         self._detail_snapshot = [
             _NodeSnapshot(node, copy.deepcopy(node.result), copy.deepcopy(node.sources), node.staged),
         ]
@@ -197,7 +213,7 @@ class TreeApp(App):
 
     def _show_detail_multi(self, nodes: list[FileNode]) -> None:
         """Switch from tree view to detail view for multiple file nodes."""
-        self._in_detail = True
+        self._mode = AppMode.DETAIL
         self._detail_snapshot = [
             _NodeSnapshot(n, copy.deepcopy(n.result), copy.deepcopy(n.sources), n.staged) for n in nodes
         ]
@@ -211,7 +227,7 @@ class TreeApp(App):
 
     def _show_tree(self) -> None:
         """Switch from detail view back to tree view."""
-        self._in_detail = False
+        self._mode = AppMode.TREE
         detail = self.query_one(DetailView)
         detail.styles.display = "none"  # ty: ignore[invalid-assignment]  # Textual RenderStyles setter
         tv = self.query_one(TreeView)
@@ -223,7 +239,7 @@ class TreeApp(App):
 
     def _show_commit(self) -> None:
         """Show the commit confirmation view."""
-        self._in_commit = True
+        self._mode = AppMode.COMMIT
         staged = [f for f in self.model.all_files() if f.staged]
         bar = self.query_one(BottomBar)
         cv = self.query_one(CommitView)
@@ -238,7 +254,7 @@ class TreeApp(App):
 
     def _hide_commit(self) -> None:
         """Hide the commit view and return to tree."""
-        self._in_commit = False
+        self._mode = AppMode.TREE
         cv = self.query_one(CommitView)
         cv.styles.display = "none"  # ty: ignore[invalid-assignment]  # Textual RenderStyles setter
         tv = self.query_one(TreeView)
@@ -265,14 +281,14 @@ class TreeApp(App):
 
     def action_toggle_help(self) -> None:
         """Toggle the inline help view."""
-        if self._in_help:
+        if self._mode == AppMode.HELP:
             self._hide_help()
         else:
             self._show_help()
 
     def _show_help(self) -> None:
         """Show the inline help view."""
-        self._in_help = True
+        self._mode = AppMode.HELP
         hv = self.query_one(HelpView)
         hv.styles.height = HELP_HEIGHT
         hv.styles.display = "block"
@@ -282,7 +298,7 @@ class TreeApp(App):
 
     def _hide_help(self) -> None:
         """Hide the help view and return to tree."""
-        self._in_help = False
+        self._mode = AppMode.TREE
         hv = self.query_one(HelpView)
         hv.styles.display = "none"  # ty: ignore[invalid-assignment]  # Textual RenderStyles setter
         tv = self.query_one(TreeView)
@@ -293,46 +309,42 @@ class TreeApp(App):
         self._update_footer()
 
     def action_cursor_down(self) -> None:
-        if self._in_commit or self._in_help:
+        if self._mode in _MODAL_MODES:
             return
-        if self._in_detail:
+        if self._mode == AppMode.DETAIL:
             self.query_one(DetailView).move_cursor(row_delta=1)
         else:
             self.query_one(TreeView).move_cursor(1)
 
     def action_cursor_up(self) -> None:
-        if self._in_commit or self._in_help:
+        if self._mode in _MODAL_MODES:
             return
-        if self._in_detail:
+        if self._mode == AppMode.DETAIL:
             self.query_one(DetailView).move_cursor(row_delta=-1)
         else:
             self.query_one(TreeView).move_cursor(-1)
 
     def action_cursor_left(self) -> None:
-        if self._in_commit or self._in_help:
+        if self._mode in _MODAL_MODES:
             return
-        if self._in_detail:
+        if self._mode == AppMode.DETAIL:
             self.query_one(DetailView).cycle_source(-1)
 
     def action_cursor_right(self) -> None:
-        if self._in_commit or self._in_help:
+        if self._mode in _MODAL_MODES:
             return
-        if self._in_detail:
+        if self._mode == AppMode.DETAIL:
             self.query_one(DetailView).cycle_source(1)
 
     def action_toggle_staged(self) -> None:
-        if self._in_commit or self._in_help:
-            return
-        if self._in_detail:
+        if self._mode != AppMode.TREE:
             return
         tv = self.query_one(TreeView)
         tv.toggle_staged_at_cursor()
         self._update_footer()
 
     def action_cycle_op(self) -> None:
-        if self._in_commit or self._in_help:
-            return
-        if self._in_detail:
+        if self._mode != AppMode.TREE:
             return
         self.query_one(BottomBar).cycle_operation()
 
@@ -358,14 +370,16 @@ class TreeApp(App):
         return pairs
 
     def action_toggle_or_enter(self) -> None:
-        if self._in_commit:
+        if self._mode == AppMode.COMMIT:
             cv = self.query_one(CommitView)
             self._hide_commit()
             self._do_commit(cv.operation)
             return
-        if self._in_detail:
+        if self._mode == AppMode.DETAIL:
             dv = self.query_one(DetailView)
             dv.start_edit()
+            return
+        if self._mode != AppMode.TREE:
             return
         tv = self.query_one(TreeView)
         if tv.in_range_mode:
@@ -382,29 +396,26 @@ class TreeApp(App):
             self._show_detail(node)
 
     def action_apply_all_clear(self) -> None:
-        if self._in_commit or self._in_help:
+        if self._mode != AppMode.DETAIL:
             return
-        if self._in_detail:
-            self.query_one(DetailView).apply_source_all_clear()
+        self.query_one(DetailView).apply_source_all_clear()
 
     def action_range_select(self) -> None:
-        if self._in_commit or self._in_help:
-            return
-        if self._in_detail:
+        if self._mode != AppMode.TREE:
             return
         self.query_one(TreeView).start_range_select()
 
     def action_cancel(self) -> None:
-        if self._searching:
+        if self._mode == AppMode.SEARCHING:
             self._finish_search(keep_filter=False)
             return
-        if self._in_help:
+        if self._mode == AppMode.HELP:
             self._hide_help()
             return
-        if self._in_commit:
+        if self._mode == AppMode.COMMIT:
             self._hide_commit()
             return
-        if self._in_detail:
+        if self._mode == AppMode.DETAIL:
             dv = self.query_one(DetailView)
             if dv.editing:
                 dv.cancel_edit()
@@ -416,22 +427,22 @@ class TreeApp(App):
             tv.clear_range_select()
 
     def action_toggle_ignored(self) -> None:
-        if self._in_commit or self._in_help:
-            return
-        if self._in_detail:
+        if self._mode != AppMode.TREE:
             return
         tv = self.query_one(TreeView)
         tv.toggle_ignored_at_cursor()
         self._update_footer()
 
     def action_commit(self) -> None:
-        if self._in_detail:
+        if self._mode == AppMode.DETAIL:
             self._confirm_detail()
             return
-        if self._in_commit:
+        if self._mode == AppMode.COMMIT:
             cv = self.query_one(CommitView)
             self._hide_commit()
             self._do_commit(cv.operation)
+            return
+        if self._mode != AppMode.TREE:
             return
         tv = self.query_one(TreeView)
         if tv.staged_count == 0:
@@ -453,14 +464,14 @@ class TreeApp(App):
         self.exit(result=results)
 
     def action_refresh_query(self) -> None:
-        if self._in_commit or self._in_help:
+        if self._mode in _MODAL_MODES:
             return
         from tapes.pipeline import refresh_tmdb_source
 
         token = self.config.metadata.tmdb_token
         threshold = self.config.metadata.auto_accept_threshold
 
-        if self._in_detail:
+        if self._mode == AppMode.DETAIL:
             dv = self.query_one(DetailView)
             for fn in dv.file_nodes:
                 refresh_tmdb_source(fn, token=token, confidence_threshold=threshold)
@@ -482,25 +493,19 @@ class TreeApp(App):
         self._update_footer()
 
     def action_clear_field(self) -> None:
-        if self._in_commit or self._in_help:
-            return
-        if not self._in_detail:
+        if self._mode != AppMode.DETAIL:
             return
         self.query_one(DetailView).clear_field()
 
     def action_reset_guessit(self) -> None:
-        if self._in_commit or self._in_help:
-            return
-        if not self._in_detail:
+        if self._mode != AppMode.DETAIL:
             return
         self.query_one(DetailView).reset_field_to_guessit()
 
     def action_start_search(self) -> None:
-        if self._in_commit or self._in_help:
+        if self._mode != AppMode.TREE:
             return
-        if self._in_detail:
-            return
-        self._searching = True
+        self._mode = AppMode.SEARCHING
         self._search_query = ""
         bar = self.query_one(BottomBar)
         bar.search_active = True
@@ -513,7 +518,7 @@ class TreeApp(App):
 
     def _finish_search(self, keep_filter: bool) -> None:
         """Exit search mode. If keep_filter is False, clear the filter."""
-        self._searching = False
+        self._mode = AppMode.TREE
         bar = self.query_one(BottomBar)
         bar.search_active = False
         if not keep_filter:
@@ -532,11 +537,11 @@ class TreeApp(App):
             else:
                 self._last_ctrl_c = now
                 msg = "press ctrl+c again to exit"
-                if self._in_detail:
+                if self._mode == AppMode.DETAIL:
                     dv = self.query_one(DetailView)
                     dv.quit_hint = msg
                     self.set_timer(1.0, self._clear_quit_hint)
-                elif self._in_commit:
+                elif self._mode == AppMode.COMMIT:
                     cv = self.query_one(CommitView)
                     cv.quit_hint = msg
                     self.set_timer(1.0, self._clear_quit_hint)
@@ -548,8 +553,8 @@ class TreeApp(App):
             return
 
         # Intercept shift+tab for op cycling (Textual captures it for focus)
-        if event.key == "shift+tab" and not self._in_detail and not self._searching:
-            if self._in_commit:
+        if event.key == "shift+tab" and self._mode not in (AppMode.DETAIL, AppMode.SEARCHING):
+            if self._mode == AppMode.COMMIT:
                 self.query_one(CommitView).cycle_operation()
             else:
                 self.query_one(BottomBar).cycle_operation()
@@ -557,7 +562,7 @@ class TreeApp(App):
             event.stop()
             return
 
-        if not self._searching:
+        if self._mode != AppMode.SEARCHING:
             return
 
         if event.key == "escape":
@@ -586,32 +591,26 @@ class TreeApp(App):
             event.stop()
 
     def action_collapse_all(self) -> None:
-        if self._in_commit or self._in_help:
-            return
-        if self._in_detail:
+        if self._mode != AppMode.TREE:
             return
         self.model.collapse_all()
         self.query_one(TreeView).refresh_tree()
 
     def action_expand_all(self) -> None:
-        if self._in_commit or self._in_help:
-            return
-        if self._in_detail:
+        if self._mode != AppMode.TREE:
             return
         self.model.expand_all()
         self.query_one(TreeView).refresh_tree()
 
     def action_toggle_flat(self) -> None:
-        if self._in_commit or self._in_help:
-            return
-        if self._in_detail:
+        if self._mode != AppMode.TREE:
             return
         self.query_one(TreeView).toggle_flat_mode()
 
     def _on_tmdb_progress(self, done: int, total: int) -> None:
         """Called from worker thread via call_from_thread after each file."""
         self._tmdb_progress = (done, total)
-        if self._in_detail:
+        if self._mode == AppMode.DETAIL:
             self.query_one(DetailView).refresh()
         else:
             self.query_one(TreeView).refresh()
@@ -620,7 +619,7 @@ class TreeApp(App):
     def _on_tmdb_done(self) -> None:
         """Called when all TMDB queries are complete."""
         self._tmdb_querying = False
-        if self._in_detail:
+        if self._mode == AppMode.DETAIL:
             self.query_one(DetailView).refresh()
         else:
             self.query_one(TreeView).refresh()
@@ -650,7 +649,7 @@ class TreeApp(App):
             bar.stats_text = " \u00b7 ".join(parts)
 
         # Hints
-        if self._searching:
+        if self._mode == AppMode.SEARCHING:
             bar.hint_text = "enter to confirm \u00b7 esc to cancel"
         else:
             bar.hint_text = "space to stage \u00b7 enter to expand \u00b7 c to commit \u00b7 ? for help"

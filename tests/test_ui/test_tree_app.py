@@ -12,6 +12,7 @@ from tapes.tree_model import (
     Source,
     TreeModel,
 )
+from tapes.ui.tree_app import AppMode
 from tapes.ui.tree_view import TreeView
 
 # ---------------------------------------------------------------------------
@@ -636,7 +637,7 @@ class TestCommitAction:
 
         async with app.run_test() as pilot:
             await pilot.press("c")
-            assert not app._in_commit
+            assert app.mode == AppMode.TREE
 
     @pytest.mark.asyncio()
     async def test_c_shows_commit_view(self) -> None:
@@ -648,7 +649,7 @@ class TestCommitAction:
 
         async with app.run_test() as pilot:
             await pilot.press("c")
-            assert app._in_commit
+            assert app.mode == AppMode.COMMIT
 
     @pytest.mark.asyncio()
     async def test_commit_esc_cancels(self) -> None:
@@ -660,9 +661,9 @@ class TestCommitAction:
 
         async with app.run_test() as pilot:
             await pilot.press("c")
-            assert app._in_commit
+            assert app.mode == AppMode.COMMIT
             await pilot.press("escape")
-            assert not app._in_commit
+            assert app.mode == AppMode.TREE
 
     @pytest.mark.asyncio()
     async def test_x_toggles_ignored(self) -> None:
@@ -872,7 +873,7 @@ class TestSearchModeAsync:
 
         async with app.run_test() as pilot:
             await pilot.press("slash")
-            assert app._searching is True
+            assert app.mode == AppMode.SEARCHING
 
     @pytest.mark.asyncio()
     async def test_typing_filters_items(self) -> None:
@@ -902,7 +903,7 @@ class TestSearchModeAsync:
             await pilot.press("t", "o", "p")
             assert tv.item_count == 1
             await pilot.press("escape")
-            assert app._searching is False
+            assert app.mode == AppMode.TREE
             assert tv.item_count == original_count
 
     @pytest.mark.asyncio()
@@ -917,7 +918,7 @@ class TestSearchModeAsync:
             await pilot.press("slash")
             await pilot.press("t", "o", "p")
             await pilot.press("enter")
-            assert app._searching is False
+            assert app.mode == AppMode.TREE
             # Filter remains active
             assert tv.item_count == 1
 
@@ -951,9 +952,9 @@ class TestSearchModeAsync:
         async with app.run_test() as pilot:
             # Enter detail view
             await pilot.press("enter")
-            assert app._in_detail is True
+            assert app.mode == AppMode.DETAIL
             await pilot.press("slash")
-            assert app._searching is False
+            assert app.mode == AppMode.DETAIL
 
 
 # ---------------------------------------------------------------------------
@@ -1046,15 +1047,15 @@ class TestVisualIntegration:
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
-            assert not app._in_help
+            assert app.mode == AppMode.TREE
 
             # Show help
             await pilot.press("question_mark")
-            assert app._in_help
+            assert app.mode == AppMode.HELP
 
             # Hide help
             await pilot.press("question_mark")
-            assert not app._in_help
+            assert app.mode == AppMode.TREE
 
 
 # ---------------------------------------------------------------------------
@@ -1081,11 +1082,11 @@ class TestDetailConfirmDiscard:
 
         async with app.run_test() as pilot:
             await pilot.press("enter")
-            assert app._in_detail
+            assert app.mode == AppMode.DETAIL
             await pilot.press("shift+enter")
             assert node.result["title"] == "Changed"
             await pilot.press("escape")
-            assert not app._in_detail
+            assert app.mode == AppMode.TREE
             assert node.result["title"] == "Original"
 
     @pytest.mark.asyncio()
@@ -1106,7 +1107,7 @@ class TestDetailConfirmDiscard:
             await pilot.press("shift+enter")
             assert node.result["title"] == "Changed"
             await pilot.press("c")
-            assert not app._in_detail
+            assert app.mode == AppMode.TREE
             assert node.result["title"] == "Changed"
 
     @pytest.mark.asyncio()
@@ -1126,9 +1127,81 @@ class TestDetailConfirmDiscard:
         async with app.run_test() as pilot:
             await pilot.press("enter")
             dv = app.query_one(DetailView)
-            assert app._in_detail
+            assert app.mode == AppMode.DETAIL
             await pilot.press("enter")  # start edit
             assert dv.editing
             await pilot.press("escape")  # cancel edit
             assert not dv.editing
-            assert app._in_detail  # still in detail
+            assert app.mode == AppMode.DETAIL  # still in detail
+
+
+# ---------------------------------------------------------------------------
+# AppMode transition tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(not HAS_PILOT, reason="textual pilot not available")
+class TestAppModeTransitions:
+    @pytest.mark.asyncio()
+    async def test_initial_mode_is_tree(self) -> None:
+        from tapes.ui.tree_app import TreeApp
+
+        model = _expanded_model()
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
+        async with app.run_test():
+            assert app.mode == AppMode.TREE
+
+    @pytest.mark.asyncio()
+    async def test_enter_detail_and_back(self) -> None:
+        from tapes.ui.tree_app import TreeApp
+
+        node = FileNode(path=Path("/media/test.mkv"), result={"title": "Test"})
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
+        async with app.run_test() as pilot:
+            assert app.mode == AppMode.TREE
+            await pilot.press("enter")
+            assert app.mode == AppMode.DETAIL
+            await pilot.press("escape")
+            assert app.mode == AppMode.TREE
+
+    @pytest.mark.asyncio()
+    async def test_commit_and_cancel(self) -> None:
+        from tapes.ui.tree_app import TreeApp
+
+        model = _expanded_model()
+        model.all_files()[0].staged = True
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
+        async with app.run_test() as pilot:
+            assert app.mode == AppMode.TREE
+            await pilot.press("c")
+            assert app.mode == AppMode.COMMIT
+            await pilot.press("escape")
+            assert app.mode == AppMode.TREE
+
+    @pytest.mark.asyncio()
+    async def test_help_and_back(self) -> None:
+        from tapes.ui.tree_app import TreeApp
+
+        model = _expanded_model()
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
+        async with app.run_test() as pilot:
+            assert app.mode == AppMode.TREE
+            await pilot.press("question_mark")
+            assert app.mode == AppMode.HELP
+            await pilot.press("question_mark")
+            assert app.mode == AppMode.TREE
+
+    @pytest.mark.asyncio()
+    async def test_search_and_cancel(self) -> None:
+        from tapes.ui.tree_app import TreeApp
+
+        model = _expanded_model()
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
+        async with app.run_test() as pilot:
+            assert app.mode == AppMode.TREE
+            await pilot.press("slash")
+            assert app.mode == AppMode.SEARCHING
+            await pilot.press("escape")
+            assert app.mode == AppMode.TREE

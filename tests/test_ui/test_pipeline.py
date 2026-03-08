@@ -9,6 +9,7 @@ import pytest
 
 from tapes.pipeline import refresh_tmdb_source, run_auto_pipeline
 from tapes.tree_model import FileNode, FolderNode, Source, TreeModel
+from tapes.ui.tree_app import AppMode
 
 TOKEN = "test-token"
 
@@ -456,7 +457,7 @@ class TestRefreshQueryIntegration:
 
         async with app.run_test() as pilot:
             await pilot.press("enter")
-            assert app._in_detail is True
+            assert app.mode == AppMode.DETAIL
             await pilot.press("r")
             tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
             assert len(tmdb_sources) == 1
@@ -514,7 +515,7 @@ class TestRefreshQueryIntegration:
             await pilot.press("v")
             await pilot.press("j")
             await pilot.press("enter")
-            assert app._in_detail is True
+            assert app.mode == AppMode.DETAIL
             await pilot.press("r")
             for n in [node1, node2]:
                 tmdb = [s for s in n.sources if s.name.startswith("TMDB")]

@@ -13,6 +13,7 @@ from tapes.ui.detail_render import (
     is_multi_value,
 )
 from tapes.ui.detail_view import DetailView
+from tapes.ui.tree_app import AppMode
 
 TEMPLATE = "{title} ({year})/S{season:02d}E{episode:02d}.{ext}"
 
@@ -647,11 +648,11 @@ class TestTreeDetailIntegration:
             dv = app.query_one(DetailView)
 
             # Initially detail is not shown
-            assert app._in_detail is False
+            assert app.mode == AppMode.TREE
 
             # Enter on the file node opens detail
             await pilot.press("enter")
-            assert app._in_detail is True
+            assert app.mode == AppMode.DETAIL
             assert dv.node is node
 
             # Navigate in detail view
@@ -662,7 +663,7 @@ class TestTreeDetailIntegration:
 
             # Escape returns to tree
             await pilot.press("escape")
-            assert app._in_detail is False
+            assert app.mode == AppMode.TREE
 
 
 @pytest.mark.skipif(not HAS_PILOT, reason="textual pilot not available")
@@ -700,10 +701,10 @@ class TestMultiFileDetailIntegration:
             await pilot.press("j")
             # Enter opens multi-file detail
             await pilot.press("enter")
-            assert app._in_detail is True
+            assert app.mode == AppMode.DETAIL
             assert dv.is_multi is True
             assert len(dv.file_nodes) == 2
 
             # Escape returns to tree
             await pilot.press("escape")
-            assert app._in_detail is False
+            assert app.mode == AppMode.TREE
