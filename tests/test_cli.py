@@ -323,6 +323,7 @@ class TestServeCommand:
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
         result = runner.invoke(app, ["serve"])
         assert result.exit_code != 0
+        assert "No import path" in result.output
 
     def test_serve_constructs_command(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("TAPES_CONFIG", raising=False)
@@ -331,10 +332,11 @@ class TestServeCommand:
         from unittest.mock import patch
 
         with patch("tapes.cli._start_server") as mock_start:
-            runner.invoke(app, ["serve", "--import-path", "/media/incoming"])
+            runner.invoke(app, ["serve", "--import-path", "/media/my incoming"])
             mock_start.assert_called_once()
             cmd, host, port = mock_start.call_args[0]
-            assert "/media/incoming" in cmd
+            assert cmd.startswith("tapes import ")
+            assert "'/media/my incoming'" in cmd
             assert host == "0.0.0.0"  # noqa: S104
             assert port == 8080
 
