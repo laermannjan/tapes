@@ -123,17 +123,19 @@ class DetailView(Widget):
     def _compute_col_widths(self) -> tuple[int, int, int]:
         """Compute auto-sized column widths: (label_w, value_w, source_w).
 
-        Measures longest content in each column, adds padding, and divides
-        remaining space proportionally. Source column only used when sources exist.
+        Label and value columns are measured by content. The source column
+        starts after a gap. The label+gap+value portion is capped at 50%
+        of the widget width so the source column stays visible.
         """
         shared = self._shared_result()
         sources = self.node.sources
         gap = len(COL_GAP)
+        inner = self.size.width
 
         # Measure label column
         label_w = max((len(f) for f in self.fields), default=6) + 2  # 2 left pad
 
-        # Measure value column
+        # Measure value column by content
         val_w = 6  # minimum
         for f in self.fields:
             v = display_val(shared.get(f))
@@ -148,17 +150,12 @@ class DetailView(Widget):
                 src_w = max(src_w, len(v))
             src_w = max(src_w, 6)  # minimum
 
-        inner = self.size.width
-        used = label_w + gap + val_w
-        if src_w:
-            used += gap + src_w
-
-        # If we have spare room, expand value column
-        if used < inner and src_w == 0:
-            val_w += inner - used
-        elif used < inner:
-            # Give extra to value column
-            val_w += inner - used
+        # Cap label+gap+value at 50% of width when source column exists
+        if src_w > 0:
+            max_left = inner // 2
+            left_used = label_w + gap + val_w
+            if left_used > max_left:
+                val_w = max(6, max_left - label_w - gap)
 
         return (label_w, val_w, src_w)
 
