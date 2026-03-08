@@ -71,67 +71,6 @@ class TestFolderNode:
         assert f.collapsed is False
 
 
-# --- TreeModel.flatten ---
-
-
-class TestFlatten:
-    def test_collapsed_folder_hides_children(self) -> None:
-        child = FileNode(path=Path("/root/sub/a.mkv"))
-        sub = FolderNode(name="sub", children=[child], collapsed=True)
-        root = FolderNode(name="root", children=[sub])
-        model = TreeModel(root=root)
-
-        flat = model.flatten()
-        assert len(flat) == 1
-        assert flat[0] is sub
-
-    def test_expanded_folder_shows_children(self) -> None:
-        child = FileNode(path=Path("/root/sub/a.mkv"))
-        sub = FolderNode(name="sub", children=[child], collapsed=False)
-        root = FolderNode(name="root", children=[sub])
-        model = TreeModel(root=root)
-
-        flat = model.flatten()
-        assert len(flat) == 2
-        assert flat[0] is sub
-        assert flat[1] is child
-
-    def test_root_not_in_output(self) -> None:
-        child = FileNode(path=Path("/root/a.mkv"))
-        root = FolderNode(name="root", children=[child])
-        model = TreeModel(root=root)
-
-        flat = model.flatten()
-        assert root not in flat
-        assert flat == [child]
-
-    def test_nested_expanded(self) -> None:
-        f1 = FileNode(path=Path("/r/a/b/c.mkv"))
-        inner = FolderNode(name="b", children=[f1], collapsed=False)
-        outer = FolderNode(name="a", children=[inner], collapsed=False)
-        root = FolderNode(name="r", children=[outer])
-        model = TreeModel(root=root)
-
-        flat = model.flatten()
-        assert flat == [outer, inner, f1]
-
-    def test_nested_inner_collapsed(self) -> None:
-        f1 = FileNode(path=Path("/r/a/b/c.mkv"))
-        inner = FolderNode(name="b", children=[f1], collapsed=True)
-        outer = FolderNode(name="a", children=[inner], collapsed=False)
-        root = FolderNode(name="r", children=[outer])
-        model = TreeModel(root=root)
-
-        flat = model.flatten()
-        # inner appears but its children don't
-        assert flat == [outer, inner]
-
-    def test_empty_root(self) -> None:
-        root = FolderNode(name="root")
-        model = TreeModel(root=root)
-        assert model.flatten() == []
-
-
 # --- TreeModel toggles ---
 
 

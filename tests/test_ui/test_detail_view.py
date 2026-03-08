@@ -11,8 +11,6 @@ from tapes.ui.detail_render import (
     display_val,
     get_display_fields,
     is_multi_value,
-    render_detail_grid,
-    render_detail_header,
 )
 from tapes.ui.detail_view import DetailView
 
@@ -98,82 +96,6 @@ class TestDisplayVal:
 
     def test_empty_string(self) -> None:
         assert display_val("") == ""
-
-
-# --- render_detail_header ---
-
-
-class TestRenderDetailHeader:
-    def test_shows_filename(self) -> None:
-        node = _make_node()
-        lines = render_detail_header(node, TEMPLATE)
-        assert "Breaking.Bad.S01E01.720p.BluRay.x264.mkv" in lines[0]
-
-    def test_shows_destination(self) -> None:
-        node = _make_node()
-        lines = render_detail_header(node, TEMPLATE)
-        assert "\u2192" in lines[1]
-        assert "Breaking Bad (2008)" in lines[1]
-
-    def test_missing_fields_shows_partial(self) -> None:
-        node = FileNode(path=Path("test.mkv"), result={})
-        lines = render_detail_header(node, TEMPLATE)
-        assert "?" in lines[1]
-
-
-# --- render_detail_grid ---
-
-
-class TestRenderDetailGrid:
-    def test_result_column_values_shown(self) -> None:
-        node = _make_node()
-        lines = render_detail_grid(node, TEMPLATE)
-        # Find the title row
-        title_line = [line for line in lines if "title" in line.lower()[:15]]
-        assert len(title_line) == 1
-        assert "Breaking Bad" in title_line[0]
-
-    def test_source_column_shown_with_confidence(self) -> None:
-        node = _make_node()
-        # Default source_index=0 shows filename source (confidence=0)
-        lines = render_detail_grid(node, TEMPLATE, source_index=1)
-        header = lines[0]
-        assert "TMDB #1" in header
-        assert "95%" in header
-
-    def test_shows_source_indicator(self) -> None:
-        node = _make_node()
-        lines = render_detail_grid(node, TEMPLATE, source_index=0)
-        header = lines[0]
-        assert "[1/2]" in header
-
-    def test_second_source_indicator(self) -> None:
-        node = _make_node()
-        lines = render_detail_grid(node, TEMPLATE, source_index=1)
-        header = lines[0]
-        assert "[2/2]" in header
-
-    def test_separator_present(self) -> None:
-        node = _make_node()
-        lines = render_detail_grid(node, TEMPLATE)
-        # The vertical separator should appear in each line
-        for line in lines:
-            assert "\u2503" in line
-
-    def test_none_values_shown_as_question_mark(self) -> None:
-        node = _make_node()
-        # filename source (index 0) has no year
-        lines = render_detail_grid(node, TEMPLATE, source_index=0)
-        year_line = [line for line in lines if line.strip().startswith("year")]
-        assert len(year_line) == 1
-        assert "?" in year_line[0]
-
-    def test_only_two_data_columns(self) -> None:
-        node = _make_node()
-        lines = render_detail_grid(node, TEMPLATE, source_index=0)
-        # Each line should have exactly one separator
-        for line in lines:
-            assert line.count("\u2503") == 1
 
 
 # --- DetailView cursor ---

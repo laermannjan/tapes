@@ -7,7 +7,6 @@ import respx
 
 from tapes.tmdb import (
     BASE_URL,
-    get_movie,
     get_season_episodes,
     get_show,
     search_multi,
@@ -172,36 +171,6 @@ class TestSearchMulti:
         results = search_multi("Unknown", TOKEN)
         assert len(results) == 1
         assert results[0]["year"] is None
-
-
-class TestGetMovie:
-    @respx.mock
-    def test_get_movie(self) -> None:
-        respx.get(f"{BASE_URL}/movie/438631").mock(
-            return_value=httpx.Response(
-                200,
-                json={
-                    "id": 438631,
-                    "title": "Dune",
-                    "release_date": "2021-09-15",
-                },
-            )
-        )
-        result = get_movie(438631, TOKEN)
-        assert result == {
-            "tmdb_id": 438631,
-            "title": "Dune",
-            "year": 2021,
-            "media_type": "movie",
-        }
-
-    def test_empty_token(self) -> None:
-        assert get_movie(438631, "") == {}
-
-    @respx.mock
-    def test_http_error(self) -> None:
-        respx.get(f"{BASE_URL}/movie/999999").mock(return_value=httpx.Response(404))
-        assert get_movie(999999, TOKEN) == {}
 
 
 class TestGetShow:

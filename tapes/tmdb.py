@@ -105,39 +105,6 @@ def search_multi(
     return results
 
 
-def get_movie(
-    tmdb_id: int,
-    token: str,
-    *,
-    client: httpx.Client | None = None,
-) -> dict:
-    """GET /movie/{id}. Returns {tmdb_id, title, year, media_type: "movie"}."""
-    if not token:
-        return {}
-
-    try:
-        if client is not None:
-            resp = client.get(f"/movie/{tmdb_id}")
-            resp.raise_for_status()
-        else:
-            with create_client(token) as c:
-                resp = c.get(f"/movie/{tmdb_id}")
-                resp.raise_for_status()
-    except (httpx.HTTPError, httpx.HTTPStatusError) as exc:
-        logger.warning("TMDB get_movie failed: %s", exc)
-        return {}
-
-    data = resp.json()
-    release_date = data.get("release_date", "") or ""
-    yr = int(release_date[:4]) if len(release_date) >= 4 else None
-    return {
-        TMDB_ID: data["id"],
-        TITLE: data.get("title", ""),
-        YEAR: yr,
-        MEDIA_TYPE: MEDIA_TYPE_MOVIE,
-    }
-
-
 def get_show(
     tmdb_id: int,
     token: str,
