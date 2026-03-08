@@ -21,6 +21,8 @@ from tapes.fields import (
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://api.themoviedb.org/3"
+REQUEST_TIMEOUT_S = 10.0
+MAX_TMDB_RESULTS = 3
 
 
 def create_client(token: str) -> httpx.Client:
@@ -31,7 +33,7 @@ def create_client(token: str) -> httpx.Client:
     return httpx.Client(
         base_url=BASE_URL,
         headers={"Authorization": f"Bearer {token}"},
-        timeout=10.0,
+        timeout=REQUEST_TIMEOUT_S,
     )
 
 
@@ -99,7 +101,7 @@ def search_multi(
             )
         # Skip "person" and other types
 
-        if len(results) >= 3:
+        if len(results) >= MAX_TMDB_RESULTS:
             break
 
     return results

@@ -20,7 +20,10 @@ from tapes.fields import (
     YEAR,
 )
 from tapes.similarity import compute_episode_similarity, compute_similarity, should_auto_accept
+from tapes.tmdb import MAX_TMDB_RESULTS
 from tapes.tree_model import FileNode, Source, TreeModel
+
+DEFAULT_MAX_WORKERS = 4
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +89,7 @@ def run_tmdb_pass(
     token: str = "",
     confidence_threshold: float | None = None,
     on_progress: Callable[[int, int], None] | None = None,
-    max_workers: int = 4,
+    max_workers: int = DEFAULT_MAX_WORKERS,
 ) -> None:
     """Query TMDB for all files using a thread pool.
 
@@ -277,7 +280,7 @@ def _query_tmdb_for_node(
 
     # Create sources for each search result
     tmdb_sources: list[Source] = []
-    for i, sr in enumerate(search_results[:3]):
+    for i, sr in enumerate(search_results[:MAX_TMDB_RESULTS]):
         confidence = compute_similarity(node.result, sr)
         source = Source(
             name=f"TMDB #{i + 1}",
@@ -393,7 +396,7 @@ def _query_episodes(
 
     # Keep top 3 episode sources by confidence
     all_episode_sources.sort(key=lambda s: s.confidence, reverse=True)
-    top_sources = all_episode_sources[:3]
+    top_sources = all_episode_sources[:MAX_TMDB_RESULTS]
 
     # Always apply the best episode's fields to the result.
     # We're only here because the show was confidently matched,

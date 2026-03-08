@@ -16,6 +16,9 @@ if TYPE_CHECKING:
     from rich.console import RenderableType
 
 
+DEFAULT_ARROW_COL = 40
+
+
 class TreeView(Widget):
     """Renders the file tree with cursor highlighting and navigation."""
 
@@ -42,7 +45,7 @@ class TreeView(Widget):
         self._range_anchor: int | None = None
         self._filter_text: str = ""
         self._scroll_offset: int = 0
-        self._arrow_col: int = 40
+        self._arrow_col: int = DEFAULT_ARROW_COL
         self._refresh_items()
 
     @property
