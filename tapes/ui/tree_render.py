@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import re
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,7 @@ CURSOR_BG = "on #373737"
 RANGE_BG = "on #373737"
 
 
+@functools.lru_cache(maxsize=8)
 def template_field_names(template: str) -> list[str]:
     """Extract unique field names referenced in a template string."""
     return list(dict.fromkeys(m.group(1).split(":")[0] for m in re.finditer(r"\{(\w+[^}]*)\}", template)))
