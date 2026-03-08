@@ -260,7 +260,7 @@ class TestTreeViewRender:
             result = view.render()
         # The render method applies "on #36345a" style to the cursor row.
         # Output includes content rows only (no manual borders).
-        plain = result.plain
+        plain = result.plain  # ty: ignore[unresolved-attribute]  # Rich render return type
         lines = plain.split("\n")
         assert len(lines) == 3  # 3 content items (no borders)
 
@@ -419,7 +419,7 @@ class TestRangeSelection:
             result = view.render()
         # The cursor row (idx 2) has "on #36345a", range rows (idx 0, 1) have "on #2a2844"
         # We verify that the Text object has spans applied
-        assert len(result._spans) > 0
+        assert len(result._spans) > 0  # ty: ignore[unresolved-attribute]  # Rich render return type
 
     def test_space_in_range_mode_stages_and_exits(self) -> None:
         model = _expanded_model()

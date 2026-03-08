@@ -104,7 +104,7 @@ def _make_config(token: str = ""):
     """Create a TapesConfig with the given token."""
     from tapes.config import TapesConfig
 
-    return TapesConfig(metadata={"tmdb_token": token})
+    return TapesConfig(metadata={"tmdb_token": token})  # ty: ignore[invalid-argument-type]  # Pydantic dict coercion
 
 
 def _patch_tmdb():

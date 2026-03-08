@@ -72,6 +72,10 @@ Core
 - `docs/plans/2026-03-08-visual-and-commit-fixes.md` -- visual fixes + inline CommitView
 - `docs/plans/2026-03-08-code-review-fixes.md` -- confirm/discard model, keybinding overhaul
 
+**Testing and issue tracking:**
+- `docs/testing.md` -- testing strategy (unit vs integration vs snapshot, anti-patterns)
+- `docs/issues.md` -- issue tracker with triage, merges, dependencies, priority tiers
+
 **Mockups and references:**
 - `docs/mockups/color-swatches.html` -- color palette reference (all Claude palettes)
 - `docs/mockups/screenshots/column-layout-mockup.html` -- before/after layout comparison
@@ -115,6 +119,8 @@ Core
   or any AI. When spawning subagents, pass `--author="$(git config user.name) <$(git config user.email)>"` explicitly.
 - **Tests:** pytest in `tests/`. Mirror the source tree. Use `tmp_path` fixture
   for file system tests. Mock external HTTP with `respx` (for httpx).
+  See `docs/testing.md` for testing strategy (what to test at each level,
+  anti-patterns, when to use snapshot tests).
 - **Config:** Pydantic v2 models with sane defaults.
 - **guessit field names:** `extract_metadata` normalizes guessit keys:
   `video_codec` -> `codec`, `source` -> `media_source`, `audio_codec` -> `audio`.

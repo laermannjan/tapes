@@ -139,7 +139,7 @@ class TreeApp(App):
                 self._tmdb_querying = True
                 self._update_footer()
                 self.run_worker(
-                    self._run_tmdb_worker(token),
+                    self._run_tmdb_worker(token),  # ty: ignore[invalid-argument-type]  # Textual WorkType stubs
                     thread=True,
                 )
         else:
@@ -175,7 +175,7 @@ class TreeApp(App):
         detail.styles.height = len(detail.fields) + 9
         detail.styles.display = "block"
         self.query_one(TreeView).add_class("dimmed")
-        self.query_one(BottomBar).styles.display = "none"
+        self.query_one(BottomBar).styles.display = "none"  # ty: ignore[invalid-assignment]  # Textual RenderStyles setter
         detail.focus()
 
     def _show_detail_multi(self, nodes: list[FileNode]) -> None:
@@ -187,14 +187,14 @@ class TreeApp(App):
         detail.styles.height = len(detail.fields) + 9
         detail.styles.display = "block"
         self.query_one(TreeView).add_class("dimmed")
-        self.query_one(BottomBar).styles.display = "none"
+        self.query_one(BottomBar).styles.display = "none"  # ty: ignore[invalid-assignment]  # Textual RenderStyles setter
         detail.focus()
 
     def _show_tree(self) -> None:
         """Switch from detail view back to tree view."""
         self._in_detail = False
         detail = self.query_one(DetailView)
-        detail.styles.display = "none"
+        detail.styles.display = "none"  # ty: ignore[invalid-assignment]  # Textual RenderStyles setter
         tv = self.query_one(TreeView)
         tv.remove_class("dimmed")
         self.query_one(BottomBar).styles.display = "block"
@@ -214,14 +214,14 @@ class TreeApp(App):
         cv.styles.height = cv.computed_height
         cv.styles.display = "block"
         self.query_one(TreeView).add_class("dimmed")
-        bar.styles.display = "none"
+        bar.styles.display = "none"  # ty: ignore[invalid-assignment]  # Textual RenderStyles setter
         cv.focus()
 
     def _hide_commit(self) -> None:
         """Hide the commit view and return to tree."""
         self._in_commit = False
         cv = self.query_one(CommitView)
-        cv.styles.display = "none"
+        cv.styles.display = "none"  # ty: ignore[invalid-assignment]  # Textual RenderStyles setter
         tv = self.query_one(TreeView)
         tv.remove_class("dimmed")
         self.query_one(BottomBar).styles.display = "block"
@@ -258,14 +258,14 @@ class TreeApp(App):
         hv.styles.height = HELP_HEIGHT
         hv.styles.display = "block"
         self.query_one(TreeView).add_class("dimmed")
-        self.query_one(BottomBar).styles.display = "none"
+        self.query_one(BottomBar).styles.display = "none"  # ty: ignore[invalid-assignment]  # Textual RenderStyles setter
         hv.focus()
 
     def _hide_help(self) -> None:
         """Hide the help view and return to tree."""
         self._in_help = False
         hv = self.query_one(HelpView)
-        hv.styles.display = "none"
+        hv.styles.display = "none"  # ty: ignore[invalid-assignment]  # Textual RenderStyles setter
         tv = self.query_one(TreeView)
         tv.remove_class("dimmed")
         self.query_one(BottomBar).styles.display = "block"
