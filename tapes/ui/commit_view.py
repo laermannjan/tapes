@@ -72,6 +72,7 @@ class CommitView(Widget):
     can_focus = True
 
     operation: reactive[str] = reactive("copy")
+    quit_hint: reactive[str] = reactive("")
 
     def __init__(self, files: list[FileNode], operation: str, *, id: str | None = None) -> None:
         super().__init__(id=id)
@@ -82,14 +83,14 @@ class CommitView(Widget):
     @property
     def computed_height(self) -> int:
         """Compute the height needed for this view."""
-        # separator + blank + stats lines + blank + total + blank + separator + op line
-        lines = 4  # separator + blank-before-total + total + blank-after-total
+        # blank + separator + blank + blank + stats lines + blank + total + blank + op line
+        lines = 6  # blank + separator + blank + blank-before-total + total + blank-after-total
         cats = self._categories
         if cats["movies"] or cats["subtitles"] or cats["sidecars"] or cats["other"]:
             lines += 1
         if cats["episodes"]:
             lines += 1
-        lines += 3  # blank + separator + op line
+        lines += 2  # blank + op line
         return lines
 
     def render(self) -> RenderableType:
@@ -100,8 +101,10 @@ class CommitView(Widget):
         content: list[Text] = []
         cats = self._categories
 
-        # Separator
+        # Blank + separator + blank
+        content.append(Text())
         content.append(render_separator(width, title="Commit", color=ACCENT))
+        content.append(Text())
 
         # Blank
         content.append(Text())
@@ -145,18 +148,18 @@ class CommitView(Widget):
         # Blank
         content.append(Text())
 
-        # Bottom separator
-        content.append(render_separator(width, color=ACCENT))
-
         # Operation + hints line (mirrors BottomBar layout)
         bottom = Text()
         bottom.append("  ")
         op_color = OP_COLORS.get(self.operation, "")
         bottom.append(self.operation, style=op_color)
         bottom.append("  ")
-        bottom.append("(shift-tab)", style=MUTED)
+        bottom.append("(shift+tab to cycle)", style=MUTED)
         bottom.append("       ")
-        bottom.append("enter confirm \u00b7 esc cancel", style=f"italic {MUTED}")
+        if self.quit_hint:
+            bottom.append(self.quit_hint, style=f"italic {MUTED}")
+        else:
+            bottom.append("enter to confirm \u00b7 esc to cancel", style=f"italic {MUTED}")
         content.append(bottom)
 
         return content

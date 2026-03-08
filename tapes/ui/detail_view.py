@@ -19,6 +19,7 @@ from tapes.ui.detail_render import (
 )
 from tapes.ui.tree_model import FileNode, compute_shared_fields
 from tapes.ui.tree_render import (
+    CURSOR_BG,
     MUTED,
     compute_dest,
     render_dest,
@@ -47,6 +48,7 @@ class DetailView(Widget):
     cursor_row: reactive[int] = reactive(0)   # 0+ = fields
     source_index: reactive[int] = reactive(0)  # which TMDB source tab
     editing: reactive[bool] = reactive(False)
+    quit_hint: reactive[str] = reactive("")
 
     def __init__(
         self,
@@ -133,7 +135,7 @@ class DetailView(Widget):
         inner = self.size.width
 
         # Measure label column
-        label_w = max((len(f) for f in self.fields), default=6) + 2  # 2 left pad
+        label_w = max((len(f) for f in self.fields), default=6) + 4  # 4 left pad
 
         # Measure value column by content
         val_w = 6  # minimum
@@ -169,13 +171,9 @@ class DetailView(Widget):
         """Render the full detail view with separator and footer hints."""
         content: list[Text] = []
 
-        # Separator line
+        # Blank + separator + blank
+        content.append(Text())
         content.append(render_separator(inner_width, title="Info", color=ACCENT))
-
-        # Tab bar
-        content.append(self._render_tab_bar(inner_width))
-
-        # Blank line
         content.append(Text())
 
         # File path -> destination
@@ -187,11 +185,19 @@ class DetailView(Widget):
         # Blank line
         content.append(Text())
 
+        # Tab bar
+        content.append(self._render_tab_bar(inner_width))
+
+        # Blank line
+        content.append(Text())
+
         # Field rows
         label_w, val_w, src_w = self._compute_col_widths()
         for row_idx, field_name in enumerate(self.fields):
             content.append(
-                self._render_field_row(row_idx, field_name, label_w, val_w, src_w)
+                self._render_field_row(
+                    row_idx, field_name, label_w, val_w, src_w, inner_width
+                )
             )
 
         # Blank line + footer hints
@@ -205,27 +211,25 @@ class DetailView(Widget):
         sources = self.node.sources
 
         line = Text()
+        line.append("    ")  # 4-space indent matching content
         # Tabs for sources
         if sources:
             for idx, src in enumerate(sources):
                 if idx > 0:
                     line.append("  ")
-                tab_text = f" TMDB #{idx + 1} "
+                conf = f" [{src.confidence:.0%}]" if src.confidence else ""
+                tab_text = f" TMDB #{idx + 1}{conf} "
                 if idx == self.source_index:
-                    # Active tab: show confidence inline
-                    if src.confidence:
-                        tab_text = f" TMDB #{idx + 1} {src.confidence:.0%} "
                     line.append(tab_text, style=f"on {ACCENT} #000000")
                 else:
                     line.append(tab_text)
 
             # Navigation hint
-            if len(sources) > 1:
-                line.append("   ")
-                line.append(
-                    "h/l to cycle",
-                    style=f"italic {MUTED}",
-                )
+            line.append("   ")
+            line.append(
+                "(\u2190/\u2192 or tab to cycle)",
+                style=MUTED,
+            )
         else:
             line.append("(no TMDB matches)", style=MUTED)
 
@@ -234,7 +238,7 @@ class DetailView(Widget):
     def _render_path_line(self) -> Text:
         """Render single file: path -> destination on one line."""
         line = Text()
-        line.append(f"  {self._display_path(self.node)}")
+        line.append(f"    {self._display_path(self.node)}")
         line.append("  ")
         line.append("\u2192 ", style=MUTED)
         dest = compute_dest(self.node, self._active_template())
@@ -245,7 +249,7 @@ class DetailView(Widget):
         """Render multi-file summary: count + destinations."""
         count = len(self.file_nodes)
         line = Text()
-        line.append(f"  {count} files selected", style="bold")
+        line.append(f"    {count} files selected", style="bold")
 
         dests: set[str] = set()
         for n in self.file_nodes:
@@ -262,13 +266,15 @@ class DetailView(Widget):
 
     def _render_footer_hints(self) -> Text:
         """Render contextual footer hints based on editing state."""
+        if self.quit_hint:
+            return Text(f"    {self.quit_hint}", style=f"italic {MUTED}")
         if self.editing:
             return Text(
-                " enter to confirm \u00b7 esc to cancel",
+                "    enter to confirm \u00b7 esc to cancel",
                 style=f"italic {MUTED}",
             )
         return Text(
-            " enter edit \u00b7 shift-enter apply all \u00b7 d clear \u00b7 g guessit \u00b7 tab sources \u00b7 c confirm \u00b7 esc discard",
+            "    enter to edit \u00b7 backspace to clear \u00b7 shift+enter to apply all from match \u00b7 f to extract from filename \u00b7 r to refresh \u00b7 c to confirm \u00b7 esc to discard",
             style=f"italic {MUTED}",
         )
 
@@ -279,15 +285,17 @@ class DetailView(Widget):
         label_w: int,
         val_w: int,
         src_w: int,
+        inner_width: int = 0,
     ) -> Text:
         """Render a single field row with auto-sized columns."""
         shared = self._shared_result()
         sources = self.node.sources
+        is_cursor = self.cursor_row == row_idx
 
         line = Text()
 
         # Label
-        label = f"  {field_name:<{label_w - 2}}"
+        label = f"    {field_name:<{label_w - 4}}"
         line.append(label, style=MUTED)
 
         # Gap
@@ -295,12 +303,12 @@ class DetailView(Widget):
 
         # Value (editable)
         result_raw = shared.get(field_name)
-        if self.editing and self.cursor_row == row_idx:
+        if self.editing and is_cursor:
             edit_display = self.edit_value + "\u2588"
             line.append(self._col(edit_display, val_w), style="underline")
         else:
             result_val = display_val(result_raw)
-            style = "bold" if self.cursor_row == row_idx else ""
+            style = "bold" if is_cursor else ""
             line.append(self._col(result_val, val_w), style=style)
 
         # Source value (from active tab, if any)
@@ -316,6 +324,13 @@ class DetailView(Widget):
             else:
                 base_style = diff_style(result_raw, src_raw)
             line.append(self._col(src_val, src_w), style=base_style)
+
+        # Pad to full width and apply background highlight to cursor row
+        if is_cursor and inner_width > 0:
+            plain_len = len(line.plain)
+            if plain_len < inner_width:
+                line.append(" " * (inner_width - plain_len))
+            line.stylize(CURSOR_BG)
 
         return line
 

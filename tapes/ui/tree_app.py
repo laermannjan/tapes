@@ -1,7 +1,9 @@
 """Textual App for the tree-based file browser."""
+
 from __future__ import annotations
 
 import copy
+import time
 from pathlib import Path
 
 from textual.app import App, ComposeResult
@@ -13,7 +15,7 @@ from tapes.fields import MEDIA_TYPE, MEDIA_TYPE_EPISODE
 from tapes.ui.bottom_bar import BottomBar
 from tapes.ui.commit_view import CommitView, categorize_staged
 from tapes.ui.detail_view import DetailView
-from tapes.ui.help_overlay import HelpScreen
+from tapes.ui.help_overlay import HELP_HEIGHT, HelpView
 from tapes.ui.tree_model import (
     FileNode,
     FolderNode,
@@ -26,7 +28,6 @@ class TreeApp(App):
     """Interactive tree browser with cursor navigation."""
 
     BINDINGS = [
-        Binding("q", "quit", "Quit"),
         Binding("j,down", "cursor_down", "Down"),
         Binding("k,up", "cursor_up", "Up"),
         Binding("h,left", "cursor_left", "Left"),
@@ -44,8 +45,8 @@ class TreeApp(App):
         Binding("minus", "collapse_all", "Collapse All"),
         Binding("equals_sign", "expand_all", "Expand All"),
         Binding("question_mark", "toggle_help", "Help"),
-        Binding("d", "clear_field", "Clear Field", show=False),
-        Binding("g", "reset_guessit", "Reset Guessit", show=False),
+        Binding("backspace", "clear_field", "Clear Field", show=False),
+        Binding("f", "reset_guessit", "Extract from filename", show=False),
     ]
 
     CSS = """
@@ -54,19 +55,20 @@ class TreeApp(App):
         padding: 0 1;
     }
     TreeView.dimmed {
-        opacity: 0.65;
+        opacity: 1.0;
     }
     DetailView {
         display: none;
-        padding: 0 1;
     }
     CommitView {
         display: none;
-        padding: 0 1;
+    }
+    HelpView {
+        display: none;
     }
     BottomBar {
         dock: bottom;
-        height: 4;
+        height: 5;
     }
     """
 
@@ -93,7 +95,9 @@ class TreeApp(App):
         self._tmdb_progress = (0, 0)
         self._searching = False
         self._in_commit = False
+        self._in_help = False
         self._search_query = ""
+        self._last_ctrl_c: float = 0.0
 
     def compose(self) -> ComposeResult:
         yield TreeView(
@@ -109,6 +113,7 @@ class TreeApp(App):
             root_path=self.root_path,
         )
         yield CommitView([], "copy", id="commit-view")
+        yield HelpView(id="help-view")
         yield BottomBar(id="bottom-bar")
 
     def on_mount(self) -> None:
@@ -169,7 +174,7 @@ class TreeApp(App):
         detail = self.query_one(DetailView)
         detail.set_node(node)
         # separator + tab_bar + blank + path + blank + fields + blank + hints
-        detail.styles.height = len(detail.fields) + 7
+        detail.styles.height = len(detail.fields) + 9
         detail.styles.display = "block"
         self.query_one(TreeView).add_class("dimmed")
         self.query_one(BottomBar).styles.display = "none"
@@ -184,7 +189,7 @@ class TreeApp(App):
         ]
         detail = self.query_one(DetailView)
         detail.set_nodes(nodes)
-        detail.styles.height = len(detail.fields) + 7
+        detail.styles.height = len(detail.fields) + 9
         detail.styles.display = "block"
         self.query_one(TreeView).add_class("dimmed")
         self.query_one(BottomBar).styles.display = "none"
@@ -245,11 +250,36 @@ class TreeApp(App):
         self._show_tree()
 
     def action_toggle_help(self) -> None:
-        """Show the help screen."""
-        self.push_screen(HelpScreen())
+        """Toggle the inline help view."""
+        if self._in_help:
+            self._hide_help()
+        else:
+            self._show_help()
+
+    def _show_help(self) -> None:
+        """Show the inline help view."""
+        self._in_help = True
+        hv = self.query_one(HelpView)
+        hv.styles.height = HELP_HEIGHT
+        hv.styles.display = "block"
+        self.query_one(TreeView).add_class("dimmed")
+        self.query_one(BottomBar).styles.display = "none"
+        hv.focus()
+
+    def _hide_help(self) -> None:
+        """Hide the help view and return to tree."""
+        self._in_help = False
+        hv = self.query_one(HelpView)
+        hv.styles.display = "none"
+        tv = self.query_one(TreeView)
+        tv.remove_class("dimmed")
+        self.query_one(BottomBar).styles.display = "block"
+        tv.focus()
+        tv.refresh()
+        self._update_footer()
 
     def action_cursor_down(self) -> None:
-        if self._in_commit:
+        if self._in_commit or self._in_help:
             return
         if self._in_detail:
             self.query_one(DetailView).move_cursor(row_delta=1)
@@ -257,7 +287,7 @@ class TreeApp(App):
             self.query_one(TreeView).move_cursor(1)
 
     def action_cursor_up(self) -> None:
-        if self._in_commit:
+        if self._in_commit or self._in_help:
             return
         if self._in_detail:
             self.query_one(DetailView).move_cursor(row_delta=-1)
@@ -265,19 +295,19 @@ class TreeApp(App):
             self.query_one(TreeView).move_cursor(-1)
 
     def action_cursor_left(self) -> None:
-        if self._in_commit:
+        if self._in_commit or self._in_help:
             return
         if self._in_detail:
             self.query_one(DetailView).cycle_source(-1)
 
     def action_cursor_right(self) -> None:
-        if self._in_commit:
+        if self._in_commit or self._in_help:
             return
         if self._in_detail:
             self.query_one(DetailView).cycle_source(1)
 
     def action_toggle_staged(self) -> None:
-        if self._in_commit:
+        if self._in_commit or self._in_help:
             return
         if self._in_detail:
             return
@@ -286,24 +316,20 @@ class TreeApp(App):
         self._update_footer()
 
     def action_cycle_op(self) -> None:
-        if self._in_commit:
+        if self._in_commit or self._in_help:
             return
         if self._in_detail:
             return
         self.query_one(BottomBar).cycle_operation()
 
-    def _compute_file_pairs(
-        self, staged: list[FileNode]
-    ) -> list[tuple[Path, Path]]:
+    def _compute_file_pairs(self, staged: list[FileNode]) -> list[tuple[Path, Path]]:
         """Compute (source, destination) pairs for staged files."""
         from tapes.ui.tree_render import compute_dest, select_template
 
         cfg = self.config
         pairs: list[tuple[Path, Path]] = []
         for node in staged:
-            tmpl = select_template(
-                node, self.movie_template, self.tv_template
-            )
+            tmpl = select_template(node, self.movie_template, self.tv_template)
             # Choose library sub-root based on media_type
             media_type = node.result.get(MEDIA_TYPE)
             if media_type == MEDIA_TYPE_EPISODE and cfg.library.tv:
@@ -342,13 +368,13 @@ class TreeApp(App):
             self._show_detail(node)
 
     def action_apply_all_clear(self) -> None:
-        if self._in_commit:
+        if self._in_commit or self._in_help:
             return
         if self._in_detail:
             self.query_one(DetailView).apply_source_all_clear()
 
     def action_range_select(self) -> None:
-        if self._in_commit:
+        if self._in_commit or self._in_help:
             return
         if self._in_detail:
             return
@@ -357,6 +383,9 @@ class TreeApp(App):
     def action_cancel(self) -> None:
         if self._searching:
             self._finish_search(keep_filter=False)
+            return
+        if self._in_help:
+            self._hide_help()
             return
         if self._in_commit:
             self._hide_commit()
@@ -373,7 +402,7 @@ class TreeApp(App):
             tv.clear_range_select()
 
     def action_toggle_ignored(self) -> None:
-        if self._in_commit:
+        if self._in_commit or self._in_help:
             return
         if self._in_detail:
             return
@@ -410,7 +439,7 @@ class TreeApp(App):
         self.exit(result=results)
 
     def action_refresh_query(self) -> None:
-        if self._in_commit:
+        if self._in_commit or self._in_help:
             return
         from tapes.ui.pipeline import refresh_tmdb_source
 
@@ -429,31 +458,35 @@ class TreeApp(App):
                 file_nodes = [n for n in nodes if isinstance(n, FileNode)]
                 if file_nodes:
                     for fn in file_nodes:
-                        refresh_tmdb_source(fn, token=token, confidence_threshold=threshold)
+                        refresh_tmdb_source(
+                            fn, token=token, confidence_threshold=threshold
+                        )
                 tv.clear_range_select()
             else:
                 node = tv.cursor_node()
                 if isinstance(node, FileNode):
-                    refresh_tmdb_source(node, token=token, confidence_threshold=threshold)
+                    refresh_tmdb_source(
+                        node, token=token, confidence_threshold=threshold
+                    )
             tv.refresh()
         self._update_footer()
 
     def action_clear_field(self) -> None:
-        if self._in_commit:
+        if self._in_commit or self._in_help:
             return
         if not self._in_detail:
             return
         self.query_one(DetailView).clear_field()
 
     def action_reset_guessit(self) -> None:
-        if self._in_commit:
+        if self._in_commit or self._in_help:
             return
         if not self._in_detail:
             return
         self.query_one(DetailView).reset_field_to_guessit()
 
     def action_start_search(self) -> None:
-        if self._in_commit:
+        if self._in_commit or self._in_help:
             return
         if self._in_detail:
             return
@@ -480,7 +513,30 @@ class TreeApp(App):
         self._update_footer()
 
     def on_key(self, event: Key) -> None:
-        """Intercept key events during search mode."""
+        """Intercept key events for ctrl+c quit, shift+tab, and search mode."""
+        # Double ctrl+c to quit
+        if event.key == "ctrl+c":
+            now = time.monotonic()
+            if now - self._last_ctrl_c < 1.0:
+                self.exit()
+            else:
+                self._last_ctrl_c = now
+                msg = "press ctrl+c again to exit"
+                if self._in_detail:
+                    dv = self.query_one(DetailView)
+                    dv.quit_hint = msg
+                    self.set_timer(1.0, self._clear_quit_hint)
+                elif self._in_commit:
+                    cv = self.query_one(CommitView)
+                    cv.quit_hint = msg
+                    self.set_timer(1.0, self._clear_quit_hint)
+                else:
+                    self.query_one(BottomBar).hint_text = msg
+                    self.set_timer(1.0, self._update_footer)
+            event.prevent_default()
+            event.stop()
+            return
+
         # Intercept shift+tab for op cycling (Textual captures it for focus)
         if event.key == "shift+tab" and not self._in_detail and not self._searching:
             if self._in_commit:
@@ -520,7 +576,7 @@ class TreeApp(App):
             event.stop()
 
     def action_collapse_all(self) -> None:
-        if self._in_commit:
+        if self._in_commit or self._in_help:
             return
         if self._in_detail:
             return
@@ -528,7 +584,7 @@ class TreeApp(App):
         self.query_one(TreeView).refresh_tree()
 
     def action_expand_all(self) -> None:
-        if self._in_commit:
+        if self._in_commit or self._in_help:
             return
         if self._in_detail:
             return
@@ -536,7 +592,7 @@ class TreeApp(App):
         self.query_one(TreeView).refresh_tree()
 
     def action_toggle_flat(self) -> None:
-        if self._in_commit:
+        if self._in_commit or self._in_help:
             return
         if self._in_detail:
             return
@@ -559,6 +615,11 @@ class TreeApp(App):
         else:
             self.query_one(TreeView).refresh()
         self._update_footer()
+
+    def _clear_quit_hint(self) -> None:
+        """Clear the quit hint from detail/commit view."""
+        self.query_one(DetailView).quit_hint = ""
+        self.query_one(CommitView).quit_hint = ""
 
     def _update_footer(self) -> None:
         bar = self.query_one(BottomBar)
@@ -583,6 +644,6 @@ class TreeApp(App):
             bar.hint_text = "enter to confirm \u00b7 esc to cancel"
         else:
             bar.hint_text = (
-                "space stage \u00b7 enter details \u00b7 "
-                "shift-tab op \u00b7 c commit \u00b7 ? help"
+                "space to stage \u00b7 enter to expand \u00b7 "
+                "c to commit \u00b7 ? for help"
             )

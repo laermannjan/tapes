@@ -138,8 +138,8 @@ class TestRenderFileRow:
         )
         row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
         plain = row.plain
-        # No markers — staging shown via background color in tree_view
-        assert plain == "Inception.mkv  \u2192  Inception (2010)/Inception (2010).mkv"
+        assert "\u2713" in plain
+        assert "Inception (2010)/Inception (2010).mkv" in plain
 
     def test_unstaged_file(self) -> None:
         node = FileNode(
@@ -150,7 +150,7 @@ class TestRenderFileRow:
         row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
         assert "Inception.mkv" in row.plain
 
-    def test_ignored_file(self) -> None:
+    def test_ignored_file_strikethrough_no_destination(self) -> None:
         node = FileNode(
             path=Path("/movies/Inception.mkv"),
             ignored=True,
@@ -158,6 +158,12 @@ class TestRenderFileRow:
         )
         row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
         assert "Inception.mkv" in row.plain
+        # No arrow or destination
+        assert "\u2192" not in row.plain
+        assert "Inception (2010)" not in row.plain
+        # Strikethrough style applied
+        has_strike = any("strike" in str(span.style) for span in row._spans)
+        assert has_strike
 
     def test_missing_dest_shows_partial(self) -> None:
         node = FileNode(
@@ -373,7 +379,7 @@ class TestRenderSeparator:
         line = render_separator(40, right_text="2 staged")
         plain = line.plain
         assert "2 staged" in plain
-        assert plain.endswith("  ")  # right padding
+        assert plain.endswith("───")
         assert len(plain) == 40
 
     def test_separator_with_title_and_right_text(self) -> None:

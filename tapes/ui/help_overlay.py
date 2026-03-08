@@ -1,100 +1,94 @@
-"""Help screen showing keybinding reference."""
+"""Inline help view showing workflow guide and keybinding reference."""
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from rich.text import Text
-from textual.app import ComposeResult
-from textual.binding import Binding
-from textual.screen import ModalScreen
-from textual.widgets import Static
+from textual.widget import Widget
 
-from tapes.ui.tree_render import MUTED
+from tapes.ui.tree_render import MUTED, render_separator
+
+if TYPE_CHECKING:
+    from rich.console import RenderableType
+
+ACCENT = "#B1B9F9"
+KEY_COLOR = ACCENT
+# Help content line count (update if content changes).
+HELP_HEIGHT = 38
 
 
-def _build_help_text() -> Text:
-    """Build the help content as a Rich Text object."""
+def _build_help_content(width: int) -> list[Text]:
+    """Build the help view content."""
 
-    def key_row(key: str, action: str) -> Text:
+    def key_row(key: str, desc: str) -> Text:
         t = Text()
-        t.append(f"  {key:<16}", "#7AB8FF")
-        t.append(action)
+        t.append(f"    {key:<16}", KEY_COLOR)
+        t.append(desc)
         return t
 
-    result = Text()
+    def heading(title: str) -> Text:
+        return Text(f"    {title}", style="bold")
 
-    result.append("  Files\n", "bold")
+    def body(text: str) -> Text:
+        return Text(f"    {text}", style=MUTED)
 
-    file_keys = [
-        ("j / k", "move cursor"),
-        ("enter", "open detail / toggle folder"),
-        ("space", "toggle staged"),
-        ("x", "toggle ignored"),
-        ("v", "range select"),
-        ("c", "commit staged files"),
-        ("/", "search / filter"),
-        ("`", "toggle flat/tree mode"),
-        ("- / =", "collapse / expand all"),
-        ("r", "refresh TMDB query"),
-        ("shift-tab", "cycle operation mode"),
-        ("q", "quit"),
-    ]
-    for key, action in file_keys:
-        result.append_text(key_row(key, action))
-        result.append("\n")
+    lines: list[Text] = []
 
-    result.append("\n")
-    result.append("  Detail\n", "bold")
+    # Separator
+    lines.append(Text())
+    lines.append(render_separator(width, title="Help", color=ACCENT))
+    lines.append(Text())
 
-    detail_keys = [
-        ("j / k", "move between fields"),
-        ("tab / h / l", "cycle TMDB sources"),
-        ("enter", "edit field inline"),
-        ("shift-enter", "apply all fields from source"),
-        ("d", "clear field"),
-        ("g", "reset field to guessit value"),
-        ("r", "refresh TMDB query"),
-        ("c", "confirm changes"),
-        ("esc", "discard changes"),
-    ]
-    for key, action in detail_keys:
-        result.append_text(key_row(key, action))
-        result.append("\n")
+    # Workflow overview
+    lines.append(heading("How it works"))
+    lines.append(body("Tapes scans a folder, extracts metadata from filenames, and"))
+    lines.append(body("searches TMDB for matches. You review and curate the results,"))
+    lines.append(body("then commit to copy/move/link files into your library."))
+    lines.append(Text())
 
-    result.append("\n")
-    result.append("  Concepts\n", "bold")
-    result.append(f"  {'staged':<16}file will be processed on commit\n")
-    result.append(f"  {'unstaged':<16}needs review, check destination\n")
-    result.append(f"  {'ignored':<16}skipped entirely\n")
+    # File browser keys
+    lines.append(heading("File browser"))
+    lines.append(key_row("j / k", "move cursor"))
+    lines.append(key_row("enter", "expand folder or open detail"))
+    lines.append(key_row("space", "stage / unstage for commit"))
+    lines.append(key_row("x", "ignore file (skip entirely)"))
+    lines.append(key_row("v", "start visual range select"))
+    lines.append(key_row("/", "search and filter"))
+    lines.append(key_row("r", "re-query TMDB with current metadata"))
+    lines.append(key_row("c", "commit staged files"))
+    lines.append(key_row("shift+tab", "cycle operation (copy/move/link)"))
+    lines.append(key_row("ctrl+c ctrl+c", "quit"))
+    lines.append(Text())
 
-    result.append("\n")
-    result.append("  sources provide metadata from TMDB.\n", MUTED)
-    result.append("  apply values to the result to build the destination path.\n", MUTED)
+    # Detail view keys
+    lines.append(heading("Detail view"))
+    lines.append(key_row("enter", "edit field value inline"))
+    lines.append(key_row("backspace", "clear field"))
+    lines.append(key_row("shift+enter", "apply all fields from TMDB match"))
+    lines.append(key_row("f", "re-extract field from filename"))
+    lines.append(key_row("r", "refresh TMDB matches"))
+    lines.append(key_row("\u2190 / \u2192 / tab", "cycle between TMDB matches"))
+    lines.append(key_row("c", "confirm changes"))
+    lines.append(key_row("esc", "discard changes"))
+    lines.append(Text())
 
-    result.append("\n")
-    result.append("  press ? or esc to close\n", f"{MUTED} italic")
+    # Tips
+    lines.append(heading("Tips"))
+    lines.append(body("High-confidence TMDB matches are auto-accepted and staged."))
+    lines.append(body("Use v to select a range, then enter to bulk-edit metadata."))
+    lines.append(body("Edit a field and press r to search TMDB with new values."))
+    lines.append(Text())
 
-    return result
+    # Footer
+    lines.append(Text("    ? or esc to close", style=f"italic {MUTED}"))
+
+    return lines
 
 
-class HelpScreen(ModalScreen):
-    """Modal screen showing keybinding reference."""
+class HelpView(Widget):
+    """Inline help view showing workflow guide and keybindings."""
 
-    DEFAULT_CSS = """
-    HelpScreen {
-        align: center middle;
-    }
-    HelpScreen #help-panel {
-        width: 64;
-        height: auto;
-        max-height: 90%;
-        border: round #7AB8FF;
-        padding: 1 2;
-    }
-    """
+    can_focus = True
 
-    BINDINGS = [
-        Binding("question_mark", "dismiss", "Close", show=False),
-        Binding("escape", "dismiss", "Close", show=False),
-    ]
-
-    def compose(self) -> ComposeResult:
-        yield Static(_build_help_text(), id="help-panel")
+    def render(self) -> RenderableType:
+        return Text("\n").join(_build_help_content(self.size.width))

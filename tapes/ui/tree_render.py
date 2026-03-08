@@ -14,12 +14,12 @@ from tapes.ui.tree_model import FileNode, FolderNode, TreeModel
 MUTED = "#888888"
 # Lighter muted for fold arrows (more visible than MUTED).
 MUTED_LIGHT = "#aaaaaa"
-# Dark mossy green background for staged files.
-STAGED_BG = "on #1e3320"
+# Green tick for staged files.
+STAGED_COLOR = "#4EBA65"
 # Cursor highlight (lazygit-style dark slate).
 CURSOR_BG = "on #373737"
-# Range selection background.
-RANGE_BG = "on #2a2844"
+# Range selection background (matches cursor).
+RANGE_BG = "on #373737"
 
 
 def template_field_names(template: str) -> list[str]:
@@ -46,6 +46,50 @@ def select_template(
     return movie_template
 
 
+_KNOWN_TAGS = frozenset({"forced", "sdh", "signs", "commentary"})
+
+
+def _is_tag(s: str) -> bool:
+    """Check if a suffix component is a language/subtitle tag."""
+    return s.lower() in _KNOWN_TAGS or (len(s) in (2, 3) and s.isalpha())
+
+
+def full_extension(path: Path) -> str:
+    """Return the full extension, preserving tags like '.forced.en.srt'.
+
+    Walks backwards through suffixes, collecting consecutive tags
+    (language codes, 'forced', 'sdh', etc.) that precede the final
+    extension.  Also picks up hyphen-prefixed tags (e.g. ``-forced``)
+    that appear just before the dot-suffix chain in the stem.
+    """
+    suffixes = path.suffixes
+    if not suffixes:
+        return ""
+    # Always include the last suffix; walk backwards collecting tags
+    count = 1
+    for i in range(len(suffixes) - 2, -1, -1):
+        tag = suffixes[i].lstrip(".")
+        if _is_tag(tag):
+            count += 1
+        else:
+            break
+
+    ext = "".join(suffixes[-count:]).lstrip(".")
+
+    # Check for hyphen-prefixed tags in the stem (e.g. "movie-forced")
+    stem = path.name[: -len("." + ext)] if ext else path.stem
+    while "-" in stem:
+        last_hyphen = stem.rfind("-")
+        candidate = stem[last_hyphen + 1 :]
+        if _is_tag(candidate):
+            ext = candidate + "." + ext
+            stem = stem[:last_hyphen]
+        else:
+            break
+
+    return ext
+
+
 def compute_dest(node: FileNode, template: str) -> str | None:
     """Compute the destination path for a file node using a template.
 
@@ -57,7 +101,7 @@ def compute_dest(node: FileNode, template: str) -> str | None:
     and ``?`` is shown instead so the user can see partial progress.
     """
     fields: dict[str, Any] = dict(node.result)
-    fields["ext"] = node.path.suffix.lstrip(".")
+    fields["ext"] = full_extension(node.path)
 
     needed = template_field_names(template)
     missing = [f for f in needed if fields.get(f) is None]
@@ -106,11 +150,16 @@ def render_dest(dest: str | None) -> Text:
     if dir_part:
         _append_with_yellow_placeholders(result, dir_part, MUTED)
 
-    # Split basename into stem and extension
-    dot_pos = basename.rfind(".")
-    if dot_pos > 0:
-        stem = basename[:dot_pos]
-        ext = basename[dot_pos:]  # includes the dot
+    # Split basename into stem and full extension (e.g. ".en.srt")
+    ext_str = full_extension(Path(basename))
+    if ext_str:
+        dot_ext = "." + ext_str
+        if basename.endswith(dot_ext):
+            stem = basename[: -len(dot_ext)]
+            ext = dot_ext
+        else:
+            stem = basename
+            ext = ""
     else:
         stem = basename
         ext = ""
@@ -159,7 +208,7 @@ def render_file_row(
     When *arrow_col* is given, the filename area is padded so the arrow
     starts at that column position, creating aligned two-column output.
 
-    Staging is shown via background color (mossy green), not markers.
+    Staged files show a green tick before the destination.
     Ignored files are rendered in muted style.
     """
     effective_template = select_template(node, movie_template, tv_template)
@@ -179,19 +228,28 @@ def render_file_row(
     else:
         filename = node.path.name
 
-    row.append(filename)
-
-    # Pad to arrow column if specified
-    if arrow_col is not None:
-        current_len = len(row.plain)
-        if current_len < arrow_col:
-            row.append(" " * (arrow_col - current_len))
-        row.append("\u2192 ", style=MUTED)
+    if node.ignored:
+        row.append(filename, style="strike")
     else:
-        row.append("  \u2192  ", style=MUTED)
+        row.append(filename)
 
-    dest = compute_dest(node, effective_template)
-    row.append_text(render_dest(dest))
+        # Pad to arrow column if specified
+        if arrow_col is not None:
+            current_len = len(row.plain)
+            if current_len < arrow_col:
+                row.append(" " * (arrow_col - current_len))
+            row.append("\u2192 ", style=MUTED)
+        else:
+            row.append("  \u2192  ", style=MUTED)
+
+        # Staged tick (green ✓) or blank placeholder for alignment
+        if node.staged:
+            row.append("\u2713 ", style=STAGED_COLOR)
+        else:
+            row.append("  ")
+
+        dest = compute_dest(node, effective_template)
+        row.append_text(render_dest(dest))
 
     return row
 
@@ -313,15 +371,17 @@ def render_separator(
 
     right_len = 0
     if right_text:
-        right_len = len(right_text) + 3  # space before text + right padding
+        # space + text + space + 3 trailing dashes
+        right_len = len(right_text) + 5
 
     fill = width - used - right_len
     if fill > 0:
         line.append("─" * fill, style=color)
 
     if right_text:
-        line.append(" ")
-        line.append(right_text, style=MUTED)
-        line.append("  ")
+        line.append(" ", style=color)
+        line.append(right_text, style=color)
+        line.append(" ", style=color)
+        line.append("───", style=color)
 
     return line

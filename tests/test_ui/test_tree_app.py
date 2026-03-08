@@ -595,12 +595,13 @@ class TestTreeAppKeys:
             assert files[1].staged  # file_b
 
     @pytest.mark.asyncio()
-    async def test_q_quits(self, model: TreeModel, template: str) -> None:
+    async def test_ctrl_c_twice_quits(self, model: TreeModel, template: str) -> None:
         from tapes.ui.tree_app import TreeApp
 
         app = TreeApp(model=model, movie_template=template, tv_template=template)
         async with app.run_test() as pilot:
-            await pilot.press("q")
+            await pilot.press("ctrl+c")
+            await pilot.press("ctrl+c")
             # app should exit; if we get here without hanging, it worked
 
 
@@ -1172,25 +1173,22 @@ class TestVisualIntegration:
 
     @pytest.mark.asyncio()
     async def test_question_mark_toggles_help(self) -> None:
-        """Pressing ? pushes HelpScreen, pressing ? again dismisses it."""
-        from tapes.ui.help_overlay import HelpScreen
+        """Pressing ? shows inline help view, pressing ? again hides it."""
         from tapes.ui.tree_app import TreeApp
 
         model = _expanded_model()
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
-            # No modal initially
-            assert len(app.screen_stack) == 1
+            assert not app._in_help
 
             # Show help
             await pilot.press("question_mark")
-            assert len(app.screen_stack) == 2
-            assert isinstance(app.screen, HelpScreen)
+            assert app._in_help
 
-            # Dismiss help (? is bound to dismiss on HelpScreen)
+            # Hide help
             await pilot.press("question_mark")
-            assert len(app.screen_stack) == 1
+            assert not app._in_help
 
 
 # ---------------------------------------------------------------------------

@@ -106,8 +106,8 @@ class TestCommitViewRender:
         files = [FileNode(path=Path("/a.mkv"), result={"media_type": "movie"})]
         view = CommitView(files, "copy")
         plain = _render_plain(view)
-        assert "enter confirm" in plain
-        assert "esc cancel" in plain
+        assert "enter to confirm" in plain
+        assert "esc to cancel" in plain
 
     def test_cycle_operation_wraps(self) -> None:
         files = [FileNode(path=Path("/a.mkv"), result={"media_type": "movie"})]

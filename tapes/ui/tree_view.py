@@ -9,7 +9,7 @@ from textual.reactive import reactive
 from textual.widget import Widget
 
 from tapes.ui.tree_model import FileNode, FolderNode, TreeModel
-from tapes.ui.tree_render import CURSOR_BG, MUTED, RANGE_BG, STAGED_BG, flatten_all_with_depth, flatten_with_depth, render_row
+from tapes.ui.tree_render import CURSOR_BG, MUTED, RANGE_BG, flatten_all_with_depth, flatten_with_depth, render_row
 
 if TYPE_CHECKING:
     from rich.console import RenderableType
@@ -186,6 +186,9 @@ class TreeView(Widget):
         start = self._scroll_offset
         end = min(start + viewport_height, len(self._items))
 
+        has_more_above = start > 0
+        has_more_below = end < len(self._items)
+
         rng = self.selected_range
         arrow_col = self._arrow_col
         content_lines: list[Text] = []
@@ -211,14 +214,29 @@ class TreeView(Widget):
 
             if isinstance(node, FileNode) and node.ignored:
                 row_text.stylize(MUTED)
-            elif isinstance(node, FileNode) and node.staged:
-                row_text.stylize(STAGED_BG)
             if i == self.cursor_index:
                 row_text.stylize(CURSOR_BG)
             elif rng and rng[0] <= i <= rng[1]:
                 row_text.stylize(RANGE_BG)
 
             content_lines.append(row_text)
+
+        # Scroll indicators
+        if has_more_above and content_lines:
+            indicator = Text()
+            indicator.append("    \u2191 more above", style=f"italic {MUTED}")
+            pad = inner_width - len(indicator.plain)
+            if pad > 0:
+                indicator.append(" " * pad)
+            content_lines[0] = indicator
+
+        if has_more_below and content_lines:
+            indicator = Text()
+            indicator.append("    \u2193 more below", style=f"italic {MUTED}")
+            pad = inner_width - len(indicator.plain)
+            if pad > 0:
+                indicator.append(" " * pad)
+            content_lines[-1] = indicator
 
         return Text("\n").join(content_lines)
 

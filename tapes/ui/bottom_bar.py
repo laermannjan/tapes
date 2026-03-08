@@ -42,6 +42,9 @@ class BottomBar(Widget):
 
         lines: list[Text] = []
 
+        # Blank line above separator
+        lines.append(Text())
+
         # Line 1: separator with stats
         lines.append(
             render_separator(w, right_text=self.stats_text or None, color=sep_color)
@@ -66,7 +69,7 @@ class BottomBar(Widget):
         op_color = OP_COLORS.get(self.operation, "")
         bottom.append(self.operation, style=op_color)
         bottom.append("  ")
-        bottom.append("(shift-tab)", style=MUTED)
+        bottom.append("(shift+tab to cycle)", style=MUTED)
         if self.hint_text:
             bottom.append("       ")
             bottom.append(self.hint_text, style=f"italic {MUTED}")
