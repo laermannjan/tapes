@@ -700,6 +700,63 @@ class TestConfigForwarding:
         assert len(tmdb_sources) == 1
 
 
+class TestTmdbIdShortcut:
+    """When tmdb_id is already set, skip show search and go to episodes."""
+
+    def test_skips_search_when_tmdb_id_set_for_tv(self, mock_tmdb) -> None:
+        """With tmdb_id + media_type=episode, skip search_multi, query episodes directly."""
+        node = FileNode(
+            path=Path("/media/Breaking.Bad.S01E02.mkv"),
+            result={
+                "title": "Breaking Bad",
+                "year": 2008,
+                "tmdb_id": 1396,
+                "media_type": "episode",
+                "season": 1,
+                "episode": 2,
+            },
+            sources=[],
+        )
+        with patch("tapes.tmdb.search_multi", side_effect=_mock_search_multi) as mock_search:
+            refresh_tmdb_source(node, token=TOKEN)
+            mock_search.assert_not_called()
+        # Should still have episode sources from direct episode query
+        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
+        assert len(tmdb_sources) >= 1
+        # Best episode should be S01E02
+        assert node.result.get("episode") == 2
+        assert node.result.get("episode_title") == "Cat's in the Bag..."
+
+    def test_skips_search_when_tmdb_id_set_for_movie(self, mock_tmdb) -> None:
+        """With tmdb_id + media_type=movie, skip entirely (movie fully identified)."""
+        node = FileNode(
+            path=Path("/media/Dune.mkv"),
+            result={
+                "title": "Dune",
+                "year": 2021,
+                "tmdb_id": 438631,
+                "media_type": "movie",
+            },
+            sources=[],
+        )
+        with patch("tapes.tmdb.search_multi", side_effect=_mock_search_multi) as mock_search:
+            refresh_tmdb_source(node, token=TOKEN)
+            mock_search.assert_not_called()
+        # No sources added (movie already identified)
+        assert len(node.sources) == 0
+
+    def test_normal_flow_without_tmdb_id(self, mock_tmdb) -> None:
+        """Without tmdb_id, normal search_multi flow is used."""
+        node = FileNode(
+            path=Path("/media/Dune.mkv"),
+            result={"title": "Dune", "year": 2021},
+            sources=[],
+        )
+        with patch("tapes.tmdb.search_multi", side_effect=_mock_search_multi) as mock_search:
+            refresh_tmdb_source(node, token=TOKEN)
+            mock_search.assert_called_once()
+
+
 class TestApplySourceAllClear:
     """Tests for DetailView.apply_source_all_clear preserving per-file fields."""
 

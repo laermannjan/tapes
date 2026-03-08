@@ -331,6 +331,33 @@ def _query_tmdb_for_node(
 
     year = node.result.get(YEAR)
 
+    # --- tmdb_id shortcut: skip show search when already identified ---
+    existing_tmdb_id = node.result.get(TMDB_ID)
+    if existing_tmdb_id is not None:
+        media_type = node.result.get(MEDIA_TYPE)
+        if media_type == MEDIA_TYPE_EPISODE:
+            # Show identified -- go directly to episode queries
+            show_fields = {
+                TMDB_ID: existing_tmdb_id,
+                TITLE: title,
+                YEAR: year,
+                MEDIA_TYPE: MEDIA_TYPE_EPISODE,
+            }
+            _query_episodes(
+                node,
+                token,
+                threshold,
+                show_fields,
+                cache=cache,
+                client=client,
+                post_update=_post,
+                max_results=max_results,
+                max_retries=max_retries,
+            )
+            return
+        # Movie already identified -- nothing more to fetch
+        return
+
     # Build optional kwargs for should_auto_accept margin params
     _accept_kwargs: dict[str, float] = {}
     if margin_threshold is not None:
