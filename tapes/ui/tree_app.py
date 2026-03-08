@@ -17,7 +17,6 @@ from tapes.ui.tree_model import (
     FileNode,
     FolderNode,
     TreeModel,
-    UndoManager,
     accept_best_source,
 )
 from tapes.ui.tree_view import TreeView
@@ -37,7 +36,6 @@ class TreeApp(App):
         Binding("space", "toggle_staged", "Stage"),
         Binding("v", "range_select", "Range Select"),
         Binding("escape", "cancel", "Cancel"),
-        Binding("u", "undo", "Undo"),
         Binding("x", "toggle_ignored", "Ignore"),
         Binding("c", "commit", "Commit"),
         Binding("a", "accept_best", "Accept"),
@@ -85,7 +83,6 @@ class TreeApp(App):
         self.root_path = root_path
         self.config = config or TapesConfig()
         self._in_detail = False
-        self._undo = UndoManager()
         self._auto_pipeline = auto_pipeline
         self._tmdb_querying = False
         self._tmdb_progress = (0, 0)
@@ -161,7 +158,6 @@ class TreeApp(App):
         self._in_detail = True
         detail = self.query_one(DetailView)
         detail.set_node(node)
-        detail.on_before_mutate = self._snapshot_before_mutate
         # separator + tab_bar + blank + path + blank + fields + blank + hints
         detail.styles.height = len(detail._fields) + 7
         detail.styles.display = "block"
@@ -174,16 +170,11 @@ class TreeApp(App):
         self._in_detail = True
         detail = self.query_one(DetailView)
         detail.set_nodes(nodes)
-        detail.on_before_mutate = self._snapshot_before_mutate
         detail.styles.height = len(detail._fields) + 7
         detail.styles.display = "block"
         self.query_one(TreeView).add_class("dimmed")
         self.query_one(BottomBar).styles.display = "none"
         detail.focus()
-
-    def _snapshot_before_mutate(self, nodes: list[FileNode]) -> None:
-        """Save undo snapshot before a mutation."""
-        self._undo.snapshot(nodes)
 
     def _show_tree(self) -> None:
         """Switch from detail view back to tree view."""
@@ -351,7 +342,6 @@ class TreeApp(App):
 
         if self._in_detail:
             dv = self.query_one(DetailView)
-            self._undo.snapshot(dv._file_nodes)
             for fn in dv._file_nodes:
                 refresh_tmdb_source(fn, token=token, confidence_threshold=threshold)
             dv.refresh()
@@ -361,14 +351,12 @@ class TreeApp(App):
                 nodes = tv.selected_nodes()
                 file_nodes = [n for n in nodes if isinstance(n, FileNode)]
                 if file_nodes:
-                    self._undo.snapshot(file_nodes)
                     for fn in file_nodes:
                         refresh_tmdb_source(fn, token=token, confidence_threshold=threshold)
                 tv.clear_range_select()
             else:
                 node = tv.cursor_node()
                 if isinstance(node, FileNode):
-                    self._undo.snapshot([node])
                     refresh_tmdb_source(node, token=token, confidence_threshold=threshold)
             tv.refresh()
         self._update_footer()
@@ -382,14 +370,12 @@ class TreeApp(App):
             nodes = tv.selected_nodes()
             file_nodes = [n for n in nodes if isinstance(n, FileNode)]
             if file_nodes:
-                self._undo.snapshot(file_nodes)
                 for fn in file_nodes:
                     accept_best_source(fn)
             tv.clear_range_select()
         else:
             node = tv.cursor_node()
             if isinstance(node, FileNode) and node.sources:
-                self._undo.snapshot([node])
                 accept_best_source(node)
         tv.refresh()
         self._update_footer()
@@ -465,14 +451,6 @@ class TreeApp(App):
         if self._in_detail:
             return
         self.query_one(TreeView).toggle_flat_mode()
-
-    def action_undo(self) -> None:
-        if self._undo.undo():
-            if self._in_detail:
-                self.query_one(DetailView).refresh()
-            else:
-                self.query_one(TreeView).refresh()
-            self._update_footer()
 
     def _on_tmdb_progress(self, done: int, total: int) -> None:
         """Called from worker thread via call_from_thread after each file."""

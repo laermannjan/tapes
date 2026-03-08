@@ -1,7 +1,6 @@
 """Tree data model for the TUI redesign."""
 from __future__ import annotations
 
-import copy
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -208,40 +207,6 @@ def _compress_single_child_dirs(folder: FolderNode) -> None:
                 child.name = f"{child.name}/{grandchild.name}"
                 child.children = grandchild.children
         i += 1
-
-
-class UndoManager:
-    """Single-level undo for metadata changes on FileNodes.
-
-    Call ``snapshot()`` before a mutation to save node state.
-    Call ``undo()`` to restore the most recent snapshot.
-    """
-
-    def __init__(self) -> None:
-        self._snapshot: list[tuple[FileNode, dict[str, Any], list[Source], bool]] | None = None
-
-    def snapshot(self, nodes: list[FileNode]) -> None:
-        """Save a deep copy of each node's result, sources, and staged flag."""
-        self._snapshot = [
-            (node, copy.deepcopy(node.result), copy.deepcopy(node.sources), node.staged)
-            for node in nodes
-        ]
-
-    def undo(self) -> bool:
-        """Restore the most recent snapshot. Returns True if restored."""
-        if self._snapshot is None:
-            return False
-        for node, saved_result, saved_sources, saved_staged in self._snapshot:
-            node.result = saved_result
-            node.sources = saved_sources
-            node.staged = saved_staged
-        self._snapshot = None
-        return True
-
-    @property
-    def has_snapshot(self) -> bool:
-        """Whether there is a snapshot to undo."""
-        return self._snapshot is not None
 
 
 def accept_best_source(node: FileNode) -> bool:

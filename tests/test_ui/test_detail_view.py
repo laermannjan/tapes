@@ -563,17 +563,6 @@ class TestMultiFileDetail:
         view._start_edit()
         assert view._edit_value == ""
 
-    def test_notify_before_mutate_sends_all_nodes(self) -> None:
-        view, node1, node2 = self._make_multi_view()
-        notified: list[list[FileNode]] = []
-        view.on_before_mutate = lambda nodes: notified.append(nodes)
-        view.cursor_row = 0
-        view.source_index = 0
-        view.apply_source_field()
-        assert len(notified) == 1
-        assert node1 in notified[0]
-        assert node2 in notified[0]
-
     def test_apply_all_clear_applies_to_all_nodes(self) -> None:
         view, node1, node2 = self._make_multi_view()
         # Set up result with extra fields

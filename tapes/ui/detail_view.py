@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 from rich.text import Text
 from textual import events
@@ -63,7 +63,6 @@ class DetailView(Widget):
         self.root_path = root_path
         self._fields: list[str] = []
         self._edit_value: str = ""
-        self.on_before_mutate: Callable[[list[FileNode]], None] | None = None
 
     def _active_template(self, node: FileNode | None = None) -> str:
         """Return the template for the given (or primary) node."""
@@ -346,11 +345,6 @@ class DetailView(Widget):
         new_idx = self.source_index + delta
         self.source_index = max(0, min(max_idx, new_idx))
 
-    def _notify_before_mutate(self) -> None:
-        """Notify the on_before_mutate callback before a mutation."""
-        if self.on_before_mutate is not None:
-            self.on_before_mutate(list(self._file_nodes))
-
     def apply_source_field(self) -> None:
         """Apply the current source field value to the result.
 
@@ -365,7 +359,6 @@ class DetailView(Widget):
         if src_idx >= len(sources):
             return
 
-        self._notify_before_mutate()
         field_name = self._fields[self.cursor_row]
         val = sources[src_idx].fields.get(field_name)
         if val is not None:
@@ -381,7 +374,6 @@ class DetailView(Widget):
         src_idx = self.source_index
         if src_idx >= len(sources):
             return
-        self._notify_before_mutate()
         src = sources[src_idx]
         for field_name in self._fields:
             val = src.fields.get(field_name)
@@ -409,7 +401,6 @@ class DetailView(Widget):
 
     def _commit_edit(self) -> None:
         """Save the edited value to the result for all nodes."""
-        self._notify_before_mutate()
         field_name = self._fields[self.cursor_row]
         val: str | int = self._edit_value
         if field_name in INT_FIELDS:
