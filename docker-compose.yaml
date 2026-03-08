@@ -1,0 +1,17 @@
+services:
+  tapes:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - TAPES_SCAN__IMPORT_PATH=/import
+      - TAPES_METADATA__TMDB_TOKEN=${TMDB_TOKEN:-}
+      - TAPES_LIBRARY__MOVIES=/library/movies
+      - TAPES_LIBRARY__TV=/library/tv
+      # - TAPES_LIBRARY__OPERATION=copy
+      # - TAPES_DRY_RUN=true
+    volumes:
+      - /path/to/downloads:/import:ro
+      - /path/to/library:/library
+      # Optional: mount config file
+      # - ./config.yaml:/config/config.yaml
