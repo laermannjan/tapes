@@ -33,7 +33,15 @@ def _mock_search_multi(query: str, token: str, year: int | None = None, **kwargs
     if "interstellar" in q:
         return [{"tmdb_id": 157336, "title": "Interstellar", "year": 2014, "media_type": "movie"}]
     if "breaking bad" in q:
-        return [{"tmdb_id": 1396, "title": "Breaking Bad", "year": 2008, "media_type": "episode"}]
+        return [
+            {"tmdb_id": 1396, "title": "Breaking Bad", "year": 2008, "media_type": "episode"},
+            {"tmdb_id": 559969, "title": "El Camino: A Breaking Bad Movie", "year": 2019, "media_type": "movie"},
+        ]
+    if "the office" in q:
+        return [
+            {"tmdb_id": 2316, "title": "The Office", "year": 2005, "media_type": "episode"},
+            {"tmdb_id": 2996, "title": "The Office", "year": 2001, "media_type": "episode"},
+        ]
     return []
 
 
@@ -106,15 +114,12 @@ class TestRunAutoPipeline:
         assert tmdb_sources[0].confidence == 1.0
         assert node.result["year"] == 2021
 
-    def test_title_only_not_auto_staged(self, mock_tmdb) -> None:
-        """Without year in filename, confidence is below threshold; not auto-staged."""
+    def test_clear_winner_no_year_auto_staged(self, mock_tmdb) -> None:
+        """Without year but clear winner (margin to second), auto-staged via tier 2."""
         model = _make_model("Breaking.Bad.S01E01.720p.mkv")
         run_auto_pipeline(model, token=TOKEN)
         node = model.all_files()[0]
-        assert node.staged is False
-        # TMDB sources still added for user curation
-        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
-        assert len(tmdb_sources) >= 1
+        assert node.staged is True
 
     def test_title_only_auto_stages_with_low_threshold(self, mock_tmdb) -> None:
         """With a low threshold, title-only matches can auto-stage."""
@@ -225,6 +230,39 @@ class TestTwoStageFlow:
             assert node.staged is True
 
 
+class TestTwoTierAutoAccept:
+    """Tests for margin-based auto-accept (tier 2)."""
+
+    def test_clear_winner_with_year_auto_accepts(self, mock_tmdb) -> None:
+        """Breaking Bad with year: tier 1 auto-accept (similarity ~1.0)."""
+        model = _make_model("Breaking.Bad.2008.S01E01.mkv")
+        run_auto_pipeline(model, token=TOKEN)
+        node = model.all_files()[0]
+        assert node.staged is True
+
+    def test_clear_winner_no_year_auto_accepts_via_margin(self, mock_tmdb) -> None:
+        """Breaking Bad without year: tier 2 auto-accept.
+
+        Best similarity ~0.7 (exact title, no year) vs second ~0.48
+        (subset match). Margin ~0.22 >= 0.15, so tier 2 accepts.
+        """
+        model = _make_model("Breaking.Bad.S01E01.mkv")
+        run_auto_pipeline(model, token=TOKEN)
+        node = model.all_files()[0]
+        assert node.staged is True
+        assert node.result["title"] == "Breaking Bad"
+
+    def test_ambiguous_candidates_no_auto_accept(self, mock_tmdb) -> None:
+        """The Office without year: two equally-named shows, no clear winner."""
+        model = _make_model("The.Office.S01E01.mkv")
+        run_auto_pipeline(model, token=TOKEN)
+        node = model.all_files()[0]
+        assert node.staged is False
+        # Both sources available for user curation
+        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
+        assert len(tmdb_sources) == 2
+
+
 # ---------------------------------------------------------------------------
 # Refresh TMDB source
 # ---------------------------------------------------------------------------
@@ -290,20 +328,17 @@ class TestRefreshTmdbSource:
         assert node.result.get("year") == 2021
         assert node.staged is True
 
-    def test_title_only_no_auto_accept(self, mock_tmdb) -> None:
-        """Without year, confidence is 0.7 -- below threshold, no auto-accept."""
+    def test_clear_winner_auto_accepts_via_margin(self, mock_tmdb) -> None:
+        """Breaking Bad without year: tier 2 auto-accept (clear margin to El Camino)."""
         node = FileNode(
             path=Path("/media/test.mkv"),
             result={"title": "Breaking Bad"},
             sources=[],
         )
         refresh_tmdb_source(node, token=TOKEN)
-        # Year not merged because confidence < threshold
-        assert node.result.get("year") is None
-        assert node.staged is False
-        # But TMDB source is still available for manual curation
-        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
-        assert len(tmdb_sources) == 1
+        # Tier 2 accepts: 0.7 >= 0.6 and margin ~0.22 >= 0.15
+        assert node.result.get("year") == 2008
+        assert node.staged is True
 
     def test_no_token_skips(self) -> None:
         node = FileNode(

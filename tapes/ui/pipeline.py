@@ -17,7 +17,7 @@ from tapes.fields import (
     TMDB_ID,
     YEAR,
 )
-from tapes.similarity import compute_episode_similarity, compute_similarity
+from tapes.similarity import compute_episode_similarity, compute_similarity, should_auto_accept
 from tapes.ui.tree_model import FileNode, Source, TreeModel
 
 logger = logging.getLogger(__name__)
@@ -143,7 +143,7 @@ def run_auto_pipeline(
     For each file node:
     1. Extract metadata from filename via guessit -> result + "from filename" source
     2. Query TMDB (two-stage: show/movie, then episodes) -> add TMDB sources
-    3. If TMDB confidence >= threshold, apply TMDB fields to result and auto-stage
+    3. Auto-accept via should_auto_accept (high similarity OR clear winner)
     """
     from tapes.config import DEFAULT_AUTO_ACCEPT_THRESHOLD
 
@@ -237,7 +237,7 @@ def _query_tmdb_for_node(
 
     Stage 1: Find movie/show
     - search_multi with title (+year if available) -> up to 3 Sources
-    - Auto-accept: if best Source confidence >= threshold, apply to result
+    - Auto-accept via should_auto_accept (high similarity OR clear winner)
     - If accepted media_type == "movie": done
 
     Stage 2: Find episode (only if stage 1 accepted a TV show)
@@ -281,10 +281,14 @@ def _query_tmdb_for_node(
         )
         tmdb_sources.append(source)
 
-    # Find best source
-    best = max(tmdb_sources, key=lambda s: s.confidence)
+    # Sort by similarity for should_auto_accept (expects descending order)
+    tmdb_sources.sort(key=lambda s: s.confidence, reverse=True)
+    for i, src in enumerate(tmdb_sources):
+        src.name = f"TMDB #{i + 1}"
+    similarities = [s.confidence for s in tmdb_sources]
+    best = tmdb_sources[0]
 
-    if best.confidence >= threshold:
+    if should_auto_accept(similarities, threshold=threshold):
         # Auto-accept: apply non-empty fields to result
         for field, val in best.fields.items():
             if val is not None:
