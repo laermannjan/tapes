@@ -61,7 +61,7 @@ class TreeApp(App):
         Binding("h,left", "cursor_left", "Left"),
         Binding("l,right", "cursor_right", "Right"),
         Binding("enter", "toggle_or_enter", "Toggle"),
-        Binding("shift+enter", "apply_all_clear", "Apply All", show=False),
+        Binding("ctrl+a", "apply_all_clear", "Accept All", show=False),
         Binding("space", "toggle_staged", "Stage"),
         Binding("v", "range_select", "Range Select"),
         Binding("escape", "cancel", "Cancel"),
@@ -117,6 +117,7 @@ class TreeApp(App):
         self.root_path = root_path
         self.config = config or TapesConfig()
         self._mode = AppMode.TREE
+        self._mode_before_help = AppMode.TREE
         self._detail_snapshot: list[_NodeSnapshot] | None = None
         self._auto_pipeline = auto_pipeline
         self._tmdb_querying = False
@@ -287,7 +288,8 @@ class TreeApp(App):
             self._show_help()
 
     def _show_help(self) -> None:
-        """Show the inline help view."""
+        """Show the inline help view, remembering the previous mode."""
+        self._mode_before_help = self._mode
         self._mode = AppMode.HELP
         hv = self.query_one(HelpView)
         hv.styles.height = HELP_HEIGHT
@@ -297,16 +299,22 @@ class TreeApp(App):
         hv.focus()
 
     def _hide_help(self) -> None:
-        """Hide the help view and return to tree."""
-        self._mode = AppMode.TREE
+        """Hide the help view and return to the previous mode."""
+        prev = self._mode_before_help
+        self._mode = prev
         hv = self.query_one(HelpView)
         hv.styles.display = "none"  # ty: ignore[invalid-assignment]  # Textual RenderStyles setter
-        tv = self.query_one(TreeView)
-        tv.remove_class("dimmed")
-        self.query_one(BottomBar).styles.display = "block"
-        tv.focus()
-        tv.refresh()
-        self._update_footer()
+        if prev == AppMode.DETAIL:
+            self.query_one(DetailView).focus()
+        elif prev == AppMode.COMMIT:
+            self.query_one(CommitView).focus()
+        else:
+            tv = self.query_one(TreeView)
+            tv.remove_class("dimmed")
+            self.query_one(BottomBar).styles.display = "block"
+            tv.focus()
+            tv.refresh()
+            self._update_footer()
 
     def action_cursor_down(self) -> None:
         if self._mode in _MODAL_MODES:

@@ -1057,6 +1057,24 @@ class TestVisualIntegration:
             await pilot.press("question_mark")
             assert app.mode == AppMode.TREE
 
+    @pytest.mark.asyncio()
+    async def test_help_from_detail_returns_to_detail(self) -> None:
+        """Pressing ? in detail opens help, closing returns to detail."""
+        from tapes.ui.tree_app import TreeApp
+
+        node = FileNode(path=Path("/media/test.mkv"), result={"title": "Test"})
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
+
+        async with app.run_test() as pilot:
+            await pilot.press("enter")
+            assert app.mode == AppMode.DETAIL
+            await pilot.press("question_mark")
+            assert app.mode == AppMode.HELP
+            await pilot.press("question_mark")
+            assert app.mode == AppMode.DETAIL
+
 
 # ---------------------------------------------------------------------------
 # Detail confirm/discard tests
@@ -1083,7 +1101,7 @@ class TestDetailConfirmDiscard:
         async with app.run_test() as pilot:
             await pilot.press("enter")
             assert app.mode == AppMode.DETAIL
-            await pilot.press("shift+enter")
+            await pilot.press("ctrl+a")
             assert node.result["title"] == "Changed"
             await pilot.press("escape")
             assert app.mode == AppMode.TREE
@@ -1104,7 +1122,7 @@ class TestDetailConfirmDiscard:
 
         async with app.run_test() as pilot:
             await pilot.press("enter")
-            await pilot.press("shift+enter")
+            await pilot.press("ctrl+a")
             assert node.result["title"] == "Changed"
             await pilot.press("c")
             assert app.mode == AppMode.TREE

@@ -56,7 +56,7 @@ def _build_help_content(width: int) -> list[Text]:
     lines.append(key_row("/", "search and filter"))
     lines.append(key_row("r", "re-query TMDB with current metadata"))
     lines.append(key_row("c", "commit staged files"))
-    lines.append(key_row("shift+tab", "cycle operation (copy/move/link)"))
+    lines.append(key_row("shift+tab", "cycle operation (copy/move/link/hardlink)"))
     lines.append(key_row("ctrl+c ctrl+c", "quit"))
     lines.append(Text())
 
@@ -64,7 +64,7 @@ def _build_help_content(width: int) -> list[Text]:
     lines.append(heading("Detail view"))
     lines.append(key_row("enter", "edit field value inline"))
     lines.append(key_row("backspace", "clear field"))
-    lines.append(key_row("shift+enter", "apply all fields from TMDB match"))
+    lines.append(key_row("ctrl+a", "accept all fields from TMDB match"))
     lines.append(key_row("f", "re-extract field from filename"))
     lines.append(key_row("r", "refresh TMDB matches"))
     lines.append(key_row("\u2190 / \u2192 / tab", "cycle between TMDB matches"))

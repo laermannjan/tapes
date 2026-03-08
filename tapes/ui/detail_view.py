@@ -270,7 +270,7 @@ class DetailView(Widget):
                 style=f"italic {MUTED}",
             )
         hints = (
-            "    enter to edit \u00b7 backspace to clear \u00b7 shift+enter to apply all from match"
+            "    enter to edit \u00b7 backspace to clear \u00b7 ctrl+a to accept all from match"
             " \u00b7 f to extract from filename \u00b7 r to refresh \u00b7 c to confirm \u00b7 esc to discard"
         )
         return Text(hints, style=f"italic {MUTED}")
@@ -350,7 +350,7 @@ class DetailView(Widget):
         self.source_index = (self.source_index + delta) % len(sources)
 
     def apply_source_all_clear(self) -> None:
-        """Handle shift-enter: apply all fields from current source."""
+        """Handle ctrl+a: accept all fields from current source."""
         sources = self.node.sources
         if not sources:
             return
