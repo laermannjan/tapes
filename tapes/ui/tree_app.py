@@ -46,7 +46,6 @@ class TreeApp(App):
         Binding("minus", "collapse_all", "Collapse All"),
         Binding("equals_sign", "expand_all", "Expand All"),
         Binding("question_mark", "toggle_help", "Help"),
-        Binding("shift+tab", "cycle_op", "Cycle Op", show=False),
         Binding("d", "clear_field", "Clear Field", show=False),
         Binding("g", "reset_guessit", "Reset Guessit", show=False),
     ]
@@ -443,6 +442,13 @@ class TreeApp(App):
 
     def on_key(self, event: Key) -> None:
         """Intercept key events during search mode."""
+        # Intercept shift+tab for op cycling (Textual captures it for focus)
+        if event.key == "shift+tab" and not self._in_detail and not self._searching:
+            self.action_cycle_op()
+            event.prevent_default()
+            event.stop()
+            return
+
         if not self._searching:
             return
 

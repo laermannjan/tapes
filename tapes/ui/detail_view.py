@@ -447,6 +447,13 @@ class DetailView(Widget):
 
     def on_key(self, event: events.Key) -> None:
         """Handle key events for inline editing."""
+        if event.key == "tab" and not self.editing:
+            self.cycle_source(1)
+            self.refresh()
+            event.prevent_default()
+            event.stop()
+            return
+
         if not self.editing:
             return
 
