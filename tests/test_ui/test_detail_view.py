@@ -291,7 +291,7 @@ class TestDetailViewApplyAllClear:
         view.fields = get_display_fields(TEMPLATE)
         return view
 
-    def test_applies_all_and_clears_empties(self) -> None:
+    def test_applies_present_and_preserves_absent(self) -> None:
         view = self._make_view()
         # filename source has title, season, episode but NOT year
         view.node.result = {
@@ -305,8 +305,8 @@ class TestDetailViewApplyAllClear:
         assert view.node.result["title"] == "Breaking Bad"
         assert view.node.result["season"] == 1
         assert view.node.result["episode"] == 1
-        # year was cleared because filename source has no year
-        assert "year" not in view.node.result
+        # year is preserved because the source doesn't have it
+        assert view.node.result["year"] == 9999
 
     def test_noop_without_sources(self) -> None:
         node = FileNode(path=Path("/test.mkv"), result={"title": "Test"}, sources=[])
@@ -434,9 +434,9 @@ class TestMultiFileDetail:
         assert node2.result["title"] == "Breaking Bad"
         assert node1.result["year"] == 2008
         assert node2.result["year"] == 2008
-        # season and episode not in TMDB source, should be cleared
-        assert "season" not in node1.result
-        assert "season" not in node2.result
+        # season and episode not in TMDB source, should be preserved
+        assert node1.result["season"] == 99
+        assert node2.result["season"] == 99
 
     def test_multi_value_count_reflects_distinct_values(self) -> None:
         node1 = FileNode(

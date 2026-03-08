@@ -350,7 +350,12 @@ class DetailView(Widget):
         self.source_index = (self.source_index + delta) % len(sources)
 
     def apply_source_all_clear(self) -> None:
-        """Handle ctrl+a: accept all fields from current source."""
+        """Handle ctrl+a: accept all fields from current source.
+
+        Only sets fields that are present in the source. Fields the source
+        doesn't have are left untouched, preserving per-file metadata like
+        season/episode when accepting a show-level TMDB match.
+        """
         sources = self.node.sources
         if not sources:
             return
@@ -363,9 +368,6 @@ class DetailView(Widget):
             if val is not None:
                 for n in self.file_nodes:
                     n.result[field_name] = val
-            else:
-                for n in self.file_nodes:
-                    n.result.pop(field_name, None)
         self.refresh()
 
     def start_edit(self) -> None:

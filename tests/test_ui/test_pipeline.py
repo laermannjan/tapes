@@ -698,3 +698,98 @@ class TestConfigForwarding:
         tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
         # Even though 3 episodes are available, only max_results=1 kept
         assert len(tmdb_sources) == 1
+
+
+class TestApplySourceAllClear:
+    """Tests for DetailView.apply_source_all_clear preserving per-file fields."""
+
+    def test_preserves_fields_not_in_source(self) -> None:
+        """Accepting a show-level source should not wipe season/episode."""
+        from tapes.ui.detail_view import DetailView
+
+        node = FileNode(
+            path=Path("/media/Breaking.Bad.S01E01.mkv"),
+            result={
+                "title": "breaking bad",
+                "season": 1,
+                "episode": 1,
+                "media_type": "episode",
+            },
+            sources=[
+                Source(
+                    name="TMDB #1",
+                    fields={"tmdb_id": 1396, "title": "Breaking Bad", "year": 2008, "media_type": "episode"},
+                    confidence=0.7,
+                ),
+            ],
+        )
+        dv = DetailView(node, movie_template="{title}.{ext}", tv_template="{title}.{ext}")
+        dv._size = (120, 40)  # fake size for field computation
+        dv.fields = ["title", "year", "season", "episode", "media_type", "tmdb_id"]
+        dv.source_index = 0
+        dv.apply_source_all_clear()
+        # Show-level fields applied
+        assert node.result["tmdb_id"] == 1396
+        assert node.result["title"] == "Breaking Bad"
+        assert node.result["year"] == 2008
+        # Per-file fields preserved (not popped)
+        assert node.result["season"] == 1
+        assert node.result["episode"] == 1
+
+    def test_preserves_per_file_fields_multi_node(self) -> None:
+        """Multi-node: each node keeps its own season/episode."""
+        from tapes.ui.detail_view import DetailView
+
+        node1 = FileNode(
+            path=Path("/media/show.s01e01.mkv"),
+            result={"title": "show", "season": 1, "episode": 1, "media_type": "episode"},
+            sources=[
+                Source(
+                    name="TMDB #1",
+                    fields={"tmdb_id": 100, "title": "Show", "year": 2020, "media_type": "episode"},
+                    confidence=0.7,
+                ),
+            ],
+        )
+        node2 = FileNode(
+            path=Path("/media/show.s02e05.mkv"),
+            result={"title": "show", "season": 2, "episode": 5, "media_type": "episode"},
+            sources=[],
+        )
+        dv = DetailView(node1, movie_template="{title}.{ext}", tv_template="{title}.{ext}")
+        dv._size = (120, 40)
+        dv.file_nodes = [node1, node2]
+        dv.fields = ["title", "year", "season", "episode", "media_type", "tmdb_id"]
+        dv.source_index = 0
+        dv.apply_source_all_clear()
+        # Show-level fields applied to both
+        assert node1.result["tmdb_id"] == 100
+        assert node2.result["tmdb_id"] == 100
+        # Per-file season/episode preserved
+        assert node1.result["season"] == 1
+        assert node1.result["episode"] == 1
+        assert node2.result["season"] == 2
+        assert node2.result["episode"] == 5
+
+    def test_sets_fields_present_in_source(self) -> None:
+        """Fields present in the source should be set on all nodes."""
+        from tapes.ui.detail_view import DetailView
+
+        node = FileNode(
+            path=Path("/media/test.mkv"),
+            result={"title": "old title"},
+            sources=[
+                Source(
+                    name="TMDB #1",
+                    fields={"title": "New Title", "year": 2020},
+                    confidence=0.9,
+                ),
+            ],
+        )
+        dv = DetailView(node, movie_template="{title}.{ext}", tv_template="{title}.{ext}")
+        dv._size = (120, 40)
+        dv.fields = ["title", "year"]
+        dv.source_index = 0
+        dv.apply_source_all_clear()
+        assert node.result["title"] == "New Title"
+        assert node.result["year"] == 2020
