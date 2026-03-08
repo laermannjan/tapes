@@ -176,6 +176,31 @@ def refresh_tmdb_source(
     _query_tmdb_for_node(node, token, confidence_threshold)
 
 
+def extract_guessit_fields(filename: str) -> dict[str, Any]:
+    """Extract metadata fields from a filename via guessit.
+
+    Returns the same field dict that run_guessit_pass would populate.
+    """
+    from tapes.metadata import extract_metadata
+
+    meta = extract_metadata(filename)
+    fields: dict[str, Any] = {}
+    if meta.title:
+        fields[TITLE] = meta.title
+    if meta.year is not None:
+        fields[YEAR] = meta.year
+    if meta.season is not None:
+        fields[SEASON] = meta.season
+    if meta.episode is not None:
+        fields[EPISODE] = meta.episode
+    if meta.media_type:
+        fields[MEDIA_TYPE] = meta.media_type
+    for k, v in meta.raw.items():
+        if v is not None:
+            fields[k] = v
+    return fields
+
+
 def _populate_node_guessit(node: FileNode, extract_metadata_fn: Callable[[str], Any]) -> None:
     """Extract metadata from filename via guessit and set as result (base layer).
 

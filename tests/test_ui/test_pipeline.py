@@ -452,3 +452,26 @@ class TestTmdbCache:
         t.start()
         t.join(timeout=2.0)
         assert not t.is_alive(), "Thread deadlocked waiting for failed fetch"
+
+
+class TestExtractGuessitFields:
+    def test_extracts_title_and_year(self) -> None:
+        from tapes.ui.pipeline import extract_guessit_fields
+
+        fields = extract_guessit_fields("Inception.2010.mkv")
+        assert fields["title"] == "Inception"
+        assert fields["year"] == 2010
+
+    def test_extracts_tv_fields(self) -> None:
+        from tapes.ui.pipeline import extract_guessit_fields
+
+        fields = extract_guessit_fields("Breaking.Bad.S01E01.mkv")
+        assert fields["title"] == "Breaking Bad"
+        assert fields["season"] == 1
+        assert fields["episode"] == 1
+
+    def test_missing_fields_omitted(self) -> None:
+        from tapes.ui.pipeline import extract_guessit_fields
+
+        fields = extract_guessit_fields("something.mkv")
+        assert "year" not in fields or fields.get("year") is None
