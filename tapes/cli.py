@@ -85,7 +85,7 @@ def main(
 
 @app.command("import")
 def import_cmd(
-    path: Path = typer.Argument(..., help="Directory or file to import"),
+    path: Path | None = typer.Argument(None, help="Directory or file to import"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview only, no file operations ever"),
     config_file: Path | None = typer.Option(None, "--config", "-c", help="Path to config file"),
     # Library
@@ -164,7 +164,15 @@ def import_cmd(
     from tapes.tree_model import build_tree
     from tapes.ui.tree_app import TreeApp
 
-    resolved = path.resolve()
+    # Resolve path: CLI argument > config import_path
+    if path is not None:
+        resolved = path.resolve()
+    elif cfg.scan.import_path:
+        resolved = Path(cfg.scan.import_path).resolve()
+    else:
+        console.print("[red]Error:[/red] No path provided. Pass a directory or set scan.import_path in config.")
+        raise typer.Exit(code=1)
+
     files = scan(resolved, ignore_patterns=cfg.scan.ignore_patterns, video_extensions=cfg.scan.video_extensions)
     if not files:
         console.print("No files found.")

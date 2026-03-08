@@ -304,3 +304,37 @@ class TestAlwaysUsesLoadConfig:
             runner.invoke(app, ["import", "--library-tv", "/my/tv", str(scan_dir)])
             _kwargs = mock_app_cls.call_args[1]
             assert _kwargs["config"].library.tv == "/my/tv"
+
+
+# ---------------------------------------------------------------------------
+# Import path fallback (CLI argument > config import_path > error)
+# ---------------------------------------------------------------------------
+
+
+class TestImportPathFallback:
+    def test_import_uses_config_import_path(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """import_cmd uses scan.import_path from config when no path argument given."""
+        monkeypatch.delenv("TAPES_CONFIG", raising=False)
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+
+        scan_dir = tmp_path / "media"
+        scan_dir.mkdir()
+        (scan_dir / "test.mkv").write_text("fake")
+
+        monkeypatch.setenv("TAPES_SCAN__IMPORT_PATH", str(scan_dir))
+
+        from unittest.mock import patch
+
+        with patch("tapes.ui.tree_app.TreeApp") as mock_app_cls:
+            mock_app_cls.return_value.run.return_value = None
+            result = runner.invoke(app, ["import"])
+            assert result.exit_code == 0
+            mock_app_cls.assert_called_once()
+
+    def test_import_errors_when_no_path(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """import_cmd exits with error when no path argument and no import_path configured."""
+        monkeypatch.delenv("TAPES_CONFIG", raising=False)
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+
+        result = runner.invoke(app, ["import"])
+        assert result.exit_code != 0
