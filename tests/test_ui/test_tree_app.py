@@ -715,10 +715,10 @@ class TestUndoIntegration:
             dv = app.query_one(DetailView)
             assert dv.node is node
 
-            # Apply source field (title from src1)
-            dv.cursor_row = 0
+            # Apply source field (title from src1; tmdb_id is at 0)
+            dv.cursor_row = 1
             dv.source_index = 0
-            await pilot.press("enter")
+            await pilot.press("a")
             assert node.result["title"] == "Alt"
 
             # Undo

@@ -1,6 +1,7 @@
 """Interactive Textual widget for the detail view with cursor and editing."""
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
 from rich.text import Text
@@ -10,21 +11,24 @@ from textual.widget import Widget
 
 from tapes.fields import INT_FIELDS
 from tapes.ui.detail_render import (
-    LABEL_WIDTH,
     confidence_style,
     diff_style,
     display_val,
     get_display_fields,
     is_multi_value,
     render_compact_preview,
-    render_detail_header,
     render_folder_preview,
 )
 from tapes.ui.tree_model import FileNode, FolderNode, compute_shared_fields
-from tapes.ui.tree_render import MUTED, compute_dest, select_template
+from tapes.ui.tree_render import MUTED, compute_dest, render_dest, select_template
 
 if TYPE_CHECKING:
     from rich.console import RenderableType
+
+# Accent color for focused panel and active tab.
+ACCENT = "#C79BFF"
+# Column gap between field names, values, and source values.
+COL_GAP = "   "
 
 
 class DetailView(Widget):
@@ -36,8 +40,8 @@ class DetailView(Widget):
 
     can_focus = True
 
-    cursor_row: reactive[int] = reactive(0)   # -1 = header, 0+ = fields
-    source_index: reactive[int] = reactive(0)  # which TMDB source to display
+    cursor_row: reactive[int] = reactive(0)   # 0+ = fields
+    source_index: reactive[int] = reactive(0)  # which TMDB source tab
     editing: reactive[bool] = reactive(False)
 
     def __init__(
@@ -45,12 +49,14 @@ class DetailView(Widget):
         node: FileNode,
         movie_template: str,
         tv_template: str,
+        root_path: Path | None = None,
     ) -> None:
         super().__init__()
         self.node = node
         self._file_nodes: list[FileNode] = [node]
         self.movie_template = movie_template
         self.tv_template = tv_template
+        self.root_path = root_path
         self._fields: list[str] = []
         self._edit_value: str = ""
         self.on_before_mutate: Callable[[list[FileNode]], None] | None = None
@@ -63,10 +69,7 @@ class DetailView(Widget):
             self.on_editing_changed(value)
 
     def _active_template(self, node: FileNode | None = None) -> str:
-        """Return the template for the given (or primary) node.
-
-        Selects based on the node's ``media_type``.
-        """
+        """Return the template for the given (or primary) node."""
         if node is None:
             node = self.node
         return select_template(node, self.movie_template, self.tv_template)
@@ -90,11 +93,7 @@ class DetailView(Widget):
         self.refresh()
 
     def set_nodes(self, nodes: list[FileNode]) -> None:
-        """Switch to multiple file nodes for multi-file detail view.
-
-        The first node is used as the primary for sources display.
-        Result column shows shared values, '(N values)' for differing.
-        """
+        """Switch to multiple file nodes for multi-file detail view."""
         if not nodes:
             return
         self._file_nodes = list(nodes)
@@ -116,12 +115,20 @@ class DetailView(Widget):
             return self.node.result
         return compute_shared_fields(self._file_nodes)
 
-    BORDER_TITLE = "Detail"
+    BORDER_TITLE = "Info"
+
+    def _display_path(self, node: FileNode) -> str:
+        """Return the display path for a node (relative to root or just name)."""
+        if self.root_path is not None:
+            try:
+                return str(node.path.relative_to(self.root_path))
+            except ValueError:
+                pass
+        return node.path.name
 
     def render(self) -> RenderableType:
         """Build Rich Text content (borders handled by Textual CSS)."""
-        w = self.size.width
-        inner_width = w  # self.size is already the content area
+        inner_width = self.size.width
 
         is_expanded = self.has_class("expanded")
 
@@ -148,66 +155,53 @@ class DetailView(Widget):
         else:
             return [Text(" (no file selected)", style=MUTED)]
 
-        # The render functions return Text with a "\n" separator.
-        # Split into individual lines preserving styles.
         return list(preview_text.split("\n"))
 
-    def _render_expanded_content(self, inner_width: int) -> list[Text]:
-        """Render the full detail grid (existing expanded behavior)."""
-        content: list[Text] = []
+    # ------------------------------------------------------------------
+    # Expanded content rendering
+    # ------------------------------------------------------------------
 
-        # Header: filename + destination (or multi-file summary)
-        if self.is_multi:
-            for hl in self._render_multi_header():
-                content.append(hl)
-        else:
-            for hl in render_detail_header(self.node, self._active_template()):
-                content.append(Text(hl))
+    def _compute_col_widths(self) -> tuple[int, int, int]:
+        """Compute auto-sized column widths: (label_w, value_w, source_w).
 
-        # Separator
-        content.append(Text("\u2500" * inner_width, style=MUTED))
-
-        # Grid header row
-        content.append(self._render_grid_header())
-
-        # Field rows
-        for row_idx, field_name in enumerate(self._fields):
-            content.append(self._render_field_row(row_idx, field_name))
-
-        # Bottom separator
-        content.append(Text("\u2500" * inner_width, style=MUTED))
-
-        return content
-
-    def _render_multi_header(self) -> list[Text]:
-        """Render header for multi-file view."""
-        count = len(self._file_nodes)
-        header = Text(f" {count} files selected", style="bold")
-
-        # Compute destinations
-        dests: set[str] = set()
-        for n in self._file_nodes:
-            d = compute_dest(n, self._active_template(n))
-            dests.add(d or "???")
-
-        if len(dests) == 1:
-            dest_line = Text(f" \u2192 {dests.pop()}")
-        else:
-            dest_line = Text(" \u2192 (various destinations)")
-
-        return [header, dest_line]
-
-    def _col_widths(self) -> tuple[int, int]:
-        """Compute dynamic column widths based on widget width.
-
-        Returns (result_col_width, source_col_width).
+        Measures longest content in each column, adds padding, and divides
+        remaining space proportionally. Source column only used when sources exist.
         """
-        inner = self.size.width  # self.size is already the content area
-        available = inner - LABEL_WIDTH - 1  # -1 for ┃ separator
-        if available < 20:
-            return (10, 10)
-        half = available // 2
-        return (half, available - half)
+        shared = self._shared_result()
+        sources = self.node.sources
+        gap = len(COL_GAP)
+
+        # Measure label column
+        label_w = max((len(f) for f in self._fields), default=6) + 2  # 2 left pad
+
+        # Measure value column
+        val_w = 6  # minimum
+        for f in self._fields:
+            v = display_val(shared.get(f))
+            val_w = max(val_w, len(v))
+
+        # Measure source column
+        src_w = 0
+        if sources and self.source_index < len(sources):
+            src = sources[self.source_index]
+            for f in self._fields:
+                v = display_val(src.fields.get(f))
+                src_w = max(src_w, len(v))
+            src_w = max(src_w, 6)  # minimum
+
+        inner = self.size.width
+        used = label_w + gap + val_w
+        if src_w:
+            used += gap + src_w
+
+        # If we have spare room, expand value column
+        if used < inner and src_w == 0:
+            val_w += inner - used
+        elif used < inner:
+            # Give extra to value column
+            val_w += inner - used
+
+        return (label_w, val_w, src_w)
 
     def _col(self, text: str, width: int) -> str:
         """Pad or truncate text to width."""
@@ -215,100 +209,155 @@ class DetailView(Widget):
             return text[: width - 1] + "\u2026"
         return text.ljust(width)
 
-    def _render_grid_header(self) -> Text:
-        """Render the column header row with optional cursor highlight."""
-        result_w, source_w = self._col_widths()
+    def _render_expanded_content(self, inner_width: int) -> list[Text]:
+        """Render the full detail view with tab-based header."""
+        content: list[Text] = []
+
+        # Tab bar: "Info" title + source tabs
+        content.append(self._render_tab_bar(inner_width))
+
+        # Blank line after tab bar
+        content.append(Text())
+
+        # File path -> destination (single line, or multi-file summary)
+        if self.is_multi:
+            content.append(self._render_multi_path_line())
+        else:
+            content.append(self._render_path_line())
+
+        # Blank line
+        content.append(Text())
+
+        # Field rows
+        label_w, val_w, src_w = self._compute_col_widths()
+        for row_idx, field_name in enumerate(self._fields):
+            content.append(
+                self._render_field_row(row_idx, field_name, label_w, val_w, src_w)
+            )
+
+        return content
+
+    def _render_tab_bar(self, inner_width: int) -> Text:
+        """Render the tab bar with source tabs."""
+        sources = self.node.sources
 
         line = Text()
-
-        # Label area (empty for header)
-        line.append(" " * LABEL_WIDTH)
-
-        # Result column header
-        result_text = self._col("result", result_w)
-        style = "bold on #36345a" if self.cursor_row == -1 else "bold"
-        line.append(result_text, style=style)
-
-        # Separator
-        line.append("\u2503", style=MUTED)
-
-        # Current source header with [N/M] indicator
-        sources = self.node.sources
+        # Tabs for sources
         if sources:
-            idx = self.source_index
-            src = sources[idx]
-            src_header = Text()
-            src_header.append(f"  {src.name}", style="#7AB8FF")
-            if src.confidence:
-                conf_text = f" ({src.confidence:.0%})"
-                src_header.append(conf_text, style=confidence_style(src.confidence))
-            indicator = f"  [{idx + 1}/{len(sources)}]"
-            src_header.append(indicator, style=MUTED)
-            # Pad to source column width
-            plain_len = len(src_header.plain)
-            if plain_len < source_w:
-                src_header.append(" " * (source_w - plain_len))
-            line.append_text(src_header)
+            for idx, src in enumerate(sources):
+                if idx > 0:
+                    line.append("  ")
+                tab_text = f" TMDB #{idx + 1} "
+                if idx == self.source_index:
+                    # Active tab: show confidence inline
+                    if src.confidence:
+                        tab_text = f" TMDB #{idx + 1} {src.confidence:.0%} "
+                    line.append(tab_text, style=f"on {ACCENT} #000000")
+                else:
+                    line.append(tab_text)
+
+            # Navigation hint
+            if len(sources) > 1:
+                line.append("   ")
+                line.append(
+                    "\u2190/\u2192 to cycle",
+                    style=f"italic {MUTED}",
+                )
         else:
-            line.append(self._col("  (no sources)", source_w), style=MUTED)
+            line.append("(no TMDB matches)", style=MUTED)
 
         return line
 
-    def _render_field_row(self, row_idx: int, field_name: str) -> Text:
-        """Render a single field row with optional cursor highlight."""
-        result_w, source_w = self._col_widths()
+    def _render_path_line(self) -> Text:
+        """Render single file: path -> destination on one line."""
+        line = Text()
+        line.append(f"  {self._display_path(self.node)}")
+        line.append("  ")
+        line.append("\u2192 ", style=MUTED)
+        dest = compute_dest(self.node, self._active_template())
+        line.append_text(render_dest(dest))
+        return line
+
+    def _render_multi_path_line(self) -> Text:
+        """Render multi-file summary: count + destinations."""
+        count = len(self._file_nodes)
+        line = Text()
+        line.append(f"  {count} files selected", style="bold")
+
+        dests: set[str] = set()
+        for n in self._file_nodes:
+            d = compute_dest(n, self._active_template(n))
+            dests.add(d or "???")
+
+        line.append("  ")
+        line.append("\u2192 ", style=MUTED)
+        if len(dests) == 1:
+            line.append_text(render_dest(dests.pop()))
+        else:
+            line.append("(various destinations)", style=MUTED)
+        return line
+
+    def _render_field_row(
+        self,
+        row_idx: int,
+        field_name: str,
+        label_w: int,
+        val_w: int,
+        src_w: int,
+    ) -> Text:
+        """Render a single field row with auto-sized columns."""
         shared = self._shared_result()
+        sources = self.node.sources
 
         line = Text()
 
-        # Label (with trailing padding)
-        label = f"  {field_name:<{LABEL_WIDTH - 2}}"
+        # Label
+        label = f"  {field_name:<{label_w - 2}}"
         line.append(label, style=MUTED)
 
-        # Result value (bold per design spec)
+        # Gap
+        line.append(COL_GAP)
+
+        # Value (editable)
         result_raw = shared.get(field_name)
         if self.editing and self.cursor_row == row_idx:
             edit_display = self._edit_value + "\u2588"
-            line.append(self._col(edit_display, result_w), style="underline")
+            line.append(self._col(edit_display, val_w), style="underline")
         else:
             result_val = display_val(result_raw)
-            style = "bold"
-            if self.cursor_row == row_idx:
-                style = "bold on #36345a"
-            line.append(self._col(result_val, result_w), style=style)
+            style = "bold" if self.cursor_row == row_idx else ""
+            line.append(self._col(result_val, val_w), style=style)
 
-        # Separator
-        line.append("\u2503", style=MUTED)
-
-        # Current source value (diff-styled relative to result)
-        sources = self.node.sources
-        if sources:
+        # Source value (from active tab, if any)
+        if sources and src_w > 0 and self.source_index < len(sources):
             src = sources[self.source_index]
             src_raw = src.fields.get(field_name)
             src_val = display_val(src_raw)
+
+            line.append(COL_GAP)
+
             if is_multi_value(result_raw):
                 base_style = "dim"
             else:
                 base_style = diff_style(result_raw, src_raw)
-            if self.cursor_row == row_idx:
-                base_style = "on #36345a"
-            line.append(self._col(f"  {src_val}", source_w), style=base_style)
-        else:
-            line.append(self._col("  \u00b7", source_w), style=MUTED)
+            line.append(self._col(src_val, src_w), style=base_style)
 
         return line
+
+    # ------------------------------------------------------------------
+    # Cursor and editing
+    # ------------------------------------------------------------------
 
     def move_cursor(self, row_delta: int = 0) -> None:
         """Move cursor row, clamping to valid range."""
         if self.editing:
             return
         max_row = len(self._fields) - 1
-
         new_row = self.cursor_row + row_delta
-        self.cursor_row = max(-1, min(max_row, new_row))
+        self.cursor_row = max(0, min(max_row, new_row))
 
     def cycle_source(self, delta: int) -> None:
-        """Cycle through sources with h/l. Clamp to [0, len(sources)-1]."""
+        """Cycle through source tabs with h/l."""
         if self.editing:
             return
         sources = self.node.sources
@@ -326,13 +375,10 @@ class DetailView(Widget):
     def apply_source_field(self) -> None:
         """Apply the current source field value to the result.
 
-        If no sources exist, starts inline edit instead. When the cursor
-        is on the header row (-1), applies all non-empty fields from the
-        current source. Otherwise applies the single field at cursor_row.
+        If no sources exist, starts inline edit instead.
         """
         sources = self.node.sources
         if not sources:
-            # No sources, just allow editing result
             self._start_edit()
             return
 
@@ -341,22 +387,15 @@ class DetailView(Widget):
             return
 
         self._notify_before_mutate()
-        if self.cursor_row == -1:
-            # Header row: apply all non-empty from this source
-            self._apply_source_all(src_idx)
-        else:
-            # Single field: copy value to result for all nodes
-            field_name = self._fields[self.cursor_row]
-            val = sources[src_idx].fields.get(field_name)
-            if val is not None:
-                for n in self._file_nodes:
-                    n.result[field_name] = val
+        field_name = self._fields[self.cursor_row]
+        val = sources[src_idx].fields.get(field_name)
+        if val is not None:
+            for n in self._file_nodes:
+                n.result[field_name] = val
         self.refresh()
 
     def apply_source_all_clear(self) -> None:
-        """Handle shift-enter: apply all fields from source including empties."""
-        if self.cursor_row != -1:
-            return
+        """Handle shift-enter: apply all fields from current source."""
         sources = self.node.sources
         if not sources:
             return
@@ -374,15 +413,6 @@ class DetailView(Widget):
                 for n in self._file_nodes:
                     n.result.pop(field_name, None)
         self.refresh()
-
-    def _apply_source_all(self, src_idx: int) -> None:
-        """Apply all non-empty fields from a source to result."""
-        src = self.node.sources[src_idx]
-        for field_name in self._fields:
-            val = src.fields.get(field_name)
-            if val is not None:
-                for n in self._file_nodes:
-                    n.result[field_name] = val
 
     def _start_edit(self) -> None:
         """Enter inline edit mode for the current result field."""
@@ -410,6 +440,8 @@ class DetailView(Widget):
                 pass
         for n in self._file_nodes:
             n.result[field_name] = val
+            if field_name != "tmdb_id":
+                n.result.pop("tmdb_id", None)
         self.editing = False
         self.refresh()
 
@@ -441,4 +473,3 @@ class DetailView(Widget):
             self.refresh()
             event.prevent_default()
             event.stop()
-

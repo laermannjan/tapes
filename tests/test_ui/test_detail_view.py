@@ -59,27 +59,35 @@ def _make_node() -> FileNode:
 class TestGetDisplayFields:
     def test_extracts_fields_from_template(self) -> None:
         fields = get_display_fields(TEMPLATE)
-        assert fields == ["title", "year", "season", "episode"]
+        assert fields == ["tmdb_id", "title", "year", "season", "episode"]
+
+    def test_tmdb_id_always_first(self) -> None:
+        fields = get_display_fields("{title}/{year}")
+        assert fields[0] == "tmdb_id"
+
+    def test_tmdb_id_not_duplicated_if_in_template(self) -> None:
+        fields = get_display_fields("{tmdb_id}/{title}")
+        assert fields.count("tmdb_id") == 1
 
     def test_excludes_ext(self) -> None:
         fields = get_display_fields("{title}.{ext}")
         assert "ext" not in fields
-        assert fields == ["title"]
+        assert fields == ["tmdb_id", "title"]
 
     def test_empty_template(self) -> None:
-        assert get_display_fields("no_fields_here") == []
+        assert get_display_fields("no_fields_here") == ["tmdb_id"]
 
     def test_handles_format_specs(self) -> None:
         fields = get_display_fields("{season:02d}")
-        assert fields == ["season"]
+        assert fields == ["tmdb_id", "season"]
 
 
 # --- display_val ---
 
 
 class TestDisplayVal:
-    def test_none_becomes_dot(self) -> None:
-        assert display_val(None) == "\u00b7"
+    def test_none_becomes_question_mark(self) -> None:
+        assert display_val(None) == "?"
 
     def test_string_passthrough(self) -> None:
         assert display_val("hello") == "hello"
@@ -151,13 +159,13 @@ class TestRenderDetailGrid:
         for line in lines:
             assert "\u2503" in line
 
-    def test_none_values_shown_as_dot(self) -> None:
+    def test_none_values_shown_as_question_mark(self) -> None:
         node = _make_node()
         # filename source (index 0) has no year
         lines = render_detail_grid(node, TEMPLATE, source_index=0)
         year_line = [l for l in lines if l.strip().startswith("year")]
         assert len(year_line) == 1
-        assert "\u00b7" in year_line[0]
+        assert "?" in year_line[0]
 
     def test_only_two_data_columns(self) -> None:
         node = _make_node()
@@ -188,20 +196,20 @@ class TestDetailViewCursor:
         view.move_cursor(row_delta=1)
         assert view.cursor_row == 1
 
-    def test_move_cursor_row_up_clamps_at_header(self) -> None:
+    def test_move_cursor_row_up_clamps_at_zero(self) -> None:
         view = self._make_view()
         # Start at row 0, move up twice
         view.move_cursor(row_delta=-1)
-        assert view.cursor_row == -1
+        assert view.cursor_row == 0  # clamped at 0
         view.move_cursor(row_delta=-1)
-        assert view.cursor_row == -1  # clamped
+        assert view.cursor_row == 0
 
     def test_move_cursor_row_down_clamps_at_max(self) -> None:
         view = self._make_view()
-        # Fields: title, year, season, episode => max row = 3
+        # Fields: tmdb_id, title, year, season, episode => max row = 4
         for _ in range(10):
             view.move_cursor(row_delta=1)
-        assert view.cursor_row == 3
+        assert view.cursor_row == 4
 
     def test_cycle_source_right(self) -> None:
         view = self._make_view()
@@ -267,28 +275,16 @@ class TestDetailViewApply:
         view.apply_source_field()
         assert view.node.result["year"] == original
 
-    def test_apply_source_all(self) -> None:
+    def test_apply_source_field_applies_single_field(self) -> None:
         view = self._make_view()
-        # Clear result first
         view.node.result = {}
-        # Move to header row, source_index=1 (TMDB #1)
-        view.cursor_row = -1
+        # source_index=1 (TMDB #1), cursor on title (row 1, tmdb_id at 0)
+        view.cursor_row = 1
         view.source_index = 1
         view.apply_source_field()
         assert view.node.result["title"] == "Breaking Bad"
-        assert view.node.result["year"] == 2008
-        assert view.node.result["season"] == 1
-        assert view.node.result["episode"] == 1
-
-    def test_apply_source_all_skips_none(self) -> None:
-        view = self._make_view()
-        view.node.result = {"year": 9999}
-        # Apply filename source (has no year)
-        view.cursor_row = -1
-        view.source_index = 0
-        view.apply_source_field()
-        # year should remain since filename source has no year
-        assert view.node.result["year"] == 9999
+        # Other fields should NOT be applied
+        assert "year" not in view.node.result
 
     def test_enter_on_result_starts_edit_no_sources(self) -> None:
         node = FileNode(path=Path("/test.mkv"), result={"title": "Test"}, sources=[])
@@ -298,14 +294,11 @@ class TestDetailViewApply:
         view.apply_source_field()
         assert view.editing is True
 
-    def test_enter_on_header_no_edit(self) -> None:
+    def test_apply_with_sources_does_not_start_edit(self) -> None:
         view = self._make_view()
-        view.cursor_row = -1
+        view.cursor_row = 0
         view.source_index = 0
-        # Header row with a source applies all from that source
-        view.node.result = {}
         view.apply_source_field()
-        # Should have applied fields, not started editing
         assert view.editing is False
 
 
@@ -321,7 +314,8 @@ class TestDetailViewEditing:
 
     def test_start_edit_populates_value(self) -> None:
         view = self._make_view()
-        view.cursor_row = 0  # title
+        # tmdb_id is now at index 0; title is at index 1
+        view.cursor_row = 1  # title
         view._start_edit()
         assert view.editing is True
         assert view._edit_value == "Breaking Bad"
@@ -329,13 +323,13 @@ class TestDetailViewEditing:
     def test_start_edit_none_value(self) -> None:
         view = self._make_view()
         view.node.result.pop("title", None)
-        view.cursor_row = 0  # title
+        view.cursor_row = 1  # title
         view._start_edit()
         assert view._edit_value == ""
 
     def test_commit_edit_updates_result(self) -> None:
         view = self._make_view()
-        view.cursor_row = 0  # title
+        view.cursor_row = 1  # title (tmdb_id is at 0)
         view._start_edit()
         view._edit_value = "Better Call Saul"
         view._commit_edit()
@@ -344,7 +338,7 @@ class TestDetailViewEditing:
 
     def test_commit_edit_int_coercion_year(self) -> None:
         view = self._make_view()
-        view.cursor_row = 1  # year
+        view.cursor_row = 2  # year (tmdb_id is at 0)
         view._start_edit()
         view._edit_value = "2015"
         view._commit_edit()
@@ -353,7 +347,7 @@ class TestDetailViewEditing:
 
     def test_commit_edit_int_coercion_season(self) -> None:
         view = self._make_view()
-        view.cursor_row = 2  # season
+        view.cursor_row = 3  # season (tmdb_id is at 0)
         view._start_edit()
         view._edit_value = "3"
         view._commit_edit()
@@ -362,7 +356,7 @@ class TestDetailViewEditing:
 
     def test_commit_edit_int_coercion_episode(self) -> None:
         view = self._make_view()
-        view.cursor_row = 3  # episode
+        view.cursor_row = 4  # episode (tmdb_id is at 0)
         view._start_edit()
         view._edit_value = "10"
         view._commit_edit()
@@ -370,7 +364,7 @@ class TestDetailViewEditing:
 
     def test_commit_edit_invalid_int_stays_string(self) -> None:
         view = self._make_view()
-        view.cursor_row = 1  # year
+        view.cursor_row = 2  # year (tmdb_id is at 0)
         view._start_edit()
         view._edit_value = "not_a_number"
         view._commit_edit()
@@ -378,7 +372,7 @@ class TestDetailViewEditing:
 
     def test_cancel_edit_discards_changes(self) -> None:
         view = self._make_view()
-        view.cursor_row = 0
+        view.cursor_row = 1  # title (tmdb_id is at 0)
         view._start_edit()
         view._edit_value = "Something Else"
         view._cancel_edit()
@@ -413,7 +407,7 @@ class TestDetailViewSetNode:
         view = DetailView(node, TEMPLATE, TEMPLATE)
         view._fields = []
         view.set_node(node)
-        assert len(view._fields) == 4  # title, year, season, episode
+        assert len(view._fields) == 5  # tmdb_id, title, year, season, episode
 
 
 # --- DetailView.apply_source_all_clear ---
@@ -435,7 +429,6 @@ class TestDetailViewApplyAllClear:
             "season": 99,
             "episode": 99,
         }
-        view.cursor_row = -1
         view.source_index = 0  # filename source
         view.apply_source_all_clear()
         assert view.node.result["title"] == "Breaking Bad"
@@ -444,10 +437,10 @@ class TestDetailViewApplyAllClear:
         # year was cleared because filename source has no year
         assert "year" not in view.node.result
 
-    def test_noop_on_field_row(self) -> None:
-        view = self._make_view()
-        view.cursor_row = 0  # not header
-        view.source_index = 0
+    def test_noop_without_sources(self) -> None:
+        node = FileNode(path=Path("/test.mkv"), result={"title": "Test"}, sources=[])
+        view = DetailView(node, TEMPLATE, TEMPLATE)
+        view._fields = get_display_fields(TEMPLATE)
         original = dict(view.node.result)
         view.apply_source_all_clear()
         assert view.node.result == original
@@ -509,24 +502,19 @@ class TestMultiFileDetail:
         assert shared["title"] == "Breaking Bad"
         assert shared["year"] == 2008
 
-    def test_header_shows_count(self) -> None:
+    def test_path_line_shows_count(self) -> None:
         view, _, _ = self._make_multi_view()
-        header = view._render_multi_header()
-        assert "2 files selected" in header[0].plain
+        line = view._render_multi_path_line()
+        assert "2 files selected" in line.plain
 
-    def test_header_is_bold_white(self) -> None:
+    def test_path_line_shows_various_destinations(self) -> None:
         view, _, _ = self._make_multi_view()
-        header = view._render_multi_header()
-        assert header[0].style == "bold"
-
-    def test_header_shows_various_destinations(self) -> None:
-        view, _, _ = self._make_multi_view()
-        header = view._render_multi_header()
-        assert "(various destinations)" in header[1].plain
+        line = view._render_multi_path_line()
+        assert "(various destinations)" in line.plain
 
     def test_editing_applies_to_all_nodes(self) -> None:
         view, node1, node2 = self._make_multi_view()
-        view.cursor_row = 0  # title
+        view.cursor_row = 1  # title (tmdb_id is at 0)
         view._start_edit()
         view._edit_value = "Better Call Saul"
         view._commit_edit()
@@ -539,7 +527,7 @@ class TestMultiFileDetail:
         node1.result.pop("year", None)
         node2.result.pop("year", None)
         # Move to year field, source_index=0 (TMDB source)
-        view.cursor_row = 1  # year
+        view.cursor_row = 2  # year (tmdb_id at 0, title at 1)
         view.source_index = 0  # TMDB source (only one source per node)
         view.apply_source_field()
         assert node1.result["year"] == 2008
@@ -550,10 +538,9 @@ class TestMultiFileDetail:
         # Clear results
         node1.result = {}
         node2.result = {}
-        # Apply all from TMDB source (header row)
-        view.cursor_row = -1
+        # Apply all from TMDB source via shift-enter
         view.source_index = 0
-        view.apply_source_field()
+        view.apply_source_all_clear()
         assert node1.result["title"] == "Breaking Bad"
         assert node2.result["title"] == "Breaking Bad"
         assert node1.result["year"] == 2008
@@ -572,7 +559,7 @@ class TestMultiFileDetail:
     def test_edit_various_field_starts_empty(self) -> None:
         view, _, _ = self._make_multi_view()
         # episode is (2 values) -- multi-value marker
-        view.cursor_row = 3  # episode
+        view.cursor_row = 4  # episode (tmdb_id at 0)
         view._start_edit()
         assert view._edit_value == ""
 
@@ -593,7 +580,6 @@ class TestMultiFileDetail:
         node1.result = {"title": "Old", "year": 9999, "season": 99, "episode": 99}
         node2.result = {"title": "Old", "year": 9999, "season": 99, "episode": 99}
         # TMDB source only has title and year
-        view.cursor_row = -1
         view.source_index = 0
         view.apply_source_all_clear()
         assert node1.result["title"] == "Breaking Bad"

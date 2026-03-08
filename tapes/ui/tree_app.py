@@ -37,30 +37,21 @@ class StatusFooter(Static):
 
     def render(self) -> RenderableType:
         """Build styled keybinding hints based on current mode."""
-        cyan = "#7AB8FF"
+        muted = "#888888"
         if self.mode == "detail":
-            return Text.assemble(
-                " ",
-                ("enter", cyan), " apply  ",
-                ("\u21e7enter", cyan), " apply all  ",
-                ("h/l", cyan), " sources  ",
-                ("esc", cyan), " back  ",
-                ("?", cyan), " help",
+            return Text(
+                " Enter to edit \u00b7 a to apply \u00b7 \u21e7Enter to apply all \u00b7 \u2190/\u2192 to cycle sources \u00b7 Esc to go back",
+                style=f"italic {muted}",
             )
         if self.mode == "edit":
-            return Text.assemble(
-                " ",
-                ("enter", cyan), " confirm  ",
-                ("esc", cyan), " cancel",
+            return Text(
+                " Enter to confirm \u00b7 Esc to cancel",
+                style=f"italic {muted}",
             )
         # Default: tree mode
-        return Text.assemble(
-            " ",
-            ("space", cyan), " stage  ",
-            ("enter", cyan), " detail  ",
-            ("a", cyan), " accept  ",
-            ("c", cyan), " commit  ",
-            ("?", cyan), " help",
+        return Text(
+            " Space to stage \u00b7 Enter for details \u00b7 a to accept \u00b7 c to commit \u00b7 ? for help",
+            style=f"italic {muted}",
         )
 
 
@@ -98,6 +89,9 @@ class TreeApp(App):
     }
     TreeView:focus {
         border: round #7AB8FF;
+    }
+    TreeView.dimmed {
+        color: #555555;
     }
     DetailView {
         height: 5;
@@ -148,6 +142,7 @@ class TreeApp(App):
             FileNode(path=Path("placeholder")),
             self.movie_template,
             self.tv_template,
+            root_path=self.root_path,
         )
         yield StatusFooter(id="footer")
 
@@ -207,9 +202,10 @@ class TreeApp(App):
         detail.set_node(node)
         detail.on_before_mutate = self._snapshot_before_mutate
         detail.on_editing_changed = self._on_detail_editing_changed
-        # Compute height: header(2) + separator + grid_header + fields + separator + border(2)
-        detail.styles.height = len(detail._fields) + 7
+        # Compute height: tab_bar + blank + path + blank + fields + border(2)
+        detail.styles.height = len(detail._fields) + 6
         detail.add_class("expanded")
+        self.query_one(TreeView).add_class("dimmed")
         detail.focus()
         self.query_one(StatusFooter).mode = "detail"
 
@@ -220,9 +216,10 @@ class TreeApp(App):
         detail.set_nodes(nodes)
         detail.on_before_mutate = self._snapshot_before_mutate
         detail.on_editing_changed = self._on_detail_editing_changed
-        # Compute height: header(2) + separator + grid_header + fields + separator + border(2)
-        detail.styles.height = len(detail._fields) + 7
+        # Compute height: tab_bar + blank + path + blank + fields + border(2)
+        detail.styles.height = len(detail._fields) + 6
         detail.add_class("expanded")
+        self.query_one(TreeView).add_class("dimmed")
         detail.focus()
         self.query_one(StatusFooter).mode = "detail"
 
@@ -242,6 +239,7 @@ class TreeApp(App):
         detail.remove_class("expanded")
         detail.styles.height = None  # reset to CSS default
         tv = self.query_one(TreeView)
+        tv.remove_class("dimmed")
         tv.focus()
         tv.refresh()
         self.query_one(StatusFooter).mode = "tree"
@@ -315,7 +313,7 @@ class TreeApp(App):
     def action_toggle_or_enter(self) -> None:
         if self._in_detail:
             dv = self.query_one(DetailView)
-            dv.apply_source_field()
+            dv._start_edit()
             return
         tv = self.query_one(TreeView)
         if tv.in_range_mode:
@@ -369,28 +367,22 @@ class TreeApp(App):
         if tv.staged_count == 0:
             tv.set_status("No staged files to commit")
             return
-        from tapes.ui.tree_render import compute_dest, select_template
 
-        staged = [f for f in self.model.all_files() if f.staged]
-        staged_files: list[tuple[str, str | None]] = []
-        for node in staged:
-            tmpl = select_template(node, self.movie_template, self.tv_template)
-            dest = compute_dest(node, tmpl)
-            staged_files.append((node.path.name, dest))
-
+        count = tv.staged_count
         self.push_screen(
-            CommitScreen(staged_files, self.config.library.operation),
+            CommitScreen(count, self.config.library.operation),
             callback=self._on_commit_result,
         )
 
-    def _on_commit_result(self, confirmed: bool) -> None:
+    def _on_commit_result(self, result: tuple[bool, str]) -> None:
         """Handle commit screen dismissal."""
+        confirmed, operation = result
         if confirmed:
-            self._do_commit()
+            self._do_commit(operation)
         else:
             self._update_footer()
 
-    def _do_commit(self) -> None:
+    def _do_commit(self, operation: str) -> None:
         """Execute the commit: process staged files and exit."""
         staged = [f for f in self.model.all_files() if f.staged]
         pairs = self._compute_file_pairs(staged)
@@ -398,7 +390,7 @@ class TreeApp(App):
 
         results = process_staged(
             pairs,
-            self.config.library.operation,
+            operation,
             dry_run=self.config.dry_run,
         )
         self.exit(result=results)
@@ -435,6 +427,7 @@ class TreeApp(App):
 
     def action_accept_best(self) -> None:
         if self._in_detail:
+            self.query_one(DetailView).apply_source_field()
             return
         tv = self.query_one(TreeView)
         if tv.in_range_mode:

@@ -15,16 +15,20 @@ COL_WIDTH = 28
 def get_display_fields(template: str) -> list[str]:
     """Fields to show in the detail grid, derived from template.
 
-    Extracts field names from ``{field}`` placeholders and excludes ``ext``
+    Always includes ``tmdb_id`` as the first field. Extracts remaining
+    field names from ``{field}`` placeholders and excludes ``ext``
     (which is always derived from the file extension, not user-editable).
     """
-    return [f for f in template_field_names(template) if f != "ext"]
+    fields = [f for f in template_field_names(template) if f != "ext"]
+    if "tmdb_id" not in fields:
+        fields.insert(0, "tmdb_id")
+    return fields
 
 
 def display_val(val: Any) -> str:
-    """Format a value for display. None becomes a centered dot."""
+    """Format a value for display. None becomes '?'."""
     if val is None:
-        return "\u00b7"
+        return "?"
     return str(val)
 
 
@@ -76,7 +80,7 @@ def render_detail_grid(
             src_val = display_val(sources[idx].fields.get(field_name))
             parts.append(col(f"  {src_val}"))
         else:
-            parts.append(col("  \u00b7"))
+            parts.append(col("  ?"))
         lines.append("".join(parts))
 
     return lines
@@ -108,12 +112,12 @@ def diff_style(result_val: Any, source_val: Any) -> str:
 def confidence_style(confidence: float) -> str:
     """Return a Rich style for a confidence percentage.
 
-    - ``"#86E89A"`` (soft green) for >= 80%.
+    - Muted for >= 80% (normal, nothing to worry about).
     - ``"#E07A47"`` (ember) for 50-79%.
     - ``"#FF7A7A"`` (soft red) for < 50%.
     """
     if confidence >= 0.8:
-        return "#86E89A"
+        return "#888888"
     if confidence >= 0.5:
         return "#E07A47"
     return "#FF7A7A"
@@ -129,9 +133,8 @@ def col(text: str) -> str:
 def render_compact_preview(node: FileNode, template: str) -> Text:
     """Render a 2-line compact preview for a file node.
 
-    Line 1: filename (bold white) + "  " + destination (styled)
-    Line 2: key fields (title, year, type, S, E) with dim labels
-             and TMDB confidence on the right.
+    Line 1: filename + " -> " + destination (same styling as tree view)
+    Line 2: tmdb_id + confidence (only when tmdb_id is set)
     """
     # Line 1: filename -> destination
     line1 = Text()
@@ -141,39 +144,24 @@ def render_compact_preview(node: FileNode, template: str) -> Text:
     dest = compute_dest(node, template)
     line1.append_text(render_dest(dest))
 
-    # Line 2: key fields + TMDB confidence
+    # Line 2: tmdb status
     line2 = Text()
     line2.append(" ")
 
     result = node.result
-    field_specs = [
-        ("title", "title"),
-        ("year", "year"),
-        ("type", "media_type"),
-        ("S", "season"),
-        ("E", "episode"),
-    ]
-    for i, (label, key) in enumerate(field_specs):
-        if i > 0:
-            line2.append("  ")
-        line2.append(f"{label}: ", style=MUTED)
-        val = result.get(key)
-        if val is None:
-            line2.append("\u00b7", style=MUTED)
-        else:
-            line2.append(str(val))
-
-    # TMDB confidence from best source
-    best_conf = 0.0
-    for src in node.sources:
-        if src.confidence > best_conf:
-            best_conf = src.confidence
-    if best_conf > 0:
-        conf_str = f"{best_conf:.0%}"
-        # Right-align: add spacing
-        line2.append("  ")
-        line2.append("TMDB ", style="#7AB8FF")
-        line2.append(conf_str, style=confidence_style(best_conf))
+    tmdb_id = result.get("tmdb_id")
+    line2.append("tmdb: ", style=MUTED)
+    if tmdb_id is not None:
+        line2.append(str(tmdb_id))
+        # Show confidence from best source
+        best_conf = 0.0
+        for src in node.sources:
+            if src.confidence > best_conf:
+                best_conf = src.confidence
+        if best_conf > 0:
+            line2.append(f"  {best_conf:.0%}", style=confidence_style(best_conf))
+    else:
+        line2.append("?", style=MUTED)
 
     result_text = Text()
     result_text.append_text(line1)

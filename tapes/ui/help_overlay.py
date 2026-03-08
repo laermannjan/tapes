@@ -95,7 +95,6 @@ class HelpScreen(ModalScreen):
         max-height: 90%;
         border: round #7AB8FF;
         padding: 1 2;
-        background: #1a1a2e;
     }
     """
 

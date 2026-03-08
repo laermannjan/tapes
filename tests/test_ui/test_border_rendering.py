@@ -96,9 +96,9 @@ class TestDetailViewRendering:
             assert char not in plain
 
     def test_detail_has_border_title(self) -> None:
-        """DetailView should have BORDER_TITLE set to 'Detail'."""
+        """DetailView should have BORDER_TITLE set to 'Info'."""
         view = _make_detail_view()
-        assert view.BORDER_TITLE == "Detail"
+        assert view.BORDER_TITLE == "Info"
 
     def test_detail_no_help_line_in_expanded(self) -> None:
         """Expanded detail should not contain the help shortcut line."""

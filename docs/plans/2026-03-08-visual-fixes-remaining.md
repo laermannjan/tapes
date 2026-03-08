@@ -11,99 +11,97 @@ Layout mockup showing the aligned-column design is in `docs/mockups/screenshots/
 ## Context
 
 We're iterating on the TUI visual design. The goal is a clean, lazygit-inspired
-aesthetic that's easy to scan and navigate. We've made several rounds of fixes
-(colors, borders, layout) but the user reports there are still issues. The
-screenshots were taken **before** the most recent commit (445f1bf) which added
-aligned columns, VSCode colors, detail height fix, and ANSI theme — so some of
-these may already be improved. The user needs to retest.
+aesthetic that's easy to scan and navigate. Multiple rounds of fixes have been
+applied covering colors, borders, layout, staging display, path compression,
+and modal overlays.
 
 ## Color palette (decided)
 
-We use the VSCode Claude theme colors:
+| Color      | Hex         | Usage                                                    |
+|------------|-------------|----------------------------------------------------------|
+| Crail      | `#E07A47`   | `?` placeholders in destinations                         |
+| Green      | `#86E89A`   | Checkmark in commit modal                                |
+| Blue       | `#7AB8FF`   | Active border, source name, keybinding hints, modal border |
+| Red        | `#FF7A7A`   | Low confidence, errors                                   |
+| Purple     | `#C79BFF`   | Reserved                                                 |
+| Yellow     | `#FFDF61`   | Reserved                                                 |
+| Muted      | `#888888`   | Labels, muted text, ignored files, folder names, arrows, dim destinations |
+| Muted Light| `#aaaaaa`   | Folder collapse/expand arrows (▶/▼)                      |
+| Inactive   | `#555555`   | Unfocused panel border                                   |
+| Cursor BG  | `on #36345a`| Cursor highlight (lazygit-style dark slate)              |
+| Staged BG  | `on #1e3320`| Dark mossy green background for staged files             |
+| Range BG   | `on #2a2844`| Range selection background                               |
+| Modal BG   | `#1a1a2e`   | Modal panel background                                   |
 
-| Color   | Hex       | Usage                                              |
-|---------|-----------|----------------------------------------------------|
-| Crail   | `#E07A47` | Unstaged marker, differs diff, medium confidence, `?` placeholders, keybinding hints |
-| Green   | `#86E89A` | Staged marker, fills-empty diff, high confidence   |
-| Blue    | `#7AB8FF` | Active border, source name, TMDB label             |
-| Red     | `#FF7A7A` | Low confidence, errors                             |
-| Purple  | `#C79BFF` | Reserved                                           |
-| Yellow  | `#FFDF61` | Reserved                                           |
-| Dim     | `dim`     | Labels, muted text, ignored files, separators, matching values |
-| Inactive| `#555555` | Unfocused panel border                             |
-| Cursor  | `#264f78` | Selection/cursor background (`on #264f78`)         |
-| Range   | `#1a3a52` | Range selection background (`on #1a3a52`)          |
+**Important:** We use explicit `#888888` instead of Rich `dim` attribute everywhere.
+Rich `dim` halves brightness AND thins font weight, making text look weak.
 
-## Issues to verify / fix
+## Completed fixes
 
-### 1. Background transparency
+### 1. Dim text looking thin
+Replaced all Rich `"dim"` style usage with explicit `MUTED = "#888888"` constant
+defined in `tree_render.py` and imported everywhere. Same visual weight as
+normal text, just dimmer color.
 
-**Problem:** The app background is visibly different from the terminal background.
-The terminal background is warm/dark; the Textual app renders a cooler gray.
+### 2. Staging display
+Removed checkmark/circle/dot markers from tree rows. Staging is now shown via
+background color only: dark mossy green (`on #1e3320`) for staged files.
+Ignored files get muted text color. Cleaner, less noisy.
 
-**What we tried:** `background: transparent` on Screen (didn't work). Most recent
-fix: switch to `textual-ansi` theme at mount time (`on_mount`), which uses
-`ansi_default` for backgrounds. This should pass through the terminal background.
+### 3. Folder display
+- Removed folder emoji icon (terminal rendering issues)
+- Using ▼ (expanded) / ▶ (collapsed) Unicode arrows in `MUTED_LIGHT` color
+- Folder name in `MUTED` color with trailing `/`
+- 4-space indentation per nesting level
 
-**Action:** User needs to retest. If still broken, investigate whether Textual's
-`ansi_default` actually works as terminal passthrough, or if we need to set
-explicit `background: ansi_default` on Screen/widgets in CSS.
+### 4. Path compression
+Single-child directory chains are merged: `shows/s01/` instead of separate
+`shows/` and `s01/` entries. Implemented via `_compress_single_child_dirs()`
+in `tree_model.py`, called after `build_tree()`.
 
-### 2. Detail view sizing when focused
+### 5. Layout and sizing
+- `self.size.width` is already the content area in Textual (no need to subtract
+  border width)
+- Detail view height set dynamically: `len(fields) + 7`
+- Detail view in normal flow (not `dock: bottom`) to avoid footer overlap
+- Arrow column recomputes on resize via `on_resize()`
 
-**Problem:** When entering detail view (pressing Enter on a file), the detail
-panel expanded to fill all remaining space below the compressed tree, leaving
-huge empty space below the actual field rows (see screenshot 2).
+### 6. Modal overlay rewrite
+Both `HelpOverlay` and `CommitModal` were rewritten from `Widget` with manual
+box-drawing characters to proper Textual container pattern:
+- `Middle` > `Center` > `Static` hierarchy
+- CSS `border: round #7AB8FF` instead of manual `╭─╮│╰─╯`
+- `layer: overlay` + `dock: top` to float over content without scrollbar
+- Background widgets dimmed via `.modal-open` class → `opacity: 0.3`
+- Help overlay: fixed width 64, auto height, max 90%
+- Commit modal: 80% width (min 50, max 100), auto height, max 80%
 
-**What we tried:** Changed from `height: auto; max-height: 50%` to `height: 14`
-(fixed). This should give enough room for header + separator + grid header +
-~6 field rows + bottom separator.
+## Remaining issues
 
-**Action:** User needs to retest. If 14 lines is too many or too few for some
-templates, consider computing the height dynamically based on the number of
-fields: `height = len(fields) + 6` (header lines + separators + grid header).
+### 1. Textual version upgrade
+Currently pinned to `textual>=3,<4` (using 3.7.1). Latest is v8.0.2.
+Significant version gap — may have breaking API changes but also likely
+improvements to overlay/layer handling that could help with modal rendering.
 
-### 3. Aligned two-column tree layout
+### 2. Background transparency
+The app background may differ from terminal background. Using `textual-ansi`
+theme at mount time should help. Needs testing.
 
-**Problem:** Tree rows were a wall of text — filename and destination ran
-together with unaligned arrows, making it hard to scan.
-
-**What we implemented:** Arrow column aligns at the widest visible filename +
-3 chars padding, capped at 50% of widget width. Computed in
-`TreeView._compute_arrow_col()`, stored as `self._arrow_col`, passed to
-`render_file_row(..., arrow_col=...)`.
-
-**Action:** User needs to retest. Potential issues:
-- Column position may not recompute when the widget resizes (terminal resize).
-  May need to recalculate in `render()` or on resize events.
-- The 50% cap may be too aggressive or not aggressive enough.
-- Folder rows don't participate in alignment (they have no destination).
-
-### 4. General visual polish
-
-**Observations from screenshots (may be outdated):**
-- The overall look felt "chaotic" and hard to parse. The aligned columns and
-  brighter VSCode colors should help significantly.
-- Field labels in the detail view are now `dim` to reduce visual weight.
-- The inactive "Detail" border title was barely readable at `$surface-lighten-1`,
-  now changed to `#555555`.
-
-**If still not right after retest, consider:**
-- Whether the destination rendering (dim dir / normal stem / dim ext) provides
-  enough contrast against the background.
-- Whether the compact preview (bottom panel in tree-focused mode) adds value
-  or just noise.
-- Spacing/padding within the tree rows.
+### 3. General visual polish
+- Verify modal overlay dimming looks right in practice
+- Verify detail view sizing works for various field counts
+- End-to-end manual testing of all visual states
 
 ## Files involved
 
-- `tapes/ui/tree_app.py` — CSS, theme selection, layout switching
-- `tapes/ui/tree_view.py` — Arrow column computation, render loop
-- `tapes/ui/tree_render.py` — `render_file_row` with `arrow_col` parameter
+- `tapes/ui/tree_app.py` — CSS, theme selection, layout switching, modal toggle
+- `tapes/ui/tree_view.py` — Arrow column computation, render loop, staging display
+- `tapes/ui/tree_render.py` — Color constants, `render_file_row`, `render_folder_row`
+- `tapes/ui/tree_model.py` — Path compression (`_compress_single_child_dirs`)
 - `tapes/ui/detail_view.py` — Dynamic column widths, field rendering
 - `tapes/ui/detail_render.py` — Color functions (`diff_style`, `confidence_style`)
-- `tapes/ui/help_overlay.py` — Keybinding hint colors
-- `tapes/ui/commit_modal.py` — Checkmark and hint colors
+- `tapes/ui/help_overlay.py` — `Middle`/`Center`/`Static` modal with CSS border
+- `tapes/ui/commit_modal.py` — `Middle`/`Center`/`Static` modal with CSS border
 
 ## Design references
 
