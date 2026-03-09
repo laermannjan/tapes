@@ -7,12 +7,13 @@ from typing import TYPE_CHECKING
 from rich.text import Text
 from textual.widget import Widget
 
-from tapes.ui.tree_render import ACCENT, MUTED, render_separator
+from tapes.ui.colors import COLOR_ACCENT, COLOR_MUTED
+from tapes.ui.tree_render import render_separator
 
 if TYPE_CHECKING:
     from rich.console import RenderableType
 
-KEY_COLOR = ACCENT
+KEY_COLOR = COLOR_ACCENT
 # Help content line count (update if content changes).
 HELP_HEIGHT = 38
 
@@ -30,13 +31,13 @@ def _build_help_content(width: int) -> list[Text]:
         return Text(f"    {title}", style="bold")
 
     def body(text: str) -> Text:
-        return Text(f"    {text}", style=MUTED)
+        return Text(f"    {text}", style=COLOR_MUTED)
 
     lines: list[Text] = []
 
     # Separator
     lines.append(Text())
-    lines.append(render_separator(width, title="Help", color=ACCENT))
+    lines.append(render_separator(width, title="Help", color=COLOR_ACCENT))
     lines.append(Text())
 
     # Workflow overview
@@ -82,7 +83,7 @@ def _build_help_content(width: int) -> list[Text]:
     lines.append(Text())
 
     # Footer
-    lines.append(Text("    ? or esc to close", style=f"italic {MUTED}"))
+    lines.append(Text("    ? or esc to close", style=f"italic {COLOR_MUTED}"))
 
     return lines
 

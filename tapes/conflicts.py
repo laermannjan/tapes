@@ -14,8 +14,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
+from tapes.templates import full_extension
 from tapes.tree_model import FileNode
-from tapes.ui.tree_render import full_extension
 
 
 @dataclass

@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from tapes.fields import EPISODE, EPISODE_TITLE, MEDIA_TYPE, SEASON, TITLE, TMDB_ID, YEAR
+from tapes.templates import can_fill_template
 from tapes.tree_model import FileNode, FolderNode, TreeModel
-from tapes.ui.tree_render import can_fill_template
 
 MOVIE_TEMPLATE = "{title} ({year})/{title} ({year}).{ext}"
 TV_TEMPLATE = "{title} ({year})/Season {season:02d}/{title} - S{season:02d}E{episode:02d} - {episode_title}.{ext}"

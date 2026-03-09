@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from tapes.ui.tree_render import EMBER, MUTED, SOFT_GREEN, SOFT_RED, template_field_names
+from tapes.templates import template_field_names
+from tapes.ui.colors import COLOR_ADDITION, COLOR_DIFF, COLOR_MUTED, COLOR_WARNING
 
 
 def get_display_fields(template: str) -> list[str]:
@@ -43,12 +44,12 @@ def diff_style(result_val: Any, source_val: Any) -> str:
     """
 
     if source_val is None:
-        return MUTED
+        return COLOR_MUTED
     if result_val is None or result_val == "":
-        return SOFT_GREEN
+        return COLOR_ADDITION
     if str(result_val) == str(source_val):
-        return MUTED
-    return EMBER
+        return COLOR_MUTED
+    return COLOR_DIFF
 
 
 def confidence_style(confidence: float) -> str:
@@ -60,7 +61,7 @@ def confidence_style(confidence: float) -> str:
     """
 
     if confidence >= 0.8:
-        return MUTED
+        return COLOR_MUTED
     if confidence >= 0.5:
-        return EMBER
-    return SOFT_RED
+        return COLOR_DIFF
+    return COLOR_WARNING

@@ -10,7 +10,8 @@ from textual.reactive import reactive
 from textual.widget import Widget
 
 from tapes.tree_model import FileNode, FolderNode, TreeModel
-from tapes.ui.tree_render import CURSOR_BG, MUTED, RANGE_BG, flatten_all_with_depth, flatten_with_depth, render_row
+from tapes.ui.colors import COLOR_CURSOR_BG, COLOR_MUTED, COLOR_RANGE_BG
+from tapes.ui.tree_render import flatten_all_with_depth, flatten_with_depth, render_row
 
 if TYPE_CHECKING:
     from rich.console import RenderableType
@@ -182,7 +183,7 @@ class TreeView(Widget):
         inner_width = w  # self.size is already the content area
 
         if not self._items:
-            return Text("(empty)", style=MUTED)
+            return Text("(empty)", style=COLOR_MUTED)
 
         viewport_height = max(1, self.size.height)
 
@@ -216,18 +217,18 @@ class TreeView(Widget):
                 row_text.append(" " * (inner_width - plain_len))
 
             if isinstance(node, FileNode) and node.ignored:
-                row_text.stylize(MUTED)
+                row_text.stylize(COLOR_MUTED)
             if i == self.cursor_index:
-                row_text.stylize(CURSOR_BG)
+                row_text.stylize(COLOR_CURSOR_BG)
             elif rng and rng[0] <= i <= rng[1]:
-                row_text.stylize(RANGE_BG)
+                row_text.stylize(COLOR_RANGE_BG)
 
             content_lines.append(row_text)
 
         # Scroll indicators
         if has_more_above and content_lines:
             indicator = Text()
-            indicator.append("    \u2191 more above", style=f"italic {MUTED}")
+            indicator.append("    \u2191 more above", style=f"italic {COLOR_MUTED}")
             pad = inner_width - len(indicator.plain)
             if pad > 0:
                 indicator.append(" " * pad)
@@ -235,7 +236,7 @@ class TreeView(Widget):
 
         if has_more_below and content_lines:
             indicator = Text()
-            indicator.append("    \u2193 more below", style=f"italic {MUTED}")
+            indicator.append("    \u2193 more below", style=f"italic {COLOR_MUTED}")
             pad = inner_width - len(indicator.plain)
             if pad > 0:
                 indicator.append(" " * pad)

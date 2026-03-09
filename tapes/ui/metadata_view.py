@@ -13,23 +13,16 @@ from textual.reactive import reactive
 from textual.widget import Widget
 
 from tapes.fields import INT_FIELDS
+from tapes.templates import compute_dest, select_template
 from tapes.tree_model import FileNode, compute_shared_fields
+from tapes.ui.colors import COLOR_ACCENT, COLOR_COLUMN_FOCUS_BG, COLOR_CURSOR_BG, COLOR_MUTED
 from tapes.ui.metadata_render import (
     diff_style,
     display_val,
     get_display_fields,
     is_multi_value,
 )
-from tapes.ui.tree_render import (
-    ACCENT,
-    COLUMN_FOCUS_BG,
-    CURSOR_BG,
-    MUTED,
-    compute_dest,
-    render_dest,
-    render_separator,
-    select_template,
-)
+from tapes.ui.tree_render import render_dest, render_separator
 
 if TYPE_CHECKING:
     from rich.console import RenderableType
@@ -181,7 +174,7 @@ class DetailView(Widget):
 
         # Blank + separator + blank
         content.append(Text())
-        content.append(render_separator(inner_width, title="Info", color=ACCENT))
+        content.append(render_separator(inner_width, title="Info", color=COLOR_ACCENT))
         content.append(Text())
 
         # File path -> destination
@@ -224,7 +217,7 @@ class DetailView(Widget):
                 conf = f" [{src.confidence:.0%}]" if src.confidence else ""
                 tab_text = f" TMDB #{idx + 1}{conf} "
                 if idx == self.source_index:
-                    line.append(tab_text, style=f"on {ACCENT} #000000")
+                    line.append(tab_text, style=f"on {COLOR_ACCENT} #000000")
                 else:
                     line.append(tab_text)
 
@@ -232,10 +225,10 @@ class DetailView(Widget):
             line.append("   ")
             line.append(
                 "(tab to cycle)",
-                style=MUTED,
+                style=COLOR_MUTED,
             )
         else:
-            line.append("(no TMDB matches)", style=MUTED)
+            line.append("(no TMDB matches)", style=COLOR_MUTED)
 
         return line
 
@@ -244,7 +237,7 @@ class DetailView(Widget):
         line = Text()
         line.append(f"    {self._display_path(self.node)}")
         line.append("  ")
-        line.append("\u2192 ", style=MUTED)
+        line.append("\u2192 ", style=COLOR_MUTED)
         dest = compute_dest(self.node, self._active_template())
         line.append_text(render_dest(dest))
         return line
@@ -261,28 +254,28 @@ class DetailView(Widget):
             dests.add(d or "???")
 
         line.append("  ")
-        line.append("\u2192 ", style=MUTED)
+        line.append("\u2192 ", style=COLOR_MUTED)
         if len(dests) == 1:
             line.append_text(render_dest(dests.pop()))
         else:
-            line.append("(various destinations)", style=MUTED)
+            line.append("(various destinations)", style=COLOR_MUTED)
         return line
 
     def _render_footer_hints(self) -> Text:
         """Render contextual footer hints based on editing state."""
         if self.quit_hint:
-            return Text(f"    {self.quit_hint}", style=f"italic {MUTED}")
+            return Text(f"    {self.quit_hint}", style=f"italic {COLOR_MUTED}")
         if self.editing:
             return Text(
                 "    enter to confirm \u00b7 esc to cancel",
-                style=f"italic {MUTED}",
+                style=f"italic {COLOR_MUTED}",
             )
         hints = (
             "    enter to accept \u00b7 esc to discard"
             " \u00b7 e to edit \u00b7 tab/shift+tab to cycle matches"
             " \u00b7 r to refresh \u00b7 ctrl+r to reset from filename"
         )
-        return Text(hints, style=f"italic {MUTED}")
+        return Text(hints, style=f"italic {COLOR_MUTED}")
 
     def _render_field_row(
         self,
@@ -302,7 +295,7 @@ class DetailView(Widget):
 
         # Label
         label = f"    {field_name:<{label_w - 4}}"
-        line.append(label, style=MUTED)
+        line.append(label, style=COLOR_MUTED)
 
         # Gap
         line.append(COL_GAP)
@@ -316,7 +309,7 @@ class DetailView(Widget):
             result_val = display_val(result_raw)
             val_style = "bold" if is_cursor else ""
             if self.focus_column == "result":
-                val_style += f" {COLUMN_FOCUS_BG}"
+                val_style += f" {COLOR_COLUMN_FOCUS_BG}"
             line.append(self._col(result_val, val_w), style=val_style)
 
         # Source value (from active tab, if any)
@@ -329,7 +322,7 @@ class DetailView(Widget):
 
             base_style = "dim" if is_multi_value(result_raw) else diff_style(result_raw, src_raw)
             if self.focus_column == "match":
-                base_style += f" {COLUMN_FOCUS_BG}"
+                base_style += f" {COLOR_COLUMN_FOCUS_BG}"
             line.append(self._col(src_val, src_w), style=base_style)
 
         # Pad to full width and apply background highlight to cursor row
@@ -337,7 +330,7 @@ class DetailView(Widget):
             plain_len = len(line.plain)
             if plain_len < inner_width:
                 line.append(" " * (inner_width - plain_len))
-            line.stylize(CURSOR_BG)
+            line.stylize(COLOR_CURSOR_BG)
 
         return line
 

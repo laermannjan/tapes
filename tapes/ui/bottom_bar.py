@@ -8,7 +8,8 @@ from rich.text import Text
 from textual.reactive import reactive
 from textual.widget import Widget
 
-from tapes.ui.tree_render import ACCENT, EMBER, INACTIVE, MUTED, SOFT_BLUE, SOFT_GREEN, render_separator
+from tapes.ui.colors import COLOR_ACCENT, COLOR_INACTIVE, COLOR_MUTED, EMBER, MINT, SKY
+from tapes.ui.tree_render import render_separator
 
 if TYPE_CHECKING:
     from rich.console import RenderableType
@@ -16,10 +17,10 @@ if TYPE_CHECKING:
 OPERATIONS = ["copy", "move", "link", "hardlink"]
 
 OP_COLORS: dict[str, str] = {
-    "copy": SOFT_GREEN,
+    "copy": MINT,
     "move": EMBER,
-    "link": SOFT_BLUE,
-    "hardlink": SOFT_BLUE,
+    "link": SKY,
+    "hardlink": SKY,
 }
 
 
@@ -40,7 +41,7 @@ class BottomBar(Widget):
 
     def render(self) -> RenderableType:
         w = self.size.width
-        sep_color = ACCENT if self.search_active else INACTIVE
+        sep_color = COLOR_ACCENT if self.search_active else COLOR_INACTIVE
 
         lines: list[Text] = []
 
@@ -52,7 +53,7 @@ class BottomBar(Widget):
 
         # Line 2: search input
         search_line = Text()
-        search_style = "" if self.search_active else MUTED
+        search_style = "" if self.search_active else COLOR_MUTED
         search_line.append("  /", style=search_style)
         if self.search_query:
             search_line.append(self.search_query, style=search_style)
@@ -69,10 +70,10 @@ class BottomBar(Widget):
         op_color = OP_COLORS.get(self.operation, "")
         bottom.append(self.operation, style=op_color)
         bottom.append("  ")
-        bottom.append("(shift+tab to cycle)", style=MUTED)
+        bottom.append("(shift+tab to cycle)", style=COLOR_MUTED)
         if self.hint_text:
             bottom.append("       ")
-            bottom.append(self.hint_text, style=f"italic {MUTED}")
+            bottom.append(self.hint_text, style=f"italic {COLOR_MUTED}")
         lines.append(bottom)
 
         return Text("\n").join(lines)

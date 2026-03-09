@@ -17,6 +17,7 @@ from textual.events import Key
 from tapes.categorize import categorize_staged
 from tapes.config import TapesConfig
 from tapes.fields import MEDIA_TYPE, MEDIA_TYPE_EPISODE
+from tapes.templates import can_fill_template, compute_dest, select_template
 from tapes.tree_model import (
     FileNode,
     FolderNode,
@@ -189,7 +190,6 @@ class TreeApp(App):
     def _run_tmdb_worker(self, token: str) -> object:
         """Return a callable that runs TMDB queries in a background thread."""
         from tapes.pipeline import run_tmdb_pass
-        from tapes.ui.tree_render import can_fill_template
 
         threshold = self.config.metadata.auto_accept_threshold
         max_workers = self.config.advanced.max_workers
@@ -378,8 +378,6 @@ class TreeApp(App):
             return
         tv = self.query_one(TreeView)
         if tv.in_range_mode:
-            from tapes.ui.tree_render import can_fill_template
-
             mt, tt = self.movie_template, self.tv_template
             nodes = tv.selected_nodes()
             file_nodes = [n for n in nodes if isinstance(n, FileNode)]
@@ -398,8 +396,6 @@ class TreeApp(App):
         if isinstance(node, FileNode):
             self._toggle_staged_with_gate(node)
         elif isinstance(node, FolderNode):
-            from tapes.ui.tree_render import can_fill_template
-
             mt, tt = self.movie_template, self.tv_template
             self.model.toggle_staged_recursive(
                 node,
@@ -410,8 +406,6 @@ class TreeApp(App):
 
     def _compute_file_pairs(self, staged: list[FileNode]) -> list[tuple[FileNode, Path]]:
         """Compute (node, destination) pairs for staged files."""
-        from tapes.ui.tree_render import compute_dest, select_template
-
         cfg = self.config
         pairs: list[tuple[FileNode, Path]] = []
         for node in staged:
@@ -463,8 +457,6 @@ class TreeApp(App):
 
     def _toggle_staged_with_gate(self, node: FileNode) -> None:
         """Toggle staging with the can_fill_template gate."""
-        from tapes.ui.tree_render import can_fill_template
-
         mt, tt = self.movie_template, self.tv_template
 
         def _can_stage(n: FileNode) -> bool:
@@ -479,8 +471,6 @@ class TreeApp(App):
 
     def _accept_detail_and_return(self) -> None:
         """Accept detail view changes, auto-stage if possible, return to tree."""
-        from tapes.ui.tree_render import can_fill_template
-
         dv = self.query_one(DetailView)
         # Capture nodes and whether fields will change BEFORE switching modes.
         # After _show_tree(), the FieldsChanged message would trigger
@@ -734,7 +724,6 @@ class TreeApp(App):
     def _run_refresh_worker(self, nodes: list[FileNode], token: str) -> object:
         """Return a callable that refreshes TMDB data in a background thread."""
         from tapes.pipeline import refresh_tmdb_batch
-        from tapes.ui.tree_render import can_fill_template
 
         threshold = self.config.metadata.auto_accept_threshold
         max_workers = self.config.advanced.max_workers

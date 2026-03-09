@@ -359,7 +359,7 @@ class TestStagingGate:
     def test_toggle_staged_blocked_when_not_ready(self) -> None:
         """toggle_staged does nothing when can_stage returns False."""
         from tapes.fields import MEDIA_TYPE, TITLE
-        from tapes.ui.tree_render import can_fill_template
+        from tapes.templates import can_fill_template
 
         node = FileNode(path=Path("movie.mkv"))
         node.result = {MEDIA_TYPE: "movie", TITLE: "Inception"}  # no year
@@ -374,7 +374,7 @@ class TestStagingGate:
     def test_toggle_staged_allowed_when_ready(self) -> None:
         """toggle_staged works when can_stage returns True."""
         from tapes.fields import MEDIA_TYPE, TITLE, YEAR
-        from tapes.ui.tree_render import can_fill_template
+        from tapes.templates import can_fill_template
 
         node = FileNode(path=Path("movie.mkv"))
         node.result = {MEDIA_TYPE: "movie", TITLE: "Inception", YEAR: 2010}
@@ -404,7 +404,7 @@ class TestStagingGate:
     def test_toggle_staged_recursive_skips_incomplete(self) -> None:
         """toggle_staged_recursive only stages files that pass can_stage."""
         from tapes.fields import MEDIA_TYPE, TITLE, YEAR
-        from tapes.ui.tree_render import can_fill_template
+        from tapes.templates import can_fill_template
 
         complete = FileNode(path=Path("a.mkv"))
         complete.result = {MEDIA_TYPE: "movie", TITLE: "A", YEAR: 2020}

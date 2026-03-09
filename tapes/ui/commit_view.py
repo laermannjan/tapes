@@ -11,7 +11,8 @@ from textual.widget import Widget
 from tapes.categorize import categorize_staged
 from tapes.tree_model import FileNode
 from tapes.ui.bottom_bar import OP_COLORS, cycle_operation_index
-from tapes.ui.tree_render import ACCENT, MUTED, SOFT_RED, STAGED_COLOR, render_separator
+from tapes.ui.colors import COLOR_ACCENT, COLOR_MUTED, COLOR_STAGED, COLOR_WARNING
+from tapes.ui.tree_render import render_separator
 
 if TYPE_CHECKING:
     from rich.console import RenderableType
@@ -85,7 +86,7 @@ class CommitView(Widget):
 
         # Blank + separator + blank
         content.append(Text())
-        content.append(render_separator(width, title="Commit", color=ACCENT))
+        content.append(render_separator(width, title="Commit", color=COLOR_ACCENT))
         content.append(Text())
 
         if self.progress_text:
@@ -141,26 +142,28 @@ class CommitView(Widget):
                 if resolved:
                     n_resolved = len(resolved)
                     content.append(
-                        Text(f"  {n_resolved} conflict{'s' if n_resolved != 1 else ''} resolved:", style=MUTED)
+                        Text(f"  {n_resolved} conflict{'s' if n_resolved != 1 else ''} resolved:", style=COLOR_MUTED)
                     )
                     for r in resolved:
                         line = Text()
-                        line.append("    \u2713 ", style=STAGED_COLOR)
-                        line.append(r.description, style=MUTED)
+                        line.append("    \u2713 ", style=COLOR_STAGED)
+                        line.append(r.description, style=COLOR_MUTED)
                         content.append(line)
                 if problems:
                     if resolved:
                         content.append(Text())
                     n_problems = len(problems)
-                    content.append(Text(f"  {n_problems} problem{'s' if n_problems != 1 else ''}:", style=SOFT_RED))
+                    content.append(
+                        Text(f"  {n_problems} problem{'s' if n_problems != 1 else ''}:", style=COLOR_WARNING)
+                    )
                     for p in problems:
                         line = Text()
-                        line.append("    \u2717 ", style=SOFT_RED)
-                        line.append(p.description, style=SOFT_RED)
+                        line.append("    \u2717 ", style=COLOR_WARNING)
+                        line.append(p.description, style=COLOR_WARNING)
                         content.append(line)
                         if p.skipped_nodes:
                             skip_line = Text()
-                            skip_line.append(f"       {len(p.skipped_nodes)} file(s) skipped", style=MUTED)
+                            skip_line.append(f"       {len(p.skipped_nodes)} file(s) skipped", style=COLOR_MUTED)
                             content.append(skip_line)
 
         # Blank
@@ -169,13 +172,13 @@ class CommitView(Widget):
         # Library paths
         lib_line = Text()
         lib_line.append("  ")
-        lib_line.append("movies", style=MUTED)
-        lib_line.append(" \u2192 ", style=MUTED)
-        lib_line.append(self.movies_path or "(not set)", style=MUTED)
-        lib_line.append("  \u00b7  ", style=MUTED)
-        lib_line.append("tv", style=MUTED)
-        lib_line.append(" \u2192 ", style=MUTED)
-        lib_line.append(self.tv_path or "(not set)", style=MUTED)
+        lib_line.append("movies", style=COLOR_MUTED)
+        lib_line.append(" \u2192 ", style=COLOR_MUTED)
+        lib_line.append(self.movies_path or "(not set)", style=COLOR_MUTED)
+        lib_line.append("  \u00b7  ", style=COLOR_MUTED)
+        lib_line.append("tv", style=COLOR_MUTED)
+        lib_line.append(" \u2192 ", style=COLOR_MUTED)
+        lib_line.append(self.tv_path or "(not set)", style=COLOR_MUTED)
         content.append(lib_line)
 
         # Blank
@@ -187,18 +190,18 @@ class CommitView(Widget):
         op_color = OP_COLORS.get(self.operation, "")
         bottom.append(self.operation, style=op_color)
         bottom.append("  ")
-        bottom.append("(shift+tab to cycle)", style=MUTED)
+        bottom.append("(shift+tab to cycle)", style=COLOR_MUTED)
         bottom.append("       ")
         if self.quit_hint:
-            bottom.append(self.quit_hint, style=f"italic {MUTED}")
+            bottom.append(self.quit_hint, style=f"italic {COLOR_MUTED}")
         elif self.conflict_report and self.conflict_report.skipped_count > 0:
             total_valid = len(self._files)
             bottom.append(
                 f"enter to confirm {total_valid} file{'s' if total_valid != 1 else ''} \u00b7 esc to cancel",
-                style=f"italic {MUTED}",
+                style=f"italic {COLOR_MUTED}",
             )
         else:
-            bottom.append("enter to confirm \u00b7 esc to cancel", style=f"italic {MUTED}")
+            bottom.append("enter to confirm \u00b7 esc to cancel", style=f"italic {COLOR_MUTED}")
         content.append(bottom)
 
         return content
@@ -211,12 +214,12 @@ class CommitView(Widget):
         status.append("  ")
         status.append(self.operation, style=op_color)
         status.append("  ")
-        status.append(self.progress_text, style=MUTED)
+        status.append(self.progress_text, style=COLOR_MUTED)
         content.append(status)
         content.append(Text())
         hint = Text()
         hint.append("  ")
-        hint.append("esc to interrupt", style=f"italic {MUTED}")
+        hint.append("esc to interrupt", style=f"italic {COLOR_MUTED}")
         content.append(hint)
         return content
 

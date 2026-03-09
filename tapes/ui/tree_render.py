@@ -2,168 +2,18 @@
 
 from __future__ import annotations
 
-import functools
-import re
-import string
 from pathlib import Path
-from typing import Any
 
 from rich.text import Text
 
-from tapes.fields import MEDIA_TYPE, MEDIA_TYPE_EPISODE
+from tapes.templates import can_fill_template, compute_dest, full_extension, select_template
 from tapes.tree_model import FileNode, FolderNode, TreeModel
-
-# Explicit muted gray instead of Rich "dim" (which thins the font weight).
-MUTED = "#888888"
-# Lighter muted for fold arrows (more visible than MUTED).
-MUTED_LIGHT = "#aaaaaa"
-# Green tick for staged files.
-STAGED_COLOR = "#4EBA65"
-# Cursor highlight (lazygit-style dark slate).
-CURSOR_BG = "on #373737"
-# Range selection background (matches cursor).
-RANGE_BG = "on #373737"
-# Accent color for focused separators, active tabs, and highlights.
-ACCENT = "#B1B9F9"
-# Inactive separator color.
-INACTIVE = "#555555"
-# Ember for diffs, warnings, and placeholder highlights.
-EMBER = "#E07A47"
-# Soft green for additions and copy operations.
-SOFT_GREEN = "#86E89A"
-# Soft red for low-confidence warnings.
-SOFT_RED = "#FF7A7A"
-# Soft blue for link operations.
-SOFT_BLUE = "#7AB8FF"
-# Light purple background for focused column in detail view.
-COLUMN_FOCUS_BG = "on #3B3154"
-
-
-@functools.lru_cache(maxsize=8)
-def template_field_names(template: str) -> list[str]:
-    """Extract unique field names referenced in a template string."""
-    return list(dict.fromkeys(fname for _, fname, _, _ in string.Formatter().parse(template) if fname is not None))
-
-
-def select_template(node: FileNode, movie_template: str, tv_template: str) -> str:
-    """Select the appropriate template based on the node's media_type.
-
-    Returns ``tv_template`` if ``media_type`` is ``"episode"``,
-    otherwise ``movie_template``.
-    """
-    media_type = node.result.get(MEDIA_TYPE)
-    if media_type == MEDIA_TYPE_EPISODE:
-        return tv_template
-    return movie_template
-
-
-_KNOWN_TAGS = frozenset({"forced", "sdh", "signs", "commentary"})
-
-
-def _is_tag(s: str) -> bool:
-    """Check if a suffix component is a language/subtitle tag."""
-    return s.lower() in _KNOWN_TAGS or (len(s) in (2, 3) and s.isalpha())
-
-
-def full_extension(path: Path) -> str:
-    """Return the full extension, preserving tags like '.forced.en.srt'.
-
-    Walks backwards through suffixes, collecting consecutive tags
-    (language codes, 'forced', 'sdh', etc.) that precede the final
-    extension.  Also picks up hyphen-prefixed tags (e.g. ``-forced``)
-    that appear just before the dot-suffix chain in the stem.
-    """
-    suffixes = path.suffixes
-    if not suffixes:
-        return ""
-    # Always include the last suffix; walk backwards collecting tags
-    count = 1
-    for i in range(len(suffixes) - 2, -1, -1):
-        tag = suffixes[i].lstrip(".")
-        if _is_tag(tag):
-            count += 1
-        else:
-            break
-
-    ext = "".join(suffixes[-count:]).lstrip(".")
-
-    # Check for hyphen-prefixed tags in the stem (e.g. "movie-forced")
-    stem = path.name[: -len("." + ext)] if ext else path.stem
-    while "-" in stem:
-        last_hyphen = stem.rfind("-")
-        candidate = stem[last_hyphen + 1 :]
-        if _is_tag(candidate):
-            ext = candidate + "." + ext
-            stem = stem[:last_hyphen]
-        else:
-            break
-
-    return ext
-
-
-_UNSAFE_PATH_CHARS = re.compile(r'[./\\:*?"<>|\x00-\x1f]')
-
-
-def _sanitize_field(value: Any) -> Any:
-    """Sanitize a template field value for safe use in file paths.
-
-    Replaces characters that are illegal or dangerous in filenames:
-    ``. / \\ : * ? " < > |`` and control characters (0x00-0x1F).
-    Consecutive underscores from replacements are collapsed.
-    Leading/trailing dots, spaces, and underscores are stripped.
-    Only applies to string values; integers and other types pass through.
-    """
-    if not isinstance(value, str):
-        return value
-    result = _UNSAFE_PATH_CHARS.sub("_", value)
-    result = re.sub(r"_+", "_", result)
-    return result.strip(". _")
-
-
-def can_fill_template(node: FileNode, merged_result: dict, movie_template: str, tv_template: str) -> bool:
-    """Check if *merged_result* has all fields needed to fill the destination template.
-
-    The ``ext`` field is excluded because it always comes from the filename.
-    Returns ``True`` when every other required field is present and non-None.
-    """
-    template = select_template(node, movie_template, tv_template)
-    needed = template_field_names(template)
-    return all(merged_result.get(f) is not None for f in needed if f != "ext")
-
-
-def compute_dest(node: FileNode, template: str) -> str | None:
-    """Compute the destination path for a file node using a template.
-
-    Extracts fields from ``node.result`` and adds ``ext`` from the file
-    suffix. Returns None if any required template field is missing or None.
-
-    Format specs (e.g. ``{season:02d}``) are applied when all fields are
-    present. If a field with a format spec is missing, the spec is dropped
-    and ``?`` is shown instead so the user can see partial progress.
-
-    String field values are sanitized to remove characters that are illegal
-    in filenames (``/ \\ : * ? " < > |`` and control characters).
-    """
-    fields: dict[str, Any] = {k: _sanitize_field(v) for k, v in node.result.items()}
-    fields["ext"] = full_extension(node.path)
-
-    needed = template_field_names(template)
-    missing = [f for f in needed if fields.get(f) is None]
-
-    if not missing:
-        return template.format_map(fields)
-
-    # All fields missing -> no useful destination
-    if len(missing) == len(needed):
-        return None
-
-    # Partial: fill missing fields with "?" and strip format specs
-    patched = dict(fields)
-    for f in missing:
-        patched[f] = "?"
-    # Remove format specs so "?" doesn't fail on e.g. :02d
-    safe_template = re.sub(r"\{(\w+):[^}]+\}", r"{\1}", template)
-    return safe_template.format_map(patched)
+from tapes.ui.colors import (
+    COLOR_DIFF,
+    COLOR_MUTED,
+    COLOR_MUTED_LIGHT,
+    COLOR_STAGED,
+)
 
 
 def render_dest(dest: str | None) -> Text:
@@ -177,7 +27,7 @@ def render_dest(dest: str | None) -> Text:
     - Any ``?`` placeholder characters are highlighted ember.
     """
     if dest is None:
-        return Text("???", style=MUTED)
+        return Text("???", style=COLOR_MUTED)
 
     result = Text()
 
@@ -192,7 +42,7 @@ def render_dest(dest: str | None) -> Text:
 
     # Render directory part: dim, but ? chars yellow
     if dir_part:
-        _append_with_yellow_placeholders(result, dir_part, MUTED)
+        _append_with_yellow_placeholders(result, dir_part, COLOR_MUTED)
 
     # Split basename into stem and full extension (e.g. ".en.srt")
     ext_str = full_extension(Path(basename))
@@ -213,7 +63,7 @@ def render_dest(dest: str | None) -> Text:
 
     # Render extension: dim, but ? chars yellow
     if ext:
-        _append_with_yellow_placeholders(result, ext, MUTED)
+        _append_with_yellow_placeholders(result, ext, COLOR_MUTED)
 
     return result
 
@@ -227,7 +77,7 @@ def _append_with_yellow_placeholders(text: Text, s: str, base_style: str) -> Non
             # Collect consecutive ?
             while j < len(s) and s[j] == "?":
                 j += 1
-            text.append(s[i:j], style=EMBER)
+            text.append(s[i:j], style=COLOR_DIFF)
         else:
             # Collect non-? characters
             while j < len(s) and s[j] != "?":
@@ -282,15 +132,15 @@ def render_file_row(
             current_len = len(row.plain)
             if current_len < arrow_col:
                 row.append(" " * (arrow_col - current_len))
-            row.append("\u2192 ", style=MUTED)
+            row.append("\u2192 ", style=COLOR_MUTED)
         else:
-            row.append("  \u2192  ", style=MUTED)
+            row.append("  \u2192  ", style=COLOR_MUTED)
 
-        # Staging indicator: ✓ staged, ☐ ready to stage, blank if incomplete
+        # Staging indicator: checkmark staged, hollow square ready to stage, blank if incomplete
         if node.staged:
-            row.append("\u2713 ", style=STAGED_COLOR)
+            row.append("\u2713 ", style=COLOR_STAGED)
         elif can_fill_template(node, node.result, movie_template, tv_template):
-            row.append("\u2610 ", style=MUTED)
+            row.append("\u2610 ", style=COLOR_MUTED)
         else:
             row.append("  ")
 
@@ -314,8 +164,8 @@ def render_folder_row(node: FolderNode, depth: int = 0) -> Text:
     if indent:
         row.append(indent)
     arrow = "\u25bc" if not node.collapsed else "\u25b6"
-    row.append(arrow, style=MUTED_LIGHT)
-    row.append(f" {node.name}/", style=MUTED)
+    row.append(arrow, style=COLOR_MUTED_LIGHT)
+    row.append(f" {node.name}/", style=COLOR_MUTED)
     return row
 
 
@@ -403,13 +253,13 @@ def render_separator(
 ) -> Text:
     """Render a horizontal separator line spanning *width* characters.
 
-    Format: ``─── Title ──────────────────── right text``
+    Format: ``--- Title ------------------------------ right text``
     """
     line = Text()
     used = 0
 
     if title:
-        prefix = "─── "
+        prefix = "\u2500\u2500\u2500 "
         line.append(prefix, style=color)
         line.append(title, style=f"bold {color}")
         line.append(" ", style=color)
@@ -422,12 +272,12 @@ def render_separator(
 
     fill = width - used - right_len
     if fill > 0:
-        line.append("─" * fill, style=color)
+        line.append("\u2500" * fill, style=color)
 
     if right_text:
         line.append(" ", style=color)
         line.append(right_text, style=color)
         line.append(" ", style=color)
-        line.append("───", style=color)
+        line.append("\u2500\u2500\u2500", style=color)
 
     return line
