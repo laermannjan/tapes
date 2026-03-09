@@ -545,6 +545,7 @@ class TreeApp(App):
         from tapes.file_ops import process_staged
 
         dry_run = self.config.dry_run
+        verify = self.config.library.verify
         cancel = self._commit_cancelled
         if cancel is None:  # pragma: no cover -- caller always sets this
             return lambda: None
@@ -581,6 +582,7 @@ class TreeApp(App):
                 on_file_start=on_file_start,
                 on_file_progress=on_file_progress,
                 cancelled=cancel.is_set,
+                verify=verify,
             )
 
             if cancel.is_set():

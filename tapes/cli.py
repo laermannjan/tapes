@@ -31,6 +31,7 @@ def _build_overrides(**kwargs: Any) -> dict[str, Any]:
         "movie_template": ("library", "movie_template"),
         "tv_template": ("library", "tv_template"),
         "operation": ("library", "operation"),
+        "verify": ("library", "verify"),
         "tmdb_token": ("metadata", "tmdb_token"),
         "auto_accept_threshold": ("metadata", "auto_accept_threshold"),
         "margin_accept_threshold": ("metadata", "margin_accept_threshold"),
@@ -107,6 +108,9 @@ def import_cmd(
     operation: str | None = typer.Option(
         None, "--operation", help="File operation: copy, move, link, hardlink", rich_help_panel="Library"
     ),
+    no_verify: bool = typer.Option(
+        False, "--no-verify", help="Skip SHA-256 verification (faster, uses OS-level copy)", rich_help_panel="Library"
+    ),
     # Metadata
     tmdb_token: str | None = typer.Option(
         None, "--tmdb-token", help="TMDB API bearer token", rich_help_panel="Metadata"
@@ -158,6 +162,7 @@ def import_cmd(
         movie_template=movie_template,
         tv_template=tv_template,
         operation=operation,
+        verify=False if no_verify else None,
         tmdb_token=tmdb_token,
         auto_accept_threshold=auto_accept_threshold,
         margin_accept_threshold=margin_accept_threshold,

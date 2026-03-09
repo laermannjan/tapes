@@ -24,8 +24,16 @@ library:
   # movie_template: "{title} ({year})/{title} ({year}).{ext}"
   # tv_template: "{title} ({year})/Season {season:02d}/{title} - S{season:02d}E{episode:02d} - {episode_title}.{ext}"
 
-  # File operation: copy, move (copy-verify-delete), link (symlink), hardlink.
+  # File operation: copy, move, link (symlink), hardlink.
+  # Move tries atomic rename first (instant on same filesystem); falls back to
+  # copy + delete for cross-device moves.
   # operation: copy
+
+  # SHA-256 verification for copy/move. When true, copies are checksummed and
+  # moves are copy-verify-delete. When false, uses fast OS-level copy
+  # (shutil.copy2) with no progress reporting. Rename-based moves are always
+  # used when possible regardless of this setting.
+  # verify: true
 
 # ---------------------------------------------------------------------------
 # Metadata -- TMDB and matching

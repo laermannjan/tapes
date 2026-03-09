@@ -68,6 +68,7 @@ def process_file(
     dry_run: bool = False,
     progress_callback: Callable[[int, int], None] | None = None,
     cancelled: Callable[[], bool] | None = None,
+    verify: bool = True,
 ) -> str:
     """Process a single file with the given operation.
 
@@ -77,6 +78,9 @@ def process_file(
         operation: One of "copy", "move", "link" (symlink), "hardlink".
         dry_run: If True, describe what would happen without doing it.
         cancelled: Callable returning ``True`` to abort mid-copy.
+        verify: If True (default), copy with SHA-256 verification.
+            If False, use fast OS-level copy (shutil) and try rename
+            for moves.  Progress callbacks are not fired when False.
 
     Returns:
         A message describing what was done (or would be done).
@@ -95,15 +99,29 @@ def process_file(
     dest.parent.mkdir(parents=True, exist_ok=True)
 
     if operation == "copy":
-        _copy_and_hash(src, dest, progress_callback, cancelled=cancelled)
+        if verify:
+            _copy_and_hash(src, dest, progress_callback, cancelled=cancelled)
+        else:
+            shutil.copy2(src, dest)
         return f"Copied {src} -> {dest}"
     if operation == "move":
-        src_hash = _copy_and_hash(src, dest, progress_callback, cancelled=cancelled)
-        if _sha256(dest) == src_hash:
-            src.unlink()
+        # Try atomic rename first (instant on same filesystem).
+        try:
+            src.rename(dest)
+        except OSError:
+            pass  # cross-device; fall back to copy + delete
         else:
-            dest.unlink()
-            raise OSError(f"SHA-256 mismatch after copy: {src} -> {dest} (dest removed)")
+            return f"Moved {src} -> {dest}"
+        if verify:
+            src_hash = _copy_and_hash(src, dest, progress_callback, cancelled=cancelled)
+            if _sha256(dest) == src_hash:
+                src.unlink()
+            else:
+                dest.unlink()
+                raise OSError(f"SHA-256 mismatch after copy: {src} -> {dest} (dest removed)")
+        else:
+            shutil.copy2(src, dest)
+            src.unlink()
         return f"Moved {src} -> {dest}"
     if operation == "link":
         dest.symlink_to(src.resolve())
@@ -121,6 +139,7 @@ def process_staged(
     on_file_start: Callable[[int, int, Path, Path], None] | None = None,
     on_file_progress: Callable[[int, int], None] | None = None,
     cancelled: Callable[[], bool] | None = None,
+    verify: bool = True,
 ) -> list[str]:
     """Process a list of (source, destination) file pairs.
 
@@ -137,6 +156,8 @@ def process_staged(
             to :func:`process_file` for byte-level progress during copies.
         cancelled: Callable returning ``True`` to stop processing.  Checked
             between files and passed through to copy operations.
+        verify: If True, use SHA-256 verified copies. If False, use fast
+            OS-level operations (no progress callbacks).
 
     Returns:
         List of result messages (one per file).
@@ -156,6 +177,7 @@ def process_staged(
                 dry_run=dry_run,
                 progress_callback=on_file_progress,
                 cancelled=cancelled,
+                verify=verify,
             )
             results.append(msg)
         except OperationCancelledError:

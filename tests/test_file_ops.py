@@ -105,6 +105,57 @@ class TestProcessFileDryRun:
         assert "[dry-run]" in result
 
 
+class TestNoVerifyCopy:
+    def test_copy_without_verify(self, tmp_path: Path) -> None:
+        src = tmp_path / "source.mkv"
+        src.write_text("video content")
+        dest = tmp_path / "library" / "movie.mkv"
+
+        result = process_file(src, dest, "copy", verify=False)
+
+        assert dest.exists()
+        assert dest.read_text() == "video content"
+        assert "Copied" in result
+
+    def test_copy_without_verify_no_progress(self, tmp_path: Path) -> None:
+        """Progress callback is not fired when verify=False."""
+        src = tmp_path / "data.bin"
+        src.write_bytes(b"x" * 10000)
+        dest = tmp_path / "out" / "data.bin"
+        calls: list[tuple[int, int]] = []
+        process_file(src, dest, "copy", verify=False, progress_callback=lambda c, t: calls.append((c, t)))
+        assert dest.exists()
+        assert len(calls) == 0
+
+
+class TestNoVerifyMove:
+    def test_move_same_filesystem_uses_rename(self, tmp_path: Path) -> None:
+        """Move on same filesystem should be instant (rename)."""
+        src = tmp_path / "source.mkv"
+        src.write_text("video content")
+        dest = tmp_path / "library" / "movie.mkv"
+
+        result = process_file(src, dest, "move", verify=False)
+
+        assert dest.exists()
+        assert dest.read_text() == "video content"
+        assert not src.exists()
+        assert "Moved" in result
+
+    def test_move_same_filesystem_with_verify_also_renames(self, tmp_path: Path) -> None:
+        """Even with verify=True, same-fs moves try rename first."""
+        src = tmp_path / "source.mkv"
+        src.write_text("video content")
+        dest = tmp_path / "library" / "movie.mkv"
+
+        result = process_file(src, dest, "move", verify=True)
+
+        assert dest.exists()
+        assert dest.read_text() == "video content"
+        assert not src.exists()
+        assert "Moved" in result
+
+
 class TestProcessFileDestExists:
     def test_raises_file_exists_error(self, tmp_path: Path) -> None:
         src = tmp_path / "source.mkv"
@@ -146,14 +197,15 @@ class TestProgressCallback:
         assert calls[-1][0] == calls[-1][1]  # last call: copied == total
 
     def test_progress_callback_called_on_move(self, tmp_path: Path) -> None:
+        """Same-filesystem move uses rename (no progress callback)."""
         src = tmp_path / "data.bin"
         src.write_bytes(b"x" * 10000)
         dest = tmp_path / "out" / "data.bin"
         calls: list[tuple[int, int]] = []
         process_file(src, dest, "move", progress_callback=lambda copied, total: calls.append((copied, total)))
-        assert len(calls) > 0
-        assert calls[-1][0] == calls[-1][1]
-        assert not src.exists()  # source removed after move
+        # Same-filesystem move uses atomic rename, no progress
+        assert dest.exists()
+        assert not src.exists()
 
     def test_no_callback_when_none(self, tmp_path: Path) -> None:
         """process_file works without a progress callback."""
