@@ -311,11 +311,6 @@ class TreeApp(App):
         tv.refresh()
         self._update_footer()
 
-    def _confirm_detail(self) -> None:
-        """Confirm detail view changes and return to tree."""
-        self._detail_snapshot = None
-        self._show_tree()
-
     def _discard_detail(self) -> None:
         """Discard detail view changes and return to tree."""
         if self._detail_snapshot:
@@ -377,12 +372,6 @@ class TreeApp(App):
             self.query_one(DetailView).move_cursor(row_delta=-1)
         else:
             self.query_one(TreeView).move_cursor(-1)
-
-    def action_cursor_left(self) -> None:
-        pass
-
-    def action_cursor_right(self) -> None:
-        pass
 
     def action_toggle_staged(self) -> None:
         if self._mode != AppMode.TREE:
