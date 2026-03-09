@@ -683,6 +683,56 @@ class TestColumnFocus:
         assert view.node.result["title"] == "My Title"  # unchanged
 
 
+# --- Tab bar rendering ---
+
+
+class TestTabBarMultipleSources:
+    """Verify tab bar renders all TMDB source tabs."""
+
+    def _make_view_with_sources(self, num_sources: int) -> DetailView:
+        sources = [
+            Source(
+                name=f"TMDB #{i + 1}",
+                fields={"title": f"Show {i + 1}", "year": 2020 + i, "media_type": "episode"},
+                confidence=0.8 - i * 0.1,
+            )
+            for i in range(num_sources)
+        ]
+        node = FileNode(
+            path=Path("/media/show.s01e01.mkv"),
+            result={"title": "Show", "year": 2020, "media_type": "episode"},
+            sources=sources,
+        )
+        view = DetailView(node, TEMPLATE, TEMPLATE)
+        view.fields = get_display_fields(TEMPLATE)
+        return view
+
+    def test_three_sources_show_three_tabs(self) -> None:
+        from tests.test_ui.conftest import render_plain
+
+        view = self._make_view_with_sources(3)
+        plain = render_plain(view, width=120, height=30)
+        assert "TMDB #1" in plain
+        assert "TMDB #2" in plain
+        assert "TMDB #3" in plain
+
+    def test_single_source_shows_one_tab(self) -> None:
+        from tests.test_ui.conftest import render_plain
+
+        view = self._make_view_with_sources(1)
+        plain = render_plain(view, width=120, height=30)
+        assert "TMDB #1" in plain
+        assert "TMDB #2" not in plain
+
+    def test_tab_cycle_changes_active_tab(self) -> None:
+        view = self._make_view_with_sources(3)
+        assert view.source_index == 0
+        view.cycle_source(1)
+        assert view.source_index == 1
+        view.cycle_source(1)
+        assert view.source_index == 2
+
+
 try:
     from textual.pilot import Pilot  # noqa: F401
 

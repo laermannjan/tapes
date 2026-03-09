@@ -265,6 +265,37 @@ class TestTwoStageFlow:
             assert node.staged is True
 
 
+class TestMultipleSourcesNoAutoAccept:
+    """When auto-accept doesn't fire, all search results should become sources."""
+
+    def test_low_confidence_shows_all_sources(self, mock_tmdb) -> None:
+        """The Office returns 2 results. With a very high threshold, auto-accept
+        doesn't fire and both should appear as TMDB sources on the node."""
+        model = _make_model("The.Office.S01E01.mkv")
+        # Very high threshold so auto-accept doesn't fire
+        run_auto_pipeline(model, token=TOKEN, confidence_threshold=0.99)
+        node = model.all_files()[0]
+        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
+        assert len(tmdb_sources) == 2, f"Expected 2 sources, got {len(tmdb_sources)}: {tmdb_sources}"
+        assert node.staged is False
+
+    def test_can_stage_fail_still_gets_episode_sources(self, mock_tmdb) -> None:
+        """When show auto-accepts but can_stage fails (incomplete template),
+        the episode query should still run so the user gets episode-level sources."""
+        model = _make_model("Breaking.Bad.S01E01.mkv")
+
+        def _always_reject(node, merged):
+            return False
+
+        run_auto_pipeline(model, token=TOKEN, confidence_threshold=0.5, can_stage=_always_reject)
+        node = model.all_files()[0]
+        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
+        # Should have episode-level sources, not just show-level
+        ep_titles = [s.fields.get("episode_title") for s in tmdb_sources]
+        assert any(ep_titles), f"Expected episode sources with episode_title, got: {tmdb_sources}"
+        assert len(tmdb_sources) >= 2, f"Expected multiple episode sources, got {len(tmdb_sources)}"
+
+
 class TestTwoTierAutoAccept:
     """Tests for margin-based auto-accept (tier 2)."""
 

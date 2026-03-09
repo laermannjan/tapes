@@ -516,34 +516,22 @@ def _query_tmdb_for_node(  # noqa: PLR0911
         _best_fields = dict(best.fields)
 
         # Check if merged result would fill the template
-        _can_stage = can_stage
-        if _can_stage is not None:
+        _stageable = True
+        if can_stage is not None:
             merged = {**node.result, **{k: v for k, v in _best_fields.items() if v is not None}}
-            if not _can_stage(node, merged):
+            if not can_stage(node, merged):
                 logger.debug("%s: auto-accept skipped, template fields incomplete", node.path.name)
-                # Still apply fields (useful for curation) but don't stage
-                _best_fields_nostage = dict(_best_fields)
+                _stageable = False
 
-                def _apply_nostage(_n: FileNode = node, _f: dict = _best_fields_nostage) -> None:
-                    for field, val in _f.items():
-                        if val is not None:
-                            _n.result[field] = val
+        # Apply best fields (always), stage only if template is complete
+        _stage = _stageable
 
-                _post(_apply_nostage)
-                # Add sources for manual curation
-                _sources_copy = list(tmdb_sources)
-
-                def _extend(_n: FileNode = node, _s: list[Source] = _sources_copy) -> None:
-                    _n.sources.extend(_s)
-
-                _post(_extend)
-                return
-
-        def _apply_best(_n: FileNode = node, _f: dict = _best_fields) -> None:
+        def _apply_best(_n: FileNode = node, _f: dict = _best_fields, _s: bool = _stage) -> None:
             for field, val in _f.items():
                 if val is not None:
                     _n.result[field] = val
-            _n.staged = True
+            if _s:
+                _n.staged = True
 
         _post(_apply_best)
 
