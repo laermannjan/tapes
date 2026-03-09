@@ -981,6 +981,31 @@ class TestEpisodeConfidenceGate:
         assert node.staged is False
 
 
+class TestEpisodeQueryAllSeasons:
+    """Invariant #3: episode query fetches ALL seasons, no early stopping."""
+
+    def test_queries_all_seasons(self, mock_tmdb) -> None:
+        """Episode query must call get_season_episodes for every season,
+        even when a confident match is found in the first season tried."""
+        node = FileNode(
+            path=Path("/media/Breaking.Bad.S01E01.mkv"),
+            result={
+                "title": "Breaking Bad",
+                "year": 2008,
+                "tmdb_id": 1396,
+                "media_type": "episode",
+                "season": 1,
+                "episode": 1,
+            },
+            sources=[],
+        )
+        # Override get_season_episodes to count calls per season
+        with patch("tapes.tmdb.get_season_episodes", side_effect=_mock_get_season_episodes) as mock_eps:
+            refresh_tmdb_source(node, token=TOKEN)
+            # get_show returns seasons [1,2,3,4,5]. ALL must be queried.
+            assert mock_eps.call_count == 5, f"Expected 5 season queries (one per season), got {mock_eps.call_count}"
+
+
 class TestApplySourceAllClear:
     """Tests for DetailView.apply_source_all_clear preserving per-file fields."""
 

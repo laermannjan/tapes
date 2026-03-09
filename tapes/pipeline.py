@@ -656,10 +656,6 @@ def _query_episodes(
             )
             all_episode_sources.append(source)
 
-        # If we found a match in this season, stop searching more
-        if any(s.confidence >= threshold for s in all_episode_sources):
-            break
-
     # Keep top max_results episode sources by confidence
     all_episode_sources.sort(key=lambda s: s.confidence, reverse=True)
     top_sources = all_episode_sources[:max_results]
