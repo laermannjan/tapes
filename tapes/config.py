@@ -71,7 +71,6 @@ class LibraryConfig(BaseModel):
         "{title} ({year})/Season {season:02d}/{title} - S{season:02d}E{episode:02d} - {episode_title}.{ext}"
     )
     operation: Literal["copy", "move", "link", "hardlink"] = "copy"
-    verify: bool = True
 
     @field_validator("movie_template", "tv_template")
     @classmethod

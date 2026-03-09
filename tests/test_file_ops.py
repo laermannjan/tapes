@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from tapes.file_ops import OperationCancelledError, process_file, process_staged
+from tapes.file_ops import process_file, process_staged
 
 
 class TestProcessFileCopy:
@@ -103,58 +103,6 @@ class TestProcessFileDryRun:
         assert not dest.exists()
         assert src.exists()
         assert "[dry-run]" in result
-
-
-class TestNoVerifyCopy:
-    def test_copy_without_verify(self, tmp_path: Path) -> None:
-        src = tmp_path / "source.mkv"
-        src.write_text("video content")
-        dest = tmp_path / "library" / "movie.mkv"
-
-        result = process_file(src, dest, "copy", verify=False)
-
-        assert dest.exists()
-        assert dest.read_text() == "video content"
-        assert "Copied" in result
-
-    def test_copy_without_verify_still_reports_progress(self, tmp_path: Path) -> None:
-        """Progress callback fires with verify=False (dest size polling)."""
-        src = tmp_path / "data.bin"
-        src.write_bytes(b"x" * 10000)
-        dest = tmp_path / "out" / "data.bin"
-        calls: list[tuple[int, int]] = []
-        process_file(src, dest, "copy", verify=False, progress_callback=lambda c, t: calls.append((c, t)))
-        assert dest.exists()
-        assert len(calls) > 0
-        assert calls[-1][0] == calls[-1][1]  # last call: copied == total
-
-
-class TestNoVerifyMove:
-    def test_move_same_filesystem_uses_rename(self, tmp_path: Path) -> None:
-        """Move on same filesystem should be instant (rename)."""
-        src = tmp_path / "source.mkv"
-        src.write_text("video content")
-        dest = tmp_path / "library" / "movie.mkv"
-
-        result = process_file(src, dest, "move", verify=False)
-
-        assert dest.exists()
-        assert dest.read_text() == "video content"
-        assert not src.exists()
-        assert "Moved" in result
-
-    def test_move_same_filesystem_with_verify_also_renames(self, tmp_path: Path) -> None:
-        """Even with verify=True, same-fs moves try rename first."""
-        src = tmp_path / "source.mkv"
-        src.write_text("video content")
-        dest = tmp_path / "library" / "movie.mkv"
-
-        result = process_file(src, dest, "move", verify=True)
-
-        assert dest.exists()
-        assert dest.read_text() == "video content"
-        assert not src.exists()
-        assert "Moved" in result
 
 
 class TestProcessFileDestExists:
@@ -313,93 +261,14 @@ class TestCancellation:
         def on_start(i: int, t: int, s: Path, d: Path) -> None:
             files_started.append(i)
 
-        # Cancel fires when second file's copy loop starts
-        results = process_staged(
-            [(src1, dest1), (src2, dest2)],
-            "copy",
-            on_file_start=on_start,
-            cancelled=lambda: len(files_started) >= 2,
-        )
-
-        assert len(results) == 1
-        assert dest1.exists()
-        assert not dest2.exists()
-
-    def test_cancel_mid_copy_cleans_up(self, tmp_path: Path) -> None:
-        src = tmp_path / "big.bin"
-        # Write >1 MB so copy loop iterates at least twice
-        src.write_bytes(b"x" * (2 * 1024 * 1024))
-        dest = tmp_path / "lib" / "big.bin"
-
-        chunk_count = 0
-
-        def cancel_after_one_chunk() -> bool:
-            return chunk_count > 0
-
-        def count_progress(copied: int, total: int) -> None:
-            nonlocal chunk_count
-            chunk_count += 1
-
-        with pytest.raises(OperationCancelledError):
-            process_file(
-                src,
-                dest,
-                "copy",
-                progress_callback=count_progress,
-                cancelled=cancel_after_one_chunk,
-            )
-
-        # Partial file should be cleaned up
-        assert not dest.exists()
-        assert src.exists()  # source untouched
-
-    def test_cancel_between_files_no_verify(self, tmp_path: Path) -> None:
-        """verify=False cancellation stops between files (checked at loop top in process_staged)."""
-        src1 = tmp_path / "a.bin"
-        src1.write_bytes(b"x" * 1000)
-        src2 = tmp_path / "b.bin"
-        src2.write_bytes(b"y" * 1000)
-        dest1 = tmp_path / "lib" / "a.bin"
-        dest2 = tmp_path / "lib" / "b.bin"
-
-        files_started: list[int] = []
-
-        def on_start(i: int, t: int, s: Path, d: Path) -> None:
-            files_started.append(i)
-
-        # Cancel after first file starts -- second file never begins
+        # Cancel after first file starts; checked at loop top before second file
         results = process_staged(
             [(src1, dest1), (src2, dest2)],
             "copy",
             on_file_start=on_start,
             cancelled=lambda: len(files_started) >= 1,
-            verify=False,
         )
 
-        assert len(results) == 1  # first file completed, second cancelled
+        assert len(results) == 1
         assert dest1.exists()
         assert not dest2.exists()
-
-    def test_cancel_passes_through_process_staged(self, tmp_path: Path) -> None:
-        src = tmp_path / "big.bin"
-        src.write_bytes(b"x" * (2 * 1024 * 1024))
-        dest = tmp_path / "lib" / "big.bin"
-
-        chunk_count = 0
-
-        def cancel_after_chunk() -> bool:
-            return chunk_count > 0
-
-        def count_progress(copied: int, total: int) -> None:
-            nonlocal chunk_count
-            chunk_count += 1
-
-        results = process_staged(
-            [(src, dest)],
-            "copy",
-            on_file_progress=count_progress,
-            cancelled=cancel_after_chunk,
-        )
-
-        assert len(results) == 0  # cancelled before completing
-        assert not dest.exists()

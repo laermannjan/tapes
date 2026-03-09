@@ -1,6 +1,6 @@
-"""Tests for conflict resolution, language, and verify config fields."""
+"""Tests for conflict resolution and language config fields."""
 
-from tapes.config import LibraryConfig, MetadataConfig, TapesConfig
+from tapes.config import MetadataConfig, TapesConfig
 
 
 class TestConflictConfig:
@@ -15,13 +15,3 @@ class TestConflictConfig:
         assert cfg.metadata.duplicate_resolution == "warn"
         assert cfg.metadata.disambiguation == "off"
         assert cfg.metadata.language == "de"
-
-
-class TestVerifyConfig:
-    def test_verify_defaults_true(self) -> None:
-        cfg = TapesConfig()
-        assert cfg.library.verify is True
-
-    def test_verify_override_false(self) -> None:
-        cfg = TapesConfig(library=LibraryConfig(verify=False))
-        assert cfg.library.verify is False
