@@ -12,7 +12,7 @@ from tapes.tree_model import (
     FolderNode,
     TreeModel,
 )
-from tapes.ui.tree_app import AppMode
+from tapes.ui.tree_app import AppState
 from tapes.ui.tree_view import TreeView
 
 # ---------------------------------------------------------------------------
@@ -480,7 +480,7 @@ class TestTreeAppKeys:
         app = TreeApp(model=model, movie_template=template, tv_template=template)
         async with app.run_test() as pilot:
             await pilot.press("enter")
-            assert app.mode == AppMode.DETAIL
+            assert app.state == AppState.METADATA
 
     @pytest.mark.asyncio()
     async def test_h_collapses_folder(self, model: TreeModel, template: str) -> None:
@@ -672,7 +672,7 @@ class TestCommitAction:
 
         async with app.run_test() as pilot:
             await pilot.press("tab")
-            assert app.mode == AppMode.TREE
+            assert app.state == AppState.TREE
 
     @pytest.mark.asyncio()
     async def test_tab_shows_commit_view(self) -> None:
@@ -684,7 +684,7 @@ class TestCommitAction:
 
         async with app.run_test() as pilot:
             await pilot.press("tab")
-            assert app.mode == AppMode.COMMIT
+            assert app.state == AppState.COMMIT
 
     @pytest.mark.asyncio()
     async def test_commit_esc_cancels(self) -> None:
@@ -696,9 +696,9 @@ class TestCommitAction:
 
         async with app.run_test() as pilot:
             await pilot.press("tab")
-            assert app.mode == AppMode.COMMIT
+            assert app.state == AppState.COMMIT
             await pilot.press("escape")
-            assert app.mode == AppMode.TREE
+            assert app.state == AppState.TREE
 
     @pytest.mark.asyncio()
     async def test_x_toggles_ignored(self) -> None:
@@ -908,7 +908,7 @@ class TestSearchModeAsync:
 
         async with app.run_test() as pilot:
             await pilot.press("slash")
-            assert app.mode == AppMode.SEARCHING
+            assert app.state == AppState.TREE_SEARCH
 
     @pytest.mark.asyncio()
     async def test_typing_filters_items(self) -> None:
@@ -938,7 +938,7 @@ class TestSearchModeAsync:
             await pilot.press("t", "o", "p")
             assert tv.item_count == 1
             await pilot.press("escape")
-            assert app.mode == AppMode.TREE
+            assert app.state == AppState.TREE
             assert tv.item_count == original_count
 
     @pytest.mark.asyncio()
@@ -953,7 +953,7 @@ class TestSearchModeAsync:
             await pilot.press("slash")
             await pilot.press("t", "o", "p")
             await pilot.press("enter")
-            assert app.mode == AppMode.TREE
+            assert app.state == AppState.TREE
             # Filter remains active
             assert tv.item_count == 1
 
@@ -988,9 +988,9 @@ class TestSearchModeAsync:
         async with app.run_test() as pilot:
             # Enter detail view via folder (enter on folder opens detail)
             await pilot.press("enter")
-            assert app.mode == AppMode.DETAIL
+            assert app.state == AppState.METADATA
             await pilot.press("slash")
-            assert app.mode == AppMode.DETAIL
+            assert app.state == AppState.METADATA
 
 
 # ---------------------------------------------------------------------------
@@ -1085,15 +1085,15 @@ class TestVisualIntegration:
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
-            assert app.mode == AppMode.TREE
+            assert app.state == AppState.TREE
 
             # Show help
             await pilot.press("question_mark")
-            assert app.mode == AppMode.HELP
+            assert app.state == AppState.HELP
 
             # Hide help
             await pilot.press("question_mark")
-            assert app.mode == AppMode.TREE
+            assert app.state == AppState.TREE
 
     @pytest.mark.asyncio()
     async def test_help_from_detail_returns_to_detail(self) -> None:
@@ -1109,11 +1109,11 @@ class TestVisualIntegration:
         async with app.run_test() as pilot:
             # Enter detail via folder
             await pilot.press("enter")
-            assert app.mode == AppMode.DETAIL
+            assert app.state == AppState.METADATA
             await pilot.press("question_mark")
-            assert app.mode == AppMode.HELP
+            assert app.state == AppState.HELP
             await pilot.press("question_mark")
-            assert app.mode == AppMode.DETAIL
+            assert app.state == AppState.METADATA
 
 
 # ---------------------------------------------------------------------------
@@ -1142,11 +1142,11 @@ class TestDetailConfirmDiscard:
         async with app.run_test() as pilot:
             # Enter detail via folder
             await pilot.press("enter")
-            assert app.mode == AppMode.DETAIL
+            assert app.state == AppState.METADATA
             # Manually edit result to simulate a change
             node.metadata["title"] = "Changed"
             await pilot.press("escape")
-            assert app.mode == AppMode.TREE
+            assert app.state == AppState.TREE
             assert node.metadata["title"] == "Original"
 
     @pytest.mark.asyncio()
@@ -1166,12 +1166,12 @@ class TestDetailConfirmDiscard:
         async with app.run_test() as pilot:
             # Enter detail via folder
             await pilot.press("enter")
-            assert app.mode == AppMode.DETAIL
+            assert app.state == AppState.METADATA
             # Manually edit result
             node.metadata["title"] = "Changed"
             # Enter accepts changes and returns to tree
             await pilot.press("enter")
-            assert app.mode == AppMode.TREE
+            assert app.state == AppState.TREE
             assert node.metadata["title"] == "Changed"
 
     @pytest.mark.asyncio()
@@ -1193,21 +1193,21 @@ class TestDetailConfirmDiscard:
             # Enter detail via folder
             await pilot.press("enter")
             dv = app.query_one(DetailView)
-            assert app.mode == AppMode.DETAIL
+            assert app.state == AppState.METADATA
             await pilot.press("e")  # start edit via e key
             assert dv.editing
             await pilot.press("escape")  # cancel edit
             assert not dv.editing
-            assert app.mode == AppMode.DETAIL  # still in detail
+            assert app.state == AppState.METADATA  # still in detail
 
 
 # ---------------------------------------------------------------------------
-# AppMode transition tests
+# AppState transition tests
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.skipif(not HAS_PILOT, reason="textual pilot not available")
-class TestAppModeTransitions:
+class TestAppStateTransitions:
     @pytest.mark.asyncio()
     async def test_initial_mode_is_tree(self) -> None:
         from tapes.ui.tree_app import TreeApp
@@ -1215,7 +1215,7 @@ class TestAppModeTransitions:
         model = _expanded_model()
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
         async with app.run_test():
-            assert app.mode == AppMode.TREE
+            assert app.state == AppState.TREE
 
     @pytest.mark.asyncio()
     async def test_enter_detail_and_back(self) -> None:
@@ -1227,12 +1227,12 @@ class TestAppModeTransitions:
         model = TreeModel(root=root)
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
         async with app.run_test() as pilot:
-            assert app.mode == AppMode.TREE
+            assert app.state == AppState.TREE
             # Enter detail via folder
             await pilot.press("enter")
-            assert app.mode == AppMode.DETAIL
+            assert app.state == AppState.METADATA
             await pilot.press("escape")
-            assert app.mode == AppMode.TREE
+            assert app.state == AppState.TREE
 
     @pytest.mark.asyncio()
     async def test_commit_and_cancel(self) -> None:
@@ -1242,11 +1242,11 @@ class TestAppModeTransitions:
         model.all_files()[0].staged = True
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
         async with app.run_test() as pilot:
-            assert app.mode == AppMode.TREE
+            assert app.state == AppState.TREE
             await pilot.press("tab")
-            assert app.mode == AppMode.COMMIT
+            assert app.state == AppState.COMMIT
             await pilot.press("escape")
-            assert app.mode == AppMode.TREE
+            assert app.state == AppState.TREE
 
     @pytest.mark.asyncio()
     async def test_help_and_back(self) -> None:
@@ -1255,11 +1255,11 @@ class TestAppModeTransitions:
         model = _expanded_model()
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
         async with app.run_test() as pilot:
-            assert app.mode == AppMode.TREE
+            assert app.state == AppState.TREE
             await pilot.press("question_mark")
-            assert app.mode == AppMode.HELP
+            assert app.state == AppState.HELP
             await pilot.press("question_mark")
-            assert app.mode == AppMode.TREE
+            assert app.state == AppState.TREE
 
     @pytest.mark.asyncio()
     async def test_search_and_cancel(self) -> None:
@@ -1268,11 +1268,11 @@ class TestAppModeTransitions:
         model = _expanded_model()
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
         async with app.run_test() as pilot:
-            assert app.mode == AppMode.TREE
+            assert app.state == AppState.TREE
             await pilot.press("slash")
-            assert app.mode == AppMode.SEARCHING
+            assert app.state == AppState.TREE_SEARCH
             await pilot.press("escape")
-            assert app.mode == AppMode.TREE
+            assert app.state == AppState.TREE
 
 
 # ---------------------------------------------------------------------------
@@ -1294,7 +1294,7 @@ class TestTreeKeyRedesign:
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
         async with app.run_test() as pilot:
             await pilot.press("enter")
-            assert app._mode == AppMode.DETAIL
+            assert app._mode == AppState.METADATA
 
     @pytest.mark.asyncio()
     async def test_tab_opens_commit(self) -> None:
@@ -1306,7 +1306,7 @@ class TestTreeKeyRedesign:
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
         async with app.run_test() as pilot:
             await pilot.press("tab")
-            assert app.mode == AppMode.COMMIT
+            assert app.state == AppState.COMMIT
 
     @pytest.mark.asyncio()
     async def test_h_collapses_expanded_folder(self) -> None:
@@ -1346,7 +1346,7 @@ class TestTreeKeyRedesign:
         async with app.run_test() as pilot:
             # Cursor on folderA
             await pilot.press("enter")
-            assert app.mode == AppMode.DETAIL
+            assert app.state == AppState.METADATA
 
     @pytest.mark.asyncio()
     async def test_h_moves_to_parent_on_file(self) -> None:

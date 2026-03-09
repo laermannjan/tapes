@@ -174,7 +174,7 @@ class DetailView(Widget):
 
         # Blank + separator + blank
         content.append(Text())
-        content.append(render_separator(inner_width, title="Info", color=COLOR_ACCENT))
+        content.append(render_separator(inner_width, title="Metadata", color=COLOR_ACCENT))
         content.append(Text())
 
         # File path -> destination

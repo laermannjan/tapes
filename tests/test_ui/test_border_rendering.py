@@ -58,7 +58,7 @@ class TestDetailViewRendering:
     def test_detail_render_has_separator(self) -> None:
         view = _make_detail_view()
         plain = render_plain(view, height=30)
-        assert "\u2500\u2500\u2500 Info" in plain
+        assert "\u2500\u2500\u2500 Metadata" in plain
 
     def test_detail_render_has_footer_hints(self) -> None:
         view = _make_detail_view()

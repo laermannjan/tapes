@@ -9,7 +9,7 @@ import pytest
 
 from tapes.pipeline import refresh_tmdb_source, run_auto_pipeline
 from tapes.tree_model import Candidate, FileNode, FolderNode, TreeModel
-from tapes.ui.tree_app import AppMode
+from tapes.ui.tree_app import AppState
 
 TOKEN = "test-token"
 
@@ -577,7 +577,7 @@ class TestRefreshQueryIntegration:
         async with app.run_test() as pilot:
             # Enter detail via folder
             await pilot.press("enter")
-            assert app.mode == AppMode.DETAIL
+            assert app.state == AppState.METADATA
             await pilot.press("r")
             await app.workers.wait_for_complete()
             tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
@@ -637,7 +637,7 @@ class TestRefreshQueryIntegration:
             await pilot.press("v")
             await pilot.press("j")
             await pilot.press("enter")
-            assert app.mode == AppMode.DETAIL
+            assert app.state == AppState.METADATA
             await pilot.press("r")
             await app.workers.wait_for_complete()
             for n in [node1, node2]:
@@ -670,7 +670,7 @@ class TestRefreshQueryIntegration:
             await pilot.press("v")
             await pilot.press("j")
             await pilot.press("enter")
-            assert app.mode == AppMode.DETAIL
+            assert app.state == AppState.METADATA
             # Press 'r' -- should not block
             await pilot.press("r")
             await app.workers.wait_for_complete()
@@ -748,7 +748,7 @@ class TestMultiDetailAcceptTriggersEpisodeQuery:
             await pilot.press("j")
             # Open multi-detail view
             await pilot.press("enter")
-            assert app.mode == AppMode.DETAIL
+            assert app.state == AppState.METADATA
             # Accept the match (focus_column defaults to "match")
             # This writes tmdb_id/title/year/media_type to all 3 nodes
             await pilot.press("enter")
