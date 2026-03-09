@@ -36,6 +36,9 @@ def _build_overrides(**kwargs: Any) -> dict[str, Any]:
         "margin_accept_threshold": ("metadata", "margin_accept_threshold"),
         "min_accept_margin": ("metadata", "min_accept_margin"),
         "max_results": ("metadata", "max_results"),
+        "duplicate_resolution": ("metadata", "duplicate_resolution"),
+        "disambiguation": ("metadata", "disambiguation"),
+        "language": ("metadata", "language"),
         "ignore_patterns": ("scan", "ignore_patterns"),
         "video_extensions": ("scan", "video_extensions"),
         "max_workers": ("advanced", "max_workers"),
@@ -120,6 +123,15 @@ def import_cmd(
     max_results: int | None = typer.Option(
         None, "--max-results", help="Max TMDB search results", rich_help_panel="Metadata"
     ),
+    duplicate_resolution: str | None = typer.Option(
+        None, "--duplicate-resolution", help="Duplicate handling: auto, warn, off", rich_help_panel="Metadata"
+    ),
+    disambiguation: str | None = typer.Option(
+        None, "--disambiguation", help="Disambiguation: auto, warn, off", rich_help_panel="Metadata"
+    ),
+    language: str | None = typer.Option(
+        None, "--language", help="TMDB language code (e.g. de, fr, en-US)", rich_help_panel="Metadata"
+    ),
     # Scan
     ignore_patterns: str | None = typer.Option(
         None, "--ignore-patterns", help="Comma-separated ignore patterns", rich_help_panel="Scan"
@@ -151,6 +163,9 @@ def import_cmd(
         margin_accept_threshold=margin_accept_threshold,
         min_accept_margin=min_accept_margin,
         max_results=max_results,
+        duplicate_resolution=duplicate_resolution,
+        disambiguation=disambiguation,
+        language=language,
         ignore_patterns=_parse_csv(ignore_patterns),
         video_extensions=_parse_csv(video_extensions),
         max_workers=max_workers,

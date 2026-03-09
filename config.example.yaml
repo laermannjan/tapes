@@ -45,6 +45,14 @@ metadata:
   # Maximum TMDB search results to keep per query.
   # max_results: 3
 
+  # Conflict handling when multiple files map to the same destination.
+  # duplicate_resolution: auto    # auto (unstage lesser), warn, off
+  # disambiguation: auto          # auto (add -2 suffix), warn, off
+
+  # TMDB response language (ISO 639-1, e.g. en, de, fr, or en-US, de-DE).
+  # Empty = TMDB default. Affects titles and metadata, not search matching.
+  # language: ""
+
 # ---------------------------------------------------------------------------
 # Scan -- file discovery
 # ---------------------------------------------------------------------------

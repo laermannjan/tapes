@@ -28,6 +28,9 @@ class MetadataConfig(BaseModel):
     margin_accept_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
     min_accept_margin: float = Field(default=0.15, ge=0.0, le=1.0)
     max_results: int = Field(default=3, ge=1)
+    duplicate_resolution: Literal["auto", "warn", "off"] = "auto"
+    disambiguation: Literal["auto", "warn", "off"] = "auto"
+    language: str = ""
 
 
 # Known template fields. Templates may only reference these (plus "ext" which
