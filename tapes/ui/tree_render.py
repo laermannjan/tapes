@@ -35,6 +35,8 @@ SOFT_GREEN = "#86E89A"
 SOFT_RED = "#FF7A7A"
 # Soft blue for link operations.
 SOFT_BLUE = "#7AB8FF"
+# Light purple background for focused column in detail view.
+COLUMN_FOCUS_BG = "on #3B3154"
 
 
 @functools.lru_cache(maxsize=8)

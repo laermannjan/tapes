@@ -22,6 +22,7 @@ from tapes.ui.detail_render import (
 )
 from tapes.ui.tree_render import (
     ACCENT,
+    COLUMN_FOCUS_BG,
     CURSOR_BG,
     MUTED,
     compute_dest,
@@ -69,6 +70,7 @@ class DetailView(Widget):
         self.root_path = root_path
         self.fields: list[str] = []
         self.edit_value: str = ""
+        self.focus_column: str = "match"  # "result" or "match"
 
     def _active_template(self, node: FileNode | None = None) -> str:
         """Return the template for the given (or primary) node."""
@@ -90,6 +92,7 @@ class DetailView(Widget):
         self.file_nodes = [node]
         self.cursor_row = 0
         self.source_index = 0
+        self.focus_column = "match"
         self.fields = get_display_fields(self._active_template(node))
         self.editing = False
         self.refresh()
@@ -102,6 +105,7 @@ class DetailView(Widget):
         self.node = nodes[0]
         self.cursor_row = 0
         self.source_index = 0
+        self.focus_column = "match"
         self.fields = get_display_fields(self._active_template(self.node))
         self.editing = False
         self.refresh()
@@ -227,7 +231,7 @@ class DetailView(Widget):
             # Navigation hint
             line.append("   ")
             line.append(
-                "(\u2190/\u2192 or tab to cycle)",
+                "(tab to cycle)",
                 style=MUTED,
             )
         else:
@@ -274,8 +278,9 @@ class DetailView(Widget):
                 style=f"italic {MUTED}",
             )
         hints = (
-            "    enter to edit \u00b7 backspace to clear \u00b7 ctrl+a to accept all from match"
-            " \u00b7 f to extract from filename \u00b7 r to refresh \u00b7 c to confirm \u00b7 esc to discard"
+            "    enter to accept \u00b7 esc to discard"
+            " \u00b7 e to edit \u00b7 tab/shift+tab to cycle matches"
+            " \u00b7 r to refresh \u00b7 ctrl+r to reset from filename"
         )
         return Text(hints, style=f"italic {MUTED}")
 
@@ -309,8 +314,10 @@ class DetailView(Widget):
             line.append(self._col(edit_display, val_w), style="underline")
         else:
             result_val = display_val(result_raw)
-            style = "bold" if is_cursor else ""
-            line.append(self._col(result_val, val_w), style=style)
+            val_style = "bold" if is_cursor else ""
+            if self.focus_column == "result":
+                val_style += f" {COLUMN_FOCUS_BG}"
+            line.append(self._col(result_val, val_w), style=val_style)
 
         # Source value (from active tab, if any)
         if sources and src_w > 0 and self.source_index < len(sources):
@@ -321,6 +328,8 @@ class DetailView(Widget):
             line.append(COL_GAP)
 
             base_style = "dim" if is_multi_value(result_raw) else diff_style(result_raw, src_raw)
+            if self.focus_column == "match":
+                base_style += f" {COLUMN_FOCUS_BG}"
             line.append(self._col(src_val, src_w), style=base_style)
 
         # Pad to full width and apply background highlight to cursor row
@@ -352,6 +361,7 @@ class DetailView(Widget):
         if not sources:
             return
         self.source_index = (self.source_index + delta) % len(sources)
+        self.focus_column = "match"
 
     def apply_source_all_clear(self) -> None:
         """Handle ctrl+a: accept all fields from current source.
@@ -436,8 +446,22 @@ class DetailView(Widget):
         self.refresh()
 
     def toggle_column_focus(self) -> None:
-        """Toggle focus between result and match columns (stub for Task 3)."""
+        """Toggle focus between result and match columns."""
+        if self.focus_column == "result":
+            self.focus_column = "match"
+        else:
+            self.focus_column = "result"
         self.refresh()
+
+    def accept_focused_column(self) -> None:
+        """Accept the focused column's values.
+
+        If match is focused, copies non-None fields from the current
+        source to the result (preserving fields the source doesn't have).
+        If result is focused, no changes needed -- result is kept as-is.
+        """
+        if self.focus_column == "match":
+            self.apply_source_all_clear()
 
     def on_key(self, event: events.Key) -> None:
         """Handle key events for inline editing."""

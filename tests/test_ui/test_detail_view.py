@@ -622,6 +622,67 @@ class TestDetailViewTemplateSelection:
         assert view._active_template() == TV_TEMPLATE
 
 
+# --- Column focus ---
+
+
+class TestColumnFocus:
+    def _make_view(self) -> DetailView:
+        node = _make_node()
+        view = DetailView(node, TEMPLATE, TEMPLATE)
+        view.fields = get_display_fields(TEMPLATE)
+        return view
+
+    def test_default_focus_is_match(self) -> None:
+        view = self._make_view()
+        assert view.focus_column == "match"
+
+    def test_toggle_switches_to_result(self) -> None:
+        view = self._make_view()
+        view.toggle_column_focus()
+        assert view.focus_column == "result"
+
+    def test_toggle_back_to_match(self) -> None:
+        view = self._make_view()
+        view.toggle_column_focus()
+        view.toggle_column_focus()
+        assert view.focus_column == "match"
+
+    def test_cycle_source_sets_focus_to_match(self) -> None:
+        view = self._make_view()
+        view.focus_column = "result"
+        view.cycle_source(1)
+        assert view.focus_column == "match"
+
+    def test_set_node_resets_focus(self) -> None:
+        view = self._make_view()
+        view.focus_column = "result"
+        new_node = FileNode(path=Path("/other.mkv"), result={"title": "X"})
+        view.set_node(new_node)
+        assert view.focus_column == "match"
+
+    def test_set_nodes_resets_focus(self) -> None:
+        view = self._make_view()
+        view.focus_column = "result"
+        new_node = FileNode(path=Path("/other.mkv"), result={"title": "X"})
+        view.set_nodes([new_node])
+        assert view.focus_column == "match"
+
+    def test_accept_focused_match_applies_source(self) -> None:
+        view = self._make_view()
+        view.focus_column = "match"
+        view.source_index = 1  # TMDB source with title, year, etc.
+        view.node.result["title"] = "Old Title"
+        view.accept_focused_column()
+        assert view.node.result["title"] == "Breaking Bad"  # from TMDB source
+
+    def test_accept_focused_result_no_change(self) -> None:
+        view = self._make_view()
+        view.focus_column = "result"
+        view.node.result["title"] = "My Title"
+        view.accept_focused_column()
+        assert view.node.result["title"] == "My Title"  # unchanged
+
+
 try:
     from textual.pilot import Pilot  # noqa: F401
 
