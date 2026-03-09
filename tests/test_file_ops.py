@@ -118,7 +118,7 @@ class TestNoVerifyCopy:
         assert "Copied" in result
 
     def test_copy_without_verify_still_reports_progress(self, tmp_path: Path) -> None:
-        """Progress callback fires even when verify=False (chunked copy)."""
+        """Progress callback fires with verify=False (dest size polling)."""
         src = tmp_path / "data.bin"
         src.write_bytes(b"x" * 10000)
         dest = tmp_path / "out" / "data.bin"
@@ -353,33 +353,32 @@ class TestCancellation:
         assert not dest.exists()
         assert src.exists()  # source untouched
 
-    def test_cancel_mid_copy_no_verify(self, tmp_path: Path) -> None:
-        """Cancellation works even with verify=False."""
-        src = tmp_path / "big.bin"
-        src.write_bytes(b"x" * (2 * 1024 * 1024))
-        dest = tmp_path / "lib" / "big.bin"
+    def test_cancel_between_files_no_verify(self, tmp_path: Path) -> None:
+        """verify=False cancellation stops between files (checked at loop top in process_staged)."""
+        src1 = tmp_path / "a.bin"
+        src1.write_bytes(b"x" * 1000)
+        src2 = tmp_path / "b.bin"
+        src2.write_bytes(b"y" * 1000)
+        dest1 = tmp_path / "lib" / "a.bin"
+        dest2 = tmp_path / "lib" / "b.bin"
 
-        chunk_count = 0
+        files_started: list[int] = []
 
-        def cancel_after_one_chunk() -> bool:
-            return chunk_count > 0
+        def on_start(i: int, t: int, s: Path, d: Path) -> None:
+            files_started.append(i)
 
-        def count_progress(copied: int, total: int) -> None:
-            nonlocal chunk_count
-            chunk_count += 1
+        # Cancel after first file starts -- second file never begins
+        results = process_staged(
+            [(src1, dest1), (src2, dest2)],
+            "copy",
+            on_file_start=on_start,
+            cancelled=lambda: len(files_started) >= 1,
+            verify=False,
+        )
 
-        with pytest.raises(OperationCancelledError):
-            process_file(
-                src,
-                dest,
-                "copy",
-                verify=False,
-                progress_callback=count_progress,
-                cancelled=cancel_after_one_chunk,
-            )
-
-        assert not dest.exists()
-        assert src.exists()
+        assert len(results) == 1  # first file completed, second cancelled
+        assert dest1.exists()
+        assert not dest2.exists()
 
     def test_cancel_passes_through_process_staged(self, tmp_path: Path) -> None:
         src = tmp_path / "big.bin"

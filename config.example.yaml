@@ -29,10 +29,27 @@ library:
   # copy + delete for cross-device moves.
   # operation: copy
 
-  # SHA-256 verification for copy/move. When true, copies are checksummed and
-  # moves are copy-verify-delete. When false, copies skip hashing (faster on
-  # network shares). Both modes support progress reporting and cancellation.
-  # Rename-based moves are always used when possible regardless of this setting.
+  # SHA-256 verification for copy/move.
+  #
+  # true  (default): Chunked copy with SHA-256 hashing.  For moves, the
+  #   destination is re-read and hash-compared before the source is deleted.
+  #   Exact byte-level progress.  Cancellation takes effect between 1 MB
+  #   chunks.
+  #
+  # false: Uses shutil.copy2 which can leverage kernel-level optimisations
+  #   (copy_file_range, sendfile).  Approximate progress (polled from
+  #   destination file size).  Cancellation takes effect after the current
+  #   file finishes.
+  #
+  # Moves on the same filesystem always use rename (instant, no copy).
+  #
+  # When to use --no-verify:
+  #   - Source and destination on the same NFS/SMB share: copy_file_range
+  #     can do a server-side copy (data never leaves the server).
+  #   - Cross-share moves of large files: skips the destination re-read
+  #     that verify requires (avoids reading the file a second time over
+  #     the network).
+  #   - You trust the transport layer (SMB/NFS have their own checksums).
   # verify: true
 
 # ---------------------------------------------------------------------------
