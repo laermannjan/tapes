@@ -679,6 +679,72 @@ class TestRefreshQueryIntegration:
                 assert len(tmdb) >= 1
 
 
+@pytest.mark.skipif(not HAS_PILOT, reason="textual pilot not available")
+class TestMultiDetailAcceptTriggersEpisodeQuery:
+    """Accepting a show match in multi-detail view must trigger episode queries
+    for ALL files, not just the cursor node."""
+
+    @pytest.mark.asyncio()
+    async def test_accept_match_refreshes_all_files(self, mock_tmdb) -> None:
+        """Select 3 episode files, open multi-detail, accept show match.
+        All 3 files should get episode data from the refresh, not just the last."""
+        from tapes.ui.tree_app import TreeApp
+
+        # 3 episode files with show-level TMDB sources but no tmdb_id in result.
+        # Simulates: auto-pipeline found Breaking Bad but didn't auto-accept.
+        show_source = Source(
+            name="TMDB #1",
+            fields={"tmdb_id": 1396, "title": "Breaking Bad", "year": 2008, "media_type": "episode"},
+            confidence=0.7,
+        )
+        node1 = FileNode(
+            path=Path("/media/Breaking.Bad.S01E01.mkv"),
+            result={"title": "Breaking Bad", "season": 1, "episode": 1, "media_type": "episode"},
+            sources=[Source(name=show_source.name, fields=dict(show_source.fields), confidence=show_source.confidence)],
+        )
+        node2 = FileNode(
+            path=Path("/media/Breaking.Bad.S01E02.mkv"),
+            result={"title": "Breaking Bad", "season": 1, "episode": 2, "media_type": "episode"},
+            sources=[Source(name=show_source.name, fields=dict(show_source.fields), confidence=show_source.confidence)],
+        )
+        node3 = FileNode(
+            path=Path("/media/Breaking.Bad.S01E03.mkv"),
+            result={"title": "Breaking Bad", "season": 1, "episode": 3, "media_type": "episode"},
+            sources=[Source(name=show_source.name, fields=dict(show_source.fields), confidence=show_source.confidence)],
+        )
+        root = FolderNode(name="root", children=[node1, node2, node3])
+        model = TreeModel(root=root)
+        config_obj = _make_config(TOKEN)
+        tv_tmpl = "{title} ({year})/Season {season:02d}/{title} - S{season:02d}E{episode:02d} - {episode_title}.{ext}"
+        app = TreeApp(
+            model=model,
+            movie_template="{title} ({year}).{ext}",
+            tv_template=tv_tmpl,
+            config=config_obj,
+        )
+
+        async with app.run_test() as pilot:
+            # Select all 3 files: start range, move down twice
+            await pilot.press("v")
+            await pilot.press("j")
+            await pilot.press("j")
+            # Open multi-detail view
+            await pilot.press("enter")
+            assert app.mode == AppMode.DETAIL
+            # Accept the match (focus_column defaults to "match")
+            # This writes tmdb_id/title/year/media_type to all 3 nodes
+            await pilot.press("enter")
+            # Wait for TMDB refresh workers to complete
+            await app.workers.wait_for_complete()
+            # ALL nodes should have episode_title (from episode query)
+            for node in [node1, node2, node3]:
+                assert node.result.get("tmdb_id") == 1396, f"{node.path}: missing tmdb_id"
+                assert node.result.get("episode_title") is not None, (
+                    f"{node.path}: missing episode_title -- episode query didn't run"
+                )
+                assert node.staged is True, f"{node.path}: not staged after episode accept"
+
+
 class TestTmdbCache:
     def test_exception_does_not_deadlock(self) -> None:
         """If fetch_fn raises, waiting threads should not hang."""

@@ -482,6 +482,13 @@ class TreeApp(App):
         from tapes.ui.tree_render import can_fill_template
 
         dv = self.query_one(DetailView)
+        # Capture nodes and whether fields will change BEFORE switching modes.
+        # After _show_tree(), the FieldsChanged message would trigger
+        # action_refresh_query in TREE mode, which only collects the cursor
+        # node instead of all files from the detail view.
+        detail_nodes = list(dv.file_nodes)
+        needs_refresh = dv.focus_column == "match"
+
         dv.accept_focused_column()
 
         mt, tt = self.movie_template, self.tv_template
@@ -492,6 +499,18 @@ class TreeApp(App):
                     node.staged = True
         self._detail_snapshot = None
         self._show_tree()
+
+        # Trigger TMDB refresh for all detail nodes when fields changed.
+        # This replaces the stale FieldsChanged -> action_refresh_query path
+        # which would only refresh the cursor node after the mode switch.
+        token = self.config.metadata.tmdb_token
+        if needs_refresh and token and detail_nodes and not self._tmdb_querying:
+            self._tmdb_querying = True
+            self._update_footer()
+            self.run_worker(
+                self._run_refresh_worker(detail_nodes, token),  # ty: ignore[invalid-argument-type]  # Textual WorkType stubs
+                thread=True,
+            )
 
     def action_range_select(self) -> None:
         if self._mode != AppMode.TREE:
