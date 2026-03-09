@@ -84,6 +84,12 @@ def compute_similarity(query: dict, result: dict) -> float:
 
     title_score = _string_similarity(str(q_title), str(r_title))
 
+    # Also score against original_title if present, take the max
+    r_original = result.get("original_title")
+    if r_original and r_original != r_title:
+        original_score = _string_similarity(str(q_title), str(r_original))
+        title_score = max(title_score, original_score)
+
     # Year scoring -- missing year scores 0.0 (penalized)
     year_score = 0.0
     q_year = query.get(YEAR)

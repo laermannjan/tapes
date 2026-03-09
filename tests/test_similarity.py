@@ -252,6 +252,45 @@ class TestComputeEpisodeSimilarity:
         assert with_title - without_title == pytest.approx(0.10)
 
 
+class TestOriginalTitleScoring:
+    def test_scores_against_original_title(self) -> None:
+        """When localized title differs, scoring uses original_title."""
+        query = {"title": "The Matrix", "year": 1999}
+        result = {"title": "Matrix", "original_title": "The Matrix", "year": 1999}
+        score = compute_similarity(query, result)
+        assert score > 0.8
+
+    def test_scores_against_localized_title_when_better(self) -> None:
+        """When filename is in the target language, localized title scores better."""
+        query = {"title": "Die Matrix", "year": 1999}
+        result = {"title": "Die Matrix", "original_title": "The Matrix", "year": 1999}
+        score = compute_similarity(query, result)
+        assert score > 0.8
+
+    def test_takes_max_of_both(self) -> None:
+        """Score is max of original and localized."""
+        query = {"title": "The Matrix", "year": 1999}
+        result_same = {"title": "The Matrix", "year": 1999}
+        result_translated = {"title": "Matrix", "original_title": "The Matrix", "year": 1999}
+        score_same = compute_similarity(query, result_same)
+        score_translated = compute_similarity(query, result_translated)
+        assert abs(score_same - score_translated) < 0.1
+
+    def test_no_original_title_uses_title_only(self) -> None:
+        """When no original_title, behaves as before."""
+        query = {"title": "Inception", "year": 2010}
+        result = {"title": "Inception", "year": 2010}
+        score = compute_similarity(query, result)
+        assert score > 0.9
+
+    def test_original_title_same_as_title_no_double_scoring(self) -> None:
+        """When original_title == title, no extra scoring happens."""
+        query = {"title": "Dune", "year": 2021}
+        result = {"title": "Dune", "original_title": "Dune", "year": 2021}
+        score = compute_similarity(query, result)
+        assert score > 0.9
+
+
 class TestShouldAutoAccept:
     """Two-tier auto-accept: high similarity OR clear winner."""
 
