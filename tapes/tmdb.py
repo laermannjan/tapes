@@ -90,6 +90,7 @@ def search_multi(
     token: str,
     year: int | None = None,
     *,
+    language: str = "",
     client: httpx.Client | None = None,
     max_results: int = MAX_TMDB_RESULTS,
     max_retries: int = 3,
@@ -107,6 +108,8 @@ def search_multi(
     params: dict = {"query": query}
     if year is not None:
         params["year"] = year
+    if language:
+        params["language"] = language
 
     try:
         resp = _request("GET", "/search/multi", token, client=client, max_retries=max_retries, params=params)
@@ -123,10 +126,12 @@ def search_multi(
             title = item.get("title", "")
             release_date = item.get("release_date", "") or ""
             yr = int(release_date[:4]) if len(release_date) >= 4 else None
+            original_title = item.get("original_title", title)
             results.append(
                 {
                     TMDB_ID: item["id"],
                     TITLE: title,
+                    "original_title": original_title,
                     YEAR: yr,
                     MEDIA_TYPE: MEDIA_TYPE_MOVIE,
                 }
@@ -135,10 +140,12 @@ def search_multi(
             title = item.get("name", "")
             first_air = item.get("first_air_date", "") or ""
             yr = int(first_air[:4]) if len(first_air) >= 4 else None
+            original_title = item.get("original_name", title)
             results.append(
                 {
                     TMDB_ID: item["id"],
                     TITLE: title,
+                    "original_title": original_title,
                     YEAR: yr,
                     MEDIA_TYPE: MEDIA_TYPE_EPISODE,
                 }
@@ -155,6 +162,7 @@ def get_show(
     tmdb_id: int,
     token: str,
     *,
+    language: str = "",
     client: httpx.Client | None = None,
     max_retries: int = 3,
 ) -> dict:
@@ -162,8 +170,12 @@ def get_show(
     if not token:
         return {}
 
+    params: dict = {}
+    if language:
+        params["language"] = language
+
     try:
-        resp = _request("GET", f"/tv/{tmdb_id}", token, client=client, max_retries=max_retries)
+        resp = _request("GET", f"/tv/{tmdb_id}", token, client=client, max_retries=max_retries, params=params)
     except httpx.HTTPError as exc:
         logger.warning("TMDB get_show failed: %s", exc)
         return {}
@@ -188,6 +200,7 @@ def get_season_episodes(
     show_title: str = "",
     show_year: int | None = None,
     *,
+    language: str = "",
     client: httpx.Client | None = None,
     max_retries: int = 3,
 ) -> list[dict]:
@@ -199,8 +212,14 @@ def get_season_episodes(
     if not token:
         return []
 
+    params: dict = {}
+    if language:
+        params["language"] = language
+
     try:
-        resp = _request("GET", f"/tv/{show_id}/season/{season_number}", token, client=client, max_retries=max_retries)
+        resp = _request(
+            "GET", f"/tv/{show_id}/season/{season_number}", token, client=client, max_retries=max_retries, params=params
+        )
     except httpx.HTTPError as exc:
         logger.warning("TMDB get_season_episodes failed: %s", exc)
         return []

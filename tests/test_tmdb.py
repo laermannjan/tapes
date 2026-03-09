@@ -40,6 +40,7 @@ class TestSearchMulti:
         assert results[0] == {
             "tmdb_id": 438631,
             "title": "Dune",
+            "original_title": "Dune",
             "year": 2021,
             "media_type": "movie",
         }
@@ -66,6 +67,7 @@ class TestSearchMulti:
         assert results[0] == {
             "tmdb_id": 1396,
             "title": "Breaking Bad",
+            "original_title": "Breaking Bad",
             "year": 2008,
             "media_type": "episode",
         }
