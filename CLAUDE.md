@@ -50,6 +50,15 @@ so this hook config lives only in the sandbox. If missing, create
 
 ---
 
+## Pipeline
+
+The intended behavior of the TMDB identification pipeline (search,
+score, auto-accept, auto-stage) is documented in
+`docs/pipeline-model.md`. That file is the authoritative reference.
+Audit code against that model, not the other way around.
+
+---
+
 ## Architecture
 
 ```
