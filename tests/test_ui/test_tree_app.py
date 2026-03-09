@@ -1061,7 +1061,7 @@ class TestVisualIntegration:
     async def test_launch_tree_view_visible_with_border(self) -> None:
         """Launch the app and verify TreeView, DetailView, and BottomBar are composed."""
         from tapes.ui.bottom_bar import BottomBar
-        from tapes.ui.detail_view import DetailView
+        from tapes.ui.metadata_view import DetailView
         from tapes.ui.tree_app import TreeApp
 
         model = _expanded_model()
@@ -1177,7 +1177,7 @@ class TestDetailConfirmDiscard:
     @pytest.mark.asyncio()
     async def test_esc_during_edit_cancels_edit_not_detail(self) -> None:
         """Esc while editing cancels edit, doesn't discard detail changes."""
-        from tapes.ui.detail_view import DetailView
+        from tapes.ui.metadata_view import DetailView
         from tapes.ui.tree_app import TreeApp
 
         node = FileNode(

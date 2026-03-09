@@ -11,7 +11,7 @@ services:
       # TAPES_LIBRARY__OPERATION: copy
       # TAPES_DRY_RUN: "true"
     volumes:
-      - /path/to/downloads:/import:ro
-      - /path/to/library:/library
+      - /Volumes/Downloads:/import:ro
+      - /Users/jan/dev/tapes/test_media:/library
       # Optional: mount config file
       # - ./config.yaml:/config/config.yaml

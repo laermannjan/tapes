@@ -14,7 +14,7 @@ from textual.widget import Widget
 
 from tapes.fields import INT_FIELDS
 from tapes.tree_model import FileNode, compute_shared_fields
-from tapes.ui.detail_render import (
+from tapes.ui.metadata_render import (
     diff_style,
     display_val,
     get_display_fields,

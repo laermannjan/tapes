@@ -84,7 +84,7 @@ def run_guessit_pass(model: TreeModel) -> None:
     This is fast (local-only) and should be called synchronously before
     rendering the UI.
     """
-    from tapes.metadata import extract_metadata
+    from tapes.extract import extract_metadata
 
     for node in model.all_files():
         _populate_node_guessit(node, extract_metadata)
@@ -337,7 +337,7 @@ def extract_guessit_fields(filename: str) -> dict[str, Any]:
 
     Returns the same field dict that run_guessit_pass would populate.
     """
-    from tapes.metadata import extract_metadata
+    from tapes.extract import extract_metadata
 
     meta = extract_metadata(filename)
     fields: dict[str, Any] = {}

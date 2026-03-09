@@ -24,8 +24,8 @@ from tapes.tree_model import (
 )
 from tapes.ui.bottom_bar import BottomBar
 from tapes.ui.commit_view import CommitView
-from tapes.ui.detail_view import DetailView
-from tapes.ui.help_overlay import HELP_HEIGHT, HelpView
+from tapes.ui.help_view import HELP_HEIGHT, HelpView
+from tapes.ui.metadata_view import DetailView
 from tapes.ui.tree_view import TreeView
 
 logger = logging.getLogger(__name__)

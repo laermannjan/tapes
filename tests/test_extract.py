@@ -1,8 +1,8 @@
-"""Tests for tapes.metadata -- guessit wrapper and FileMetadata extraction."""
+"""Tests for tapes.extract -- guessit wrapper and FileMetadata extraction."""
 
 from __future__ import annotations
 
-from tapes.metadata import extract_metadata
+from tapes.extract import extract_metadata
 
 
 class TestMovieDetection:

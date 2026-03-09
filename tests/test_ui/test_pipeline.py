@@ -1077,7 +1077,7 @@ class TestApplySourceAllClear:
 
     def test_preserves_fields_not_in_source(self) -> None:
         """Accepting a show-level source should not wipe season/episode."""
-        from tapes.ui.detail_view import DetailView
+        from tapes.ui.metadata_view import DetailView
 
         node = FileNode(
             path=Path("/media/Breaking.Bad.S01E01.mkv"),
@@ -1110,7 +1110,7 @@ class TestApplySourceAllClear:
 
     def test_preserves_per_file_fields_multi_node(self) -> None:
         """Multi-node: each node keeps its own season/episode."""
-        from tapes.ui.detail_view import DetailView
+        from tapes.ui.metadata_view import DetailView
 
         node1 = FileNode(
             path=Path("/media/show.s01e01.mkv"),
@@ -1145,7 +1145,7 @@ class TestApplySourceAllClear:
 
     def test_sets_fields_present_in_source(self) -> None:
         """Fields present in the source should be set on all nodes."""
-        from tapes.ui.detail_view import DetailView
+        from tapes.ui.metadata_view import DetailView
 
         node = FileNode(
             path=Path("/media/test.mkv"),

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tapes.ui.help_overlay import HelpView, _build_help_content
+from tapes.ui.help_view import HelpView, _build_help_content
 from tapes.ui.tree_app import TreeApp
 from tests.test_ui.conftest import render_plain
 

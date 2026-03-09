@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from tapes.tree_model import FileNode, FolderNode, Source, TreeModel
-from tapes.ui.detail_render import get_display_fields
-from tapes.ui.detail_view import DetailView
+from tapes.ui.metadata_render import get_display_fields
+from tapes.ui.metadata_view import DetailView
 from tapes.ui.tree_view import TreeView
 from tests.test_ui.conftest import render_plain
 

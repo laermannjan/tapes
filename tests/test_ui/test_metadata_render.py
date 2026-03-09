@@ -1,8 +1,8 @@
-"""Tests for diff_style, confidence_style, and compact preview in detail_render."""
+"""Tests for diff_style, confidence_style, and compact preview in metadata_render."""
 
 from __future__ import annotations
 
-from tapes.ui.detail_render import (
+from tapes.ui.metadata_render import (
     confidence_style,
     diff_style,
 )

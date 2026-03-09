@@ -1,4 +1,4 @@
-"""Tests for detail_render and detail_view modules."""
+"""Tests for metadata_render and metadata_view modules."""
 
 from __future__ import annotations
 
@@ -7,12 +7,12 @@ from pathlib import Path
 import pytest
 
 from tapes.tree_model import FileNode, Source
-from tapes.ui.detail_render import (
+from tapes.ui.metadata_render import (
     display_val,
     get_display_fields,
     is_multi_value,
 )
-from tapes.ui.detail_view import DetailView
+from tapes.ui.metadata_view import DetailView
 from tapes.ui.tree_app import AppMode
 
 TEMPLATE = "{title} ({year})/S{season:02d}E{episode:02d}.{ext}"
