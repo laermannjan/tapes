@@ -30,9 +30,9 @@ library:
   # operation: copy
 
   # SHA-256 verification for copy/move. When true, copies are checksummed and
-  # moves are copy-verify-delete. When false, uses fast OS-level copy
-  # (shutil.copy2) with no progress reporting. Rename-based moves are always
-  # used when possible regardless of this setting.
+  # moves are copy-verify-delete. When false, copies skip hashing (faster on
+  # network shares). Both modes support progress reporting and cancellation.
+  # Rename-based moves are always used when possible regardless of this setting.
   # verify: true
 
 # ---------------------------------------------------------------------------

@@ -117,15 +117,16 @@ class TestNoVerifyCopy:
         assert dest.read_text() == "video content"
         assert "Copied" in result
 
-    def test_copy_without_verify_no_progress(self, tmp_path: Path) -> None:
-        """Progress callback is not fired when verify=False."""
+    def test_copy_without_verify_still_reports_progress(self, tmp_path: Path) -> None:
+        """Progress callback fires even when verify=False (chunked copy)."""
         src = tmp_path / "data.bin"
         src.write_bytes(b"x" * 10000)
         dest = tmp_path / "out" / "data.bin"
         calls: list[tuple[int, int]] = []
         process_file(src, dest, "copy", verify=False, progress_callback=lambda c, t: calls.append((c, t)))
         assert dest.exists()
-        assert len(calls) == 0
+        assert len(calls) > 0
+        assert calls[-1][0] == calls[-1][1]  # last call: copied == total
 
 
 class TestNoVerifyMove:
@@ -351,6 +352,34 @@ class TestCancellation:
         # Partial file should be cleaned up
         assert not dest.exists()
         assert src.exists()  # source untouched
+
+    def test_cancel_mid_copy_no_verify(self, tmp_path: Path) -> None:
+        """Cancellation works even with verify=False."""
+        src = tmp_path / "big.bin"
+        src.write_bytes(b"x" * (2 * 1024 * 1024))
+        dest = tmp_path / "lib" / "big.bin"
+
+        chunk_count = 0
+
+        def cancel_after_one_chunk() -> bool:
+            return chunk_count > 0
+
+        def count_progress(copied: int, total: int) -> None:
+            nonlocal chunk_count
+            chunk_count += 1
+
+        with pytest.raises(OperationCancelledError):
+            process_file(
+                src,
+                dest,
+                "copy",
+                verify=False,
+                progress_callback=count_progress,
+                cancelled=cancel_after_one_chunk,
+            )
+
+        assert not dest.exists()
+        assert src.exists()
 
     def test_cancel_passes_through_process_staged(self, tmp_path: Path) -> None:
         src = tmp_path / "big.bin"
