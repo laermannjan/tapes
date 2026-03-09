@@ -1090,8 +1090,8 @@ class TestEpisodeQueryAllSeasons:
             assert mock_eps.call_count == 5, f"Expected 5 season queries (one per season), got {mock_eps.call_count}"
 
 
-class TestApplySourceAllClear:
-    """Tests for DetailView.apply_source_all_clear preserving per-file fields."""
+class TestAcceptCurrentCandidate:
+    """Tests for DetailView.accept_current_candidate preserving per-file fields."""
 
     def test_preserves_fields_not_in_source(self) -> None:
         """Accepting a show-level source should not wipe season/episode."""
@@ -1117,7 +1117,7 @@ class TestApplySourceAllClear:
         dv._size = (120, 40)  # fake size for field computation
         dv.fields = ["title", "year", "season", "episode", "media_type", "tmdb_id"]
         dv.candidate_index = 0
-        dv.apply_source_all_clear()
+        dv.accept_current_candidate()
         # Show-level fields applied
         assert node.metadata["tmdb_id"] == 1396
         assert node.metadata["title"] == "Breaking Bad"
@@ -1151,7 +1151,7 @@ class TestApplySourceAllClear:
         dv.file_nodes = [node1, node2]
         dv.fields = ["title", "year", "season", "episode", "media_type", "tmdb_id"]
         dv.candidate_index = 0
-        dv.apply_source_all_clear()
+        dv.accept_current_candidate()
         # Show-level fields applied to both
         assert node1.metadata["tmdb_id"] == 100
         assert node2.metadata["tmdb_id"] == 100
@@ -1180,6 +1180,6 @@ class TestApplySourceAllClear:
         dv._size = (120, 40)
         dv.fields = ["title", "year"]
         dv.candidate_index = 0
-        dv.apply_source_all_clear()
+        dv.accept_current_candidate()
         assert node.metadata["title"] == "New Title"
         assert node.metadata["year"] == 2020

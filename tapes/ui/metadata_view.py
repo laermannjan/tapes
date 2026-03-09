@@ -346,7 +346,7 @@ class DetailView(Widget):
         new_row = self.cursor_row + row_delta
         self.cursor_row = max(0, min(max_row, new_row))
 
-    def cycle_source(self, delta: int) -> None:
+    def cycle_candidate(self, delta: int) -> None:
         """Cycle through candidate tabs."""
         if self.editing:
             return
@@ -356,8 +356,8 @@ class DetailView(Widget):
         self.candidate_index = (self.candidate_index + delta) % len(candidates)
         self.focus_column = "match"
 
-    def apply_source_all_clear(self) -> None:
-        """Handle ctrl+a: accept all fields from current candidate.
+    def accept_current_candidate(self) -> None:
+        """Accept all fields from the current candidate.
 
         Only sets fields that are present in the candidate. Fields the candidate
         doesn't have are left untouched, preserving per-file metadata like
@@ -392,7 +392,7 @@ class DetailView(Widget):
         self.editing = True
         self.refresh()
 
-    def commit_edit(self) -> None:
+    def apply_edit(self) -> None:
         """Save the edited value to the metadata for all nodes."""
         field_name = self.fields[self.cursor_row]
         val: str | int = self.edit_value
@@ -454,12 +454,12 @@ class DetailView(Widget):
         If result is focused, no changes needed -- metadata is kept as-is.
         """
         if self.focus_column == "match":
-            self.apply_source_all_clear()
+            self.accept_current_candidate()
 
     def on_key(self, event: events.Key) -> None:
         """Handle key events for inline editing."""
         if event.key == "tab" and not self.editing:
-            self.cycle_source(1)
+            self.cycle_candidate(1)
             self.refresh()
             event.prevent_default()
             event.stop()
@@ -469,7 +469,7 @@ class DetailView(Widget):
             return
 
         if event.key == "enter":
-            self.commit_edit()
+            self.apply_edit()
             event.prevent_default()
             event.stop()
         elif event.key == "escape":

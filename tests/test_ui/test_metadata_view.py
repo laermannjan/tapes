@@ -135,29 +135,29 @@ class TestDetailViewCursor:
             view.move_cursor(row_delta=1)
         assert view.cursor_row == 4
 
-    def test_cycle_source_right(self) -> None:
+    def test_cycle_candidate_right(self) -> None:
         view = self._make_view()
-        view.cycle_source(1)
+        view.cycle_candidate(1)
         assert view.candidate_index == 1
 
-    def test_cycle_source_wraps_at_zero(self) -> None:
+    def test_cycle_candidate_wraps_at_zero(self) -> None:
         view = self._make_view()
-        view.cycle_source(-1)
+        view.cycle_candidate(-1)
         assert view.candidate_index == 1  # wraps to last
 
-    def test_cycle_source_wraps_at_max(self) -> None:
+    def test_cycle_candidate_wraps_at_max(self) -> None:
         view = self._make_view()
         # 2 sources => wraps around
-        view.cycle_source(1)
+        view.cycle_candidate(1)
         assert view.candidate_index == 1
-        view.cycle_source(1)
+        view.cycle_candidate(1)
         assert view.candidate_index == 0  # wraps to first
 
-    def test_cycle_source_noop_no_sources(self) -> None:
+    def test_cycle_candidate_noop_no_sources(self) -> None:
         node = FileNode(path=Path("/test.mkv"), metadata={}, candidates=[])
         view = DetailView(node, TEMPLATE, TEMPLATE)
         view.fields = get_display_fields(TEMPLATE)
-        view.cycle_source(1)
+        view.cycle_candidate(1)
         assert view.candidate_index == 0
 
     def test_move_cursor_noop_when_editing(self) -> None:
@@ -166,10 +166,10 @@ class TestDetailViewCursor:
         view.move_cursor(row_delta=1)
         assert view.cursor_row == 0
 
-    def test_cycle_source_noop_when_editing(self) -> None:
+    def test_cycle_candidate_noop_when_editing(self) -> None:
         view = self._make_view()
         view.editing = True
-        view.cycle_source(1)
+        view.cycle_candidate(1)
         assert view.candidate_index == 0
 
 
@@ -198,47 +198,47 @@ class TestDetailViewEditing:
         view.start_edit()
         assert view.edit_value == ""
 
-    def test_commit_edit_updates_result(self) -> None:
+    def test_apply_edit_updates_result(self) -> None:
         view = self._make_view()
         view.cursor_row = 1  # title (tmdb_id is at 0)
         view.start_edit()
         view.edit_value = "Better Call Saul"
-        view.commit_edit()
+        view.apply_edit()
         assert view.node.metadata["title"] == "Better Call Saul"
         assert view.editing is False
 
-    def test_commit_edit_int_coercion_year(self) -> None:
+    def test_apply_edit_int_coercion_year(self) -> None:
         view = self._make_view()
         view.cursor_row = 2  # year (tmdb_id is at 0)
         view.start_edit()
         view.edit_value = "2015"
-        view.commit_edit()
+        view.apply_edit()
         assert view.node.metadata["year"] == 2015
         assert isinstance(view.node.metadata["year"], int)
 
-    def test_commit_edit_int_coercion_season(self) -> None:
+    def test_apply_edit_int_coercion_season(self) -> None:
         view = self._make_view()
         view.cursor_row = 3  # season (tmdb_id is at 0)
         view.start_edit()
         view.edit_value = "3"
-        view.commit_edit()
+        view.apply_edit()
         assert view.node.metadata["season"] == 3
         assert isinstance(view.node.metadata["season"], int)
 
-    def test_commit_edit_int_coercion_episode(self) -> None:
+    def test_apply_edit_int_coercion_episode(self) -> None:
         view = self._make_view()
         view.cursor_row = 4  # episode (tmdb_id is at 0)
         view.start_edit()
         view.edit_value = "10"
-        view.commit_edit()
+        view.apply_edit()
         assert view.node.metadata["episode"] == 10
 
-    def test_commit_edit_invalid_int_stays_string(self) -> None:
+    def test_apply_edit_invalid_int_stays_string(self) -> None:
         view = self._make_view()
         view.cursor_row = 2  # year (tmdb_id is at 0)
         view.start_edit()
         view.edit_value = "not_a_number"
-        view.commit_edit()
+        view.apply_edit()
         assert view.node.metadata["year"] == "not_a_number"
 
     def test_cancel_edit_discards_changes(self) -> None:
@@ -281,10 +281,10 @@ class TestDetailViewSetNode:
         assert len(view.fields) == 5  # tmdb_id, title, year, season, episode
 
 
-# --- DetailView.apply_source_all_clear ---
+# --- DetailView.accept_current_candidate ---
 
 
-class TestDetailViewApplyAllClear:
+class TestAcceptCurrentCandidate:
     def _make_view(self) -> DetailView:
         node = _make_node()
         view = DetailView(node, TEMPLATE, TEMPLATE)
@@ -301,7 +301,7 @@ class TestDetailViewApplyAllClear:
             "episode": 99,
         }
         view.candidate_index = 0  # filename source
-        view.apply_source_all_clear()
+        view.accept_current_candidate()
         assert view.node.metadata["title"] == "Breaking Bad"
         assert view.node.metadata["season"] == 1
         assert view.node.metadata["episode"] == 1
@@ -313,7 +313,7 @@ class TestDetailViewApplyAllClear:
         view = DetailView(node, TEMPLATE, TEMPLATE)
         view.fields = get_display_fields(TEMPLATE)
         original = dict(view.node.metadata)
-        view.apply_source_all_clear()
+        view.accept_current_candidate()
         assert view.node.metadata == original
 
 
@@ -388,7 +388,7 @@ class TestMultiFileDetail:
         view.cursor_row = 1  # title (tmdb_id is at 0)
         view.start_edit()
         view.edit_value = "Better Call Saul"
-        view.commit_edit()
+        view.apply_edit()
         assert node1.metadata["title"] == "Better Call Saul"
         assert node2.metadata["title"] == "Better Call Saul"
 
@@ -399,7 +399,7 @@ class TestMultiFileDetail:
         node2.metadata = {}
         # Apply all from TMDB source via shift-enter
         view.candidate_index = 0
-        view.apply_source_all_clear()
+        view.accept_current_candidate()
         assert node1.metadata["title"] == "Breaking Bad"
         assert node2.metadata["title"] == "Breaking Bad"
         assert node1.metadata["year"] == 2008
@@ -429,7 +429,7 @@ class TestMultiFileDetail:
         node2.metadata = {"title": "Old", "year": 9999, "season": 99, "episode": 99}
         # TMDB source only has title and year
         view.candidate_index = 0
-        view.apply_source_all_clear()
+        view.accept_current_candidate()
         assert node1.metadata["title"] == "Breaking Bad"
         assert node2.metadata["title"] == "Breaking Bad"
         assert node1.metadata["year"] == 2008
@@ -647,10 +647,10 @@ class TestColumnFocus:
         view.toggle_column_focus()
         assert view.focus_column == "match"
 
-    def test_cycle_source_sets_focus_to_match(self) -> None:
+    def test_cycle_candidate_sets_focus_to_match(self) -> None:
         view = self._make_view()
         view.focus_column = "result"
-        view.cycle_source(1)
+        view.cycle_candidate(1)
         assert view.focus_column == "match"
 
     def test_set_node_resets_focus(self) -> None:
@@ -727,9 +727,9 @@ class TestTabBarMultipleSources:
     def test_tab_cycle_changes_active_tab(self) -> None:
         view = self._make_view_with_sources(3)
         assert view.candidate_index == 0
-        view.cycle_source(1)
+        view.cycle_candidate(1)
         assert view.candidate_index == 1
-        view.cycle_source(1)
+        view.cycle_candidate(1)
         assert view.candidate_index == 2
 
 

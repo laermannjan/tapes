@@ -431,7 +431,7 @@ class TreeApp(App):
         if self._mode == AppState.METADATA:
             dv = self.query_one(DetailView)
             if dv.editing:
-                dv.commit_edit()
+                dv.apply_edit()
             else:
                 self._accept_metadata_and_return()
             return
@@ -544,7 +544,7 @@ class TreeApp(App):
         """Tab key: open commit preview from tree, cycle sources in detail."""
         if self._mode == AppState.METADATA:
             dv = self.query_one(DetailView)
-            dv.cycle_source(1)
+            dv.cycle_candidate(1)
             dv.refresh()
             return
         if self._mode != AppState.TREE:
