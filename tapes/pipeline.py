@@ -620,6 +620,7 @@ def _query_episodes(
             for field, val in _f.items():
                 if val is not None:
                     _n.result[field] = val
+            _n.staged = True
             _n.sources.extend(_top)
 
         _post(_apply_episode)

@@ -910,6 +910,24 @@ class TestEpisodeConfidenceGate:
         )
         refresh_tmdb_source(node, token=TOKEN)
         assert node.result.get("episode_title") == "Pilot"
+        assert node.staged is True
+
+    def test_low_confidence_episode_not_staged(self, mock_tmdb) -> None:
+        """When episode confidence is low, node should not be staged."""
+        node = FileNode(
+            path=Path("/media/Breaking.Bad.S03E05.mkv"),
+            result={
+                "title": "Breaking Bad",
+                "year": 2008,
+                "tmdb_id": 1396,
+                "media_type": "episode",
+                "season": 3,
+                "episode": 5,
+            },
+            sources=[],
+        )
+        refresh_tmdb_source(node, token=TOKEN)
+        assert node.staged is False
 
 
 class TestApplySourceAllClear:
