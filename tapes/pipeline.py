@@ -547,7 +547,7 @@ def _query_tmdb_for_node(  # noqa: PLR0911
 
         _post(_apply_best)
 
-        # Stage 2: if TV show, fetch episodes
+        # Stage 2: if TV show, fetch episodes (which add their own sources)
         if best.fields.get(MEDIA_TYPE) == MEDIA_TYPE_EPISODE:
             _query_episodes(
                 node,
@@ -563,6 +563,15 @@ def _query_tmdb_for_node(  # noqa: PLR0911
                 can_stage=can_stage,
             )
             return
+
+        # For movies: add sources so user can review alternatives in the detail view
+        _sources_auto = list(tmdb_sources)
+
+        def _extend_auto(_n: FileNode = node, _s: list[Source] = _sources_auto) -> None:
+            _n.sources.extend(_s)
+
+        _post(_extend_auto)
+        return
 
     # Add show-level TMDB sources (not episode sources yet)
     _sources_copy = list(tmdb_sources)
