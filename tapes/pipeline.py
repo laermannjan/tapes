@@ -380,7 +380,7 @@ def _populate_node_guessit(node: FileNode, extract_metadata_fn: Callable[[str], 
     node.sources = []
 
 
-def _query_tmdb_for_node(  # noqa: PLR0911
+def _query_tmdb_for_node(
     node: FileNode,
     token: str,
     threshold: float,
@@ -535,6 +535,14 @@ def _query_tmdb_for_node(  # noqa: PLR0911
 
         _post(_apply_best)
 
+        # Always add show/movie-level sources (invariant #1)
+        _sources_auto = list(tmdb_sources)
+
+        def _extend_auto(_n: FileNode = node, _s: list[Source] = _sources_auto) -> None:
+            _n.sources.extend(_s)
+
+        _post(_extend_auto)
+
         # Stage 2: if TV show, fetch episodes (which add their own sources)
         if best.fields.get(MEDIA_TYPE) == MEDIA_TYPE_EPISODE:
             _query_episodes(
@@ -550,15 +558,7 @@ def _query_tmdb_for_node(  # noqa: PLR0911
                 language=language,
                 can_stage=can_stage,
             )
-            return
 
-        # For movies: add sources so user can review alternatives in the detail view
-        _sources_auto = list(tmdb_sources)
-
-        def _extend_auto(_n: FileNode = node, _s: list[Source] = _sources_auto) -> None:
-            _n.sources.extend(_s)
-
-        _post(_extend_auto)
         return
 
     # Add show-level TMDB sources (not episode sources yet)

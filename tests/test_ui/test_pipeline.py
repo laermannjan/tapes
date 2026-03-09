@@ -242,6 +242,20 @@ class TestTwoStageFlow:
         # Best match should have episode data
         assert node.result.get("episode_title") == "Pilot"
 
+    def test_auto_accepted_tv_show_has_show_level_sources(self, mock_tmdb) -> None:
+        """Auto-accepted TV show should have show-level TMDB sources on
+        node.sources, not just episode sources.
+        Invariant #1: sources are always added."""
+        model = _make_model("Breaking.Bad.S01E01.mkv")
+        run_auto_pipeline(model, token=TOKEN, confidence_threshold=0.5)
+        node = model.all_files()[0]
+        # Should have BOTH show-level and episode-level sources
+        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
+        show_sources = [s for s in tmdb_sources if "episode_title" not in s.fields]
+        episode_sources = [s for s in tmdb_sources if "episode_title" in s.fields]
+        assert len(show_sources) >= 1, f"Expected show-level sources, got: {tmdb_sources}"
+        assert len(episode_sources) >= 1, f"Expected episode sources, got: {tmdb_sources}"
+
     def test_tv_show_no_episode_match(self) -> None:
         """TV show match with no matching episode keeps show-level sources.
 
@@ -839,8 +853,12 @@ class TestConfigForwarding:
         run_auto_pipeline(model, token=TOKEN, confidence_threshold=0.5, max_results=1)
         node = model.all_files()[0]
         tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
+        episode_sources = [s for s in tmdb_sources if "episode_title" in s.fields]
+        show_sources = [s for s in tmdb_sources if "episode_title" not in s.fields]
         # Even though 3 episodes are available, only max_results=1 kept
-        assert len(tmdb_sources) == 1
+        assert len(episode_sources) == 1
+        # Show-level sources also limited to max_results=1
+        assert len(show_sources) == 1
 
 
 class TestTmdbIdShortcut:
