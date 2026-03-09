@@ -192,6 +192,7 @@ class TreeApp(App):
     def _run_tmdb_worker(self, token: str) -> object:
         """Return a callable that runs TMDB queries in a background thread."""
         from tapes.pipeline import run_tmdb_pass
+        from tapes.ui.tree_render import can_fill_template
 
         threshold = self.config.metadata.auto_accept_threshold
         max_workers = self.config.advanced.max_workers
@@ -201,6 +202,10 @@ class TreeApp(App):
         margin_threshold = self.config.metadata.margin_accept_threshold
         min_margin = self.config.metadata.min_accept_margin
         language = self.config.metadata.language
+        mt, tt = self.movie_template, self.tv_template
+
+        def _can_stage(node: FileNode, merged: dict) -> bool:
+            return can_fill_template(node, merged, mt, tt)
 
         def worker() -> None:
             def on_progress(done: int, total: int) -> None:
@@ -219,6 +224,7 @@ class TreeApp(App):
                 margin_threshold=margin_threshold,
                 min_margin=min_margin,
                 language=language,
+                can_stage=_can_stage,
             )
             self.call_from_thread(self._on_tmdb_done)
 
@@ -668,6 +674,7 @@ class TreeApp(App):
     def _run_refresh_worker(self, nodes: list[FileNode], token: str) -> object:
         """Return a callable that refreshes TMDB data in a background thread."""
         from tapes.pipeline import refresh_tmdb_batch
+        from tapes.ui.tree_render import can_fill_template
 
         threshold = self.config.metadata.auto_accept_threshold
         max_workers = self.config.advanced.max_workers
@@ -677,6 +684,10 @@ class TreeApp(App):
         margin_threshold = self.config.metadata.margin_accept_threshold
         min_margin = self.config.metadata.min_accept_margin
         language = self.config.metadata.language
+        mt, tt = self.movie_template, self.tv_template
+
+        def _can_stage(node: FileNode, merged: dict) -> bool:
+            return can_fill_template(node, merged, mt, tt)
 
         def worker() -> None:
             def on_progress(done: int, total: int) -> None:
@@ -695,6 +706,7 @@ class TreeApp(App):
                 margin_threshold=margin_threshold,
                 min_margin=min_margin,
                 language=language,
+                can_stage=_can_stage,
             )
             self.call_from_thread(self._on_tmdb_done)
 

@@ -103,6 +103,7 @@ def run_tmdb_pass(
     margin_threshold: float | None = None,
     min_margin: float | None = None,
     language: str = "",
+    can_stage: Callable[[FileNode, dict], bool] | None = None,
 ) -> None:
     """Query TMDB for all files using a thread pool.
 
@@ -158,6 +159,7 @@ def run_tmdb_pass(
                 margin_threshold=margin_threshold,
                 min_margin=min_margin,
                 language=language,
+                can_stage=can_stage,
             )
             with lock:
                 done_count += 1
@@ -181,6 +183,7 @@ def run_auto_pipeline(
     margin_threshold: float | None = None,
     min_margin: float | None = None,
     language: str = "",
+    can_stage: Callable[[FileNode, dict], bool] | None = None,
 ) -> None:
     """Populate sources and auto-accept confident matches (synchronous).
 
@@ -205,6 +208,7 @@ def run_auto_pipeline(
         margin_threshold=margin_threshold,
         min_margin=min_margin,
         language=language,
+        can_stage=can_stage,
     )
 
 
@@ -218,6 +222,7 @@ def refresh_tmdb_source(
     margin_threshold: float | None = None,
     min_margin: float | None = None,
     language: str = "",
+    can_stage: Callable[[FileNode, dict], bool] | None = None,
 ) -> None:
     """Re-query TMDB for a file and update its sources.
 
@@ -247,6 +252,7 @@ def refresh_tmdb_source(
         margin_threshold=margin_threshold,
         min_margin=min_margin,
         language=language,
+        can_stage=can_stage,
     )
 
 
@@ -263,6 +269,7 @@ def refresh_tmdb_batch(
     margin_threshold: float | None = None,
     min_margin: float | None = None,
     language: str = "",
+    can_stage: Callable[[FileNode, dict], bool] | None = None,
 ) -> None:
     """Re-query TMDB for multiple files with shared cache and deduplication.
 
@@ -311,6 +318,7 @@ def refresh_tmdb_batch(
                 margin_threshold=margin_threshold,
                 min_margin=min_margin,
                 language=language,
+                can_stage=can_stage,
             )
 
             with lock:
@@ -372,7 +380,7 @@ def _populate_node_guessit(node: FileNode, extract_metadata_fn: Callable[[str], 
     node.sources = []
 
 
-def _query_tmdb_for_node(
+def _query_tmdb_for_node(  # noqa: PLR0911
     node: FileNode,
     token: str,
     threshold: float,
@@ -384,6 +392,7 @@ def _query_tmdb_for_node(
     margin_threshold: float | None = None,
     min_margin: float | None = None,
     language: str = "",
+    can_stage: Callable[[FileNode, dict], bool] | None = None,
 ) -> None:
     """Two-stage TMDB query for a single node.
 
@@ -435,6 +444,7 @@ def _query_tmdb_for_node(
                 max_results=max_results,
                 max_retries=max_retries,
                 language=language,
+                can_stage=can_stage,
             )
             return
         # Movie already identified -- nothing more to fetch
@@ -505,6 +515,30 @@ def _query_tmdb_for_node(
         # Snapshot fields before dispatching -- the dict may be mutated later
         _best_fields = dict(best.fields)
 
+        # Check if merged result would fill the template
+        _can_stage = can_stage
+        if _can_stage is not None:
+            merged = {**node.result, **{k: v for k, v in _best_fields.items() if v is not None}}
+            if not _can_stage(node, merged):
+                logger.debug("%s: auto-accept skipped, template fields incomplete", node.path.name)
+                # Still apply fields (useful for curation) but don't stage
+                _best_fields_nostage = dict(_best_fields)
+
+                def _apply_nostage(_n: FileNode = node, _f: dict = _best_fields_nostage) -> None:
+                    for field, val in _f.items():
+                        if val is not None:
+                            _n.result[field] = val
+
+                _post(_apply_nostage)
+                # Add sources for manual curation
+                _sources_copy = list(tmdb_sources)
+
+                def _extend(_n: FileNode = node, _s: list[Source] = _sources_copy) -> None:
+                    _n.sources.extend(_s)
+
+                _post(_extend)
+                return
+
         def _apply_best(_n: FileNode = node, _f: dict = _best_fields) -> None:
             for field, val in _f.items():
                 if val is not None:
@@ -526,6 +560,7 @@ def _query_tmdb_for_node(
                 max_results=max_results,
                 max_retries=max_retries,
                 language=language,
+                can_stage=can_stage,
             )
             return
 
@@ -549,6 +584,7 @@ def _query_episodes(
     max_results: int = DEFAULT_MAX_RESULTS,
     max_retries: int = 3,
     language: str = "",
+    can_stage: Callable[[FileNode, dict], bool] | None = None,
 ) -> None:
     """Stage 2: fetch episode data for a TV show match."""
     from tapes import tmdb
@@ -642,11 +678,24 @@ def _query_episodes(
     if should_auto_accept(ep_similarities, threshold=threshold):
         _best_fields = dict(top_sources[0].fields)
 
-        def _apply_episode(_n: FileNode = node, _f: dict = _best_fields, _top: list[Source] = _top_copy) -> None:
+        # Check if merged result would fill the template
+        stage = True
+        if can_stage is not None:
+            merged = {**node.result, **{k: v for k, v in _best_fields.items() if v is not None}}
+            if not can_stage(node, merged):
+                logger.debug("%s: episode auto-accept skipped, template fields incomplete", node.path.name)
+                stage = False
+
+        _stage = stage
+
+        def _apply_episode(
+            _n: FileNode = node, _f: dict = _best_fields, _top: list[Source] = _top_copy, _s: bool = _stage
+        ) -> None:
             for field, val in _f.items():
                 if val is not None:
                     _n.result[field] = val
-            _n.staged = True
+            if _s:
+                _n.staged = True
             _n.sources.extend(_top)
 
         _post(_apply_episode)

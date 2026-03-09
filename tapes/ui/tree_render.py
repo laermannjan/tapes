@@ -118,6 +118,17 @@ def _sanitize_field(value: Any) -> Any:
     return result.strip(". _")
 
 
+def can_fill_template(node: FileNode, merged_result: dict, movie_template: str, tv_template: str) -> bool:
+    """Check if *merged_result* has all fields needed to fill the destination template.
+
+    The ``ext`` field is excluded because it always comes from the filename.
+    Returns ``True`` when every other required field is present and non-None.
+    """
+    template = select_template(node, movie_template, tv_template)
+    needed = template_field_names(template)
+    return all(merged_result.get(f) is not None for f in needed if f != "ext")
+
+
 def compute_dest(node: FileNode, template: str) -> str | None:
     """Compute the destination path for a file node using a template.
 
