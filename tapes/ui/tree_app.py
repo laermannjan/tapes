@@ -60,8 +60,8 @@ _MODAL_MODES = frozenset({AppMode.COMMIT, AppMode.HELP})
 
 class _NodeSnapshot(NamedTuple):
     node: FileNode
-    result: dict
-    sources: list
+    metadata: dict
+    candidates: list
     staged: bool
 
 
@@ -231,7 +231,7 @@ class TreeApp(App):
         """Switch from tree view to detail view for a file node."""
         self._mode = AppMode.DETAIL
         self._detail_snapshot = [
-            _NodeSnapshot(node, copy.deepcopy(node.result), copy.deepcopy(node.sources), node.staged),
+            _NodeSnapshot(node, copy.deepcopy(node.metadata), copy.deepcopy(node.candidates), node.staged),
         ]
         detail = self.query_one(DetailView)
         detail.set_node(node)
@@ -246,7 +246,7 @@ class TreeApp(App):
         """Switch from tree view to detail view for multiple file nodes."""
         self._mode = AppMode.DETAIL
         self._detail_snapshot = [
-            _NodeSnapshot(n, copy.deepcopy(n.result), copy.deepcopy(n.sources), n.staged) for n in nodes
+            _NodeSnapshot(n, copy.deepcopy(n.metadata), copy.deepcopy(n.candidates), n.staged) for n in nodes
         ]
         detail = self.query_one(DetailView)
         detail.set_nodes(nodes)
@@ -314,9 +314,9 @@ class TreeApp(App):
     def _discard_detail(self) -> None:
         """Discard detail view changes and return to tree."""
         if self._detail_snapshot:
-            for node, result, sources, staged in self._detail_snapshot:
-                node.result = result
-                node.sources = sources
+            for node, metadata, candidates, staged in self._detail_snapshot:
+                node.metadata = metadata
+                node.candidates = candidates
                 node.staged = staged
             self._detail_snapshot = None
         self._show_tree()
@@ -386,7 +386,7 @@ class TreeApp(App):
                 for f in file_nodes:
                     if all_staged:
                         f.staged = False
-                    elif can_fill_template(f, f.result, mt, tt):
+                    elif can_fill_template(f, f.metadata, mt, tt):
                         f.staged = True
             tv.clear_range_select()
             tv.refresh()
@@ -399,7 +399,7 @@ class TreeApp(App):
             mt, tt = self.movie_template, self.tv_template
             self.model.toggle_staged_recursive(
                 node,
-                can_stage=lambda n: can_fill_template(n, n.result, mt, tt),
+                can_stage=lambda n: can_fill_template(n, n.metadata, mt, tt),
             )
             tv.refresh()
             self._update_footer()
@@ -410,7 +410,7 @@ class TreeApp(App):
         pairs: list[tuple[FileNode, Path]] = []
         for node in staged:
             tmpl = select_template(node, self.movie_template, self.tv_template)
-            media_type = node.result.get(MEDIA_TYPE)
+            media_type = node.metadata.get(MEDIA_TYPE)
             if media_type == MEDIA_TYPE_EPISODE and cfg.library.tv:
                 library_root = Path(cfg.library.tv)
             elif cfg.library.movies:
@@ -460,7 +460,7 @@ class TreeApp(App):
         mt, tt = self.movie_template, self.tv_template
 
         def _can_stage(n: FileNode) -> bool:
-            return can_fill_template(n, n.result, mt, tt)
+            return can_fill_template(n, n.metadata, mt, tt)
 
         old = node.staged
         self.model.toggle_staged(node, can_stage=_can_stage)
@@ -473,7 +473,7 @@ class TreeApp(App):
         """Accept detail view changes, auto-stage if possible, return to tree."""
         dv = self.query_one(DetailView)
         # Capture nodes and whether fields will change BEFORE switching modes.
-        # After _show_tree(), the FieldsChanged message would trigger
+        # After _show_tree(), the MetadataChanged message would trigger
         # action_refresh_query in TREE mode, which only collects the cursor
         # node instead of all files from the detail view.
         detail_nodes = list(dv.file_nodes)
@@ -485,13 +485,13 @@ class TreeApp(App):
         if self._detail_snapshot:
             for snap in self._detail_snapshot:
                 node = snap.node
-                if can_fill_template(node, node.result, mt, tt):
+                if can_fill_template(node, node.metadata, mt, tt):
                     node.staged = True
         self._detail_snapshot = None
         self._show_tree()
 
         # Trigger TMDB refresh for all detail nodes when fields changed.
-        # This replaces the stale FieldsChanged -> action_refresh_query path
+        # This replaces the stale MetadataChanged -> action_refresh_query path
         # which would only refresh the cursor node after the mode switch.
         token = self.config.metadata.tmdb_token
         if needs_refresh and token and detail_nodes and not self._tmdb_querying:
@@ -924,8 +924,8 @@ class TreeApp(App):
             self.query_one(TreeView).refresh()
         self._update_footer()
 
-    def on_detail_view_fields_changed(self, _event: DetailView.FieldsChanged) -> None:
-        """Auto-refresh TMDB when detail view fields are edited."""
+    def on_detail_view_metadata_changed(self, _event: DetailView.MetadataChanged) -> None:
+        """Auto-refresh TMDB when detail view metadata is edited."""
         if self._tmdb_querying:
             return
         token = self.config.metadata.tmdb_token

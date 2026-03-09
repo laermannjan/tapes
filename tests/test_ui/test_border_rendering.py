@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tapes.tree_model import FileNode, FolderNode, Source, TreeModel
+from tapes.tree_model import Candidate, FileNode, FolderNode, TreeModel
 from tapes.ui.metadata_render import get_display_fields
 from tapes.ui.metadata_view import DetailView
 from tapes.ui.tree_view import TreeView
@@ -17,7 +17,7 @@ TV_TEMPLATE = "{title} ({year})/Season {season:02d}/{title} - S{season:02d}E{epi
 def _make_tree_view() -> TreeView:
     node = FileNode(
         path=Path("/movies/Inception.mkv"),
-        result={"title": "Inception", "year": 2010, "media_type": "movie"},
+        metadata={"title": "Inception", "year": 2010, "media_type": "movie"},
     )
     root = FolderNode(name="root", children=[node], collapsed=False)
     model = TreeModel(root=root)
@@ -27,12 +27,12 @@ def _make_tree_view() -> TreeView:
 def _make_detail_view() -> DetailView:
     node = FileNode(
         path=Path("/media/Breaking.Bad.S01E01.mkv"),
-        result={"title": "Breaking Bad", "year": 2008, "season": 1, "episode": 1},
-        sources=[
-            Source(
+        metadata={"title": "Breaking Bad", "year": 2008, "season": 1, "episode": 1},
+        candidates=[
+            Candidate(
                 name="TMDB #1",
-                fields={"title": "Breaking Bad", "year": 2008},
-                confidence=0.95,
+                metadata={"title": "Breaking Bad", "year": 2008},
+                score=0.95,
             ),
         ],
     )

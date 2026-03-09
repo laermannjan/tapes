@@ -23,14 +23,14 @@ def categorize_staged(files: list[FileNode]) -> dict[str, int]:
 
     for f in files:
         ext = f.path.suffix.lower()
-        media_type = f.result.get(MEDIA_TYPE)
+        media_type = f.metadata.get(MEDIA_TYPE)
 
         if media_type == MEDIA_TYPE_MOVIE:
             movies += 1
         elif media_type == MEDIA_TYPE_EPISODE:
             episodes += 1
-            title = f.result.get(TITLE, "")
-            season = f.result.get(SEASON)
+            title = f.metadata.get(TITLE, "")
+            season = f.metadata.get(SEASON)
             if title:
                 shows.add(title)
             if title and season is not None:

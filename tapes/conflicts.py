@@ -116,7 +116,7 @@ def _duplicate_detection(
 ) -> list[tuple[FileNode, Path]]:
     """Detect same-destination pairs where files have the same size.
 
-    Auto mode keeps the node with the most ``result`` fields
+    Auto mode keeps the node with the most ``metadata`` fields
     (tie-break: alphabetical by source path) and unstages the rest.
     """
     if mode == "off":
@@ -163,10 +163,10 @@ def _duplicate_detection(
                 )
                 continue
 
-            # Auto: keep the one with most result fields, tie-break alphabetical.
+            # Auto: keep the one with most metadata fields, tie-break alphabetical.
             sorted_group = sorted(
                 size_group,
-                key=lambda pair: (-len(pair[0].result), str(pair[0].path)),
+                key=lambda pair: (-len(pair[0].metadata), str(pair[0].path)),
             )
             keeper = sorted_group[0]
             kept_for_dest.append(keeper)

@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 
 from tapes.pipeline import refresh_tmdb_source, run_auto_pipeline
-from tapes.tree_model import FileNode, FolderNode, Source, TreeModel
+from tapes.tree_model import Candidate, FileNode, FolderNode, TreeModel
 from tapes.ui.tree_app import AppMode
 
 TOKEN = "test-token"
@@ -130,9 +130,9 @@ class TestRunAutoPipeline:
         model = _make_model("Dune.2021.1080p.BluRay.mkv")
         run_auto_pipeline(model, token=TOKEN)
         node = model.all_files()[0]
-        assert node.result.get("title") is not None
+        assert node.metadata.get("title") is not None
         # Filename extraction is the base layer, not a source
-        filename_sources = [s for s in node.sources if s.name == "from filename"]
+        filename_sources = [s for s in node.candidates if s.name == "from filename"]
         assert len(filename_sources) == 0
 
     def test_confident_match_auto_stages(self, mock_tmdb) -> None:
@@ -140,10 +140,10 @@ class TestRunAutoPipeline:
         run_auto_pipeline(model, token=TOKEN)
         node = model.all_files()[0]
         assert node.staged is True
-        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
-        assert len(tmdb_sources) == 1
-        assert tmdb_sources[0].confidence == 1.0
-        assert node.result["year"] == 2021
+        tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
+        assert len(tmdb_candidates) == 1
+        assert tmdb_candidates[0].score == 1.0
+        assert node.metadata["year"] == 2021
 
     def test_clear_winner_no_year_auto_staged(self, mock_tmdb) -> None:
         """Without year but clear winner (margin to second), auto-staged via tier 2."""
@@ -158,13 +158,13 @@ class TestRunAutoPipeline:
         run_auto_pipeline(model, token=TOKEN, confidence_threshold=0.5)
         node = model.all_files()[0]
         assert node.staged is True
-        assert node.result["year"] == 2008
+        assert node.metadata["year"] == 2008
 
     def test_no_tmdb_match_no_sources(self, mock_tmdb) -> None:
         model = _make_model("Unknown.Movie.2024.mkv")
         run_auto_pipeline(model, token=TOKEN)
         node = model.all_files()[0]
-        assert len(node.sources) == 0
+        assert len(node.candidates) == 0
         assert node.staged is False
 
     def test_multiple_files_processed(self, mock_tmdb) -> None:
@@ -184,11 +184,11 @@ class TestRunAutoPipeline:
         run_auto_pipeline(model, token=TOKEN)
         node = model.all_files()[0]
         # guessit populates result directly (base layer), not as a source
-        assert node.result.get("title") == "Breaking Bad"
-        assert node.result.get("season") == 1
-        assert node.result.get("episode") == 1
+        assert node.metadata.get("title") == "Breaking Bad"
+        assert node.metadata.get("season") == 1
+        assert node.metadata.get("episode") == 1
         # No "from filename" source
-        filename_sources = [s for s in node.sources if s.name == "from filename"]
+        filename_sources = [s for s in node.candidates if s.name == "from filename"]
         assert len(filename_sources) == 0
 
     def test_tmdb_episode_data_merged(self, mock_tmdb) -> None:
@@ -196,10 +196,10 @@ class TestRunAutoPipeline:
         model = _make_model("Breaking.Bad.S01E01.mkv")
         run_auto_pipeline(model, token=TOKEN, confidence_threshold=0.5)
         node = model.all_files()[0]
-        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
-        assert len(tmdb_sources) >= 1
+        tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
+        assert len(tmdb_candidates) >= 1
         # At least one source should have episode_title
-        ep_titles = [s.fields.get("episode_title") for s in tmdb_sources]
+        ep_titles = [s.metadata.get("episode_title") for s in tmdb_candidates]
         assert "Pilot" in ep_titles
 
     def test_custom_confidence_threshold(self, mock_tmdb) -> None:
@@ -213,7 +213,7 @@ class TestRunAutoPipeline:
         model = _make_model("Dune.2021.mkv")
         run_auto_pipeline(model, token="")
         node = model.all_files()[0]
-        assert len(node.sources) == 0
+        assert len(node.candidates) == 0
         assert node.staged is False
 
 
@@ -223,11 +223,11 @@ class TestTwoStageFlow:
         model = _make_model("Dune.2021.mkv")
         run_auto_pipeline(model, token=TOKEN)
         node = model.all_files()[0]
-        assert node.result["media_type"] == "movie"
+        assert node.metadata["media_type"] == "movie"
         assert node.staged is True
         # Should have exactly 1 TMDB source (movie, no episodes)
-        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
-        assert len(tmdb_sources) == 1
+        tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
+        assert len(tmdb_candidates) == 1
 
     def test_tv_show_triggers_episode_stage(self, mock_tmdb) -> None:
         """TV show match should fetch episodes."""
@@ -235,26 +235,26 @@ class TestTwoStageFlow:
         # Episode confidence is 0.8 (ep=0.6 + season=0.2), so use lower threshold
         run_auto_pipeline(model, token=TOKEN, confidence_threshold=0.7)
         node = model.all_files()[0]
-        assert node.result["media_type"] == "episode"
+        assert node.metadata["media_type"] == "episode"
         # Should have episode-level TMDB sources
-        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
-        assert len(tmdb_sources) >= 1
+        tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
+        assert len(tmdb_candidates) >= 1
         # Best match should have episode data
-        assert node.result.get("episode_title") == "Pilot"
+        assert node.metadata.get("episode_title") == "Pilot"
 
     def test_auto_accepted_tv_show_has_show_level_sources(self, mock_tmdb) -> None:
         """Auto-accepted TV show should have show-level TMDB sources on
-        node.sources, not just episode sources.
+        node.candidates, not just episode sources.
         Invariant #1: sources are always added."""
         model = _make_model("Breaking.Bad.S01E01.mkv")
         run_auto_pipeline(model, token=TOKEN, confidence_threshold=0.5)
         node = model.all_files()[0]
         # Should have BOTH show-level and episode-level sources
-        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
-        show_sources = [s for s in tmdb_sources if "episode_title" not in s.fields]
-        episode_sources = [s for s in tmdb_sources if "episode_title" in s.fields]
-        assert len(show_sources) >= 1, f"Expected show-level sources, got: {tmdb_sources}"
-        assert len(episode_sources) >= 1, f"Expected episode sources, got: {tmdb_sources}"
+        tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
+        show_candidates = [s for s in tmdb_candidates if "episode_title" not in s.metadata]
+        episode_sources = [s for s in tmdb_candidates if "episode_title" in s.metadata]
+        assert len(show_candidates) >= 1, f"Expected show-level sources, got: {tmdb_candidates}"
+        assert len(episode_sources) >= 1, f"Expected episode sources, got: {tmdb_candidates}"
 
     def test_tv_show_no_episode_match(self) -> None:
         """TV show match with no matching episode keeps show-level sources.
@@ -275,7 +275,7 @@ class TestTwoStageFlow:
             run_auto_pipeline(model, token=TOKEN, confidence_threshold=0.5)
             node = model.all_files()[0]
             # Show match should still apply
-            assert node.result["title"] == "Breaking Bad"
+            assert node.metadata["title"] == "Breaking Bad"
             assert node.staged is True
 
 
@@ -289,8 +289,8 @@ class TestMultipleSourcesNoAutoAccept:
         # Very high threshold so auto-accept doesn't fire
         run_auto_pipeline(model, token=TOKEN, confidence_threshold=0.99)
         node = model.all_files()[0]
-        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
-        assert len(tmdb_sources) == 2, f"Expected 2 sources, got {len(tmdb_sources)}: {tmdb_sources}"
+        tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
+        assert len(tmdb_candidates) == 2, f"Expected 2 sources, got {len(tmdb_candidates)}: {tmdb_candidates}"
         assert node.staged is False
 
     def test_can_stage_fail_still_gets_episode_sources(self, mock_tmdb) -> None:
@@ -303,11 +303,11 @@ class TestMultipleSourcesNoAutoAccept:
 
         run_auto_pipeline(model, token=TOKEN, confidence_threshold=0.5, can_stage=_always_reject)
         node = model.all_files()[0]
-        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
+        tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
         # Should have episode-level sources, not just show-level
-        ep_titles = [s.fields.get("episode_title") for s in tmdb_sources]
-        assert any(ep_titles), f"Expected episode sources with episode_title, got: {tmdb_sources}"
-        assert len(tmdb_sources) >= 2, f"Expected multiple episode sources, got {len(tmdb_sources)}"
+        ep_titles = [s.metadata.get("episode_title") for s in tmdb_candidates]
+        assert any(ep_titles), f"Expected episode sources with episode_title, got: {tmdb_candidates}"
+        assert len(tmdb_candidates) >= 2, f"Expected multiple episode sources, got {len(tmdb_candidates)}"
 
 
 class TestTwoTierAutoAccept:
@@ -330,7 +330,7 @@ class TestTwoTierAutoAccept:
         run_auto_pipeline(model, token=TOKEN)
         node = model.all_files()[0]
         assert node.staged is True
-        assert node.result["title"] == "Breaking Bad"
+        assert node.metadata["title"] == "Breaking Bad"
 
     def test_ambiguous_candidates_no_auto_accept(self, mock_tmdb) -> None:
         """The Office without year: two equally-named shows, no clear winner."""
@@ -339,8 +339,8 @@ class TestTwoTierAutoAccept:
         node = model.all_files()[0]
         assert node.staged is False
         # Both sources available for user curation
-        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
-        assert len(tmdb_sources) == 2
+        tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
+        assert len(tmdb_candidates) == 2
 
 
 # ---------------------------------------------------------------------------
@@ -357,17 +357,17 @@ class TestRefreshTmdbBatch:
 
         node1 = FileNode(
             path=Path("/media/Dune.mkv"),
-            result={"title": "Dune", "year": 2021},
-            sources=[Source(name="TMDB #1", fields={"title": "Old"}, confidence=0.5)],
+            metadata={"title": "Dune", "year": 2021},
+            candidates=[Candidate(name="TMDB #1", metadata={"title": "Old"}, score=0.5)],
         )
         node2 = FileNode(
             path=Path("/media/Arrival.mkv"),
-            result={"title": "Arrival", "year": 2016},
-            sources=[],
+            metadata={"title": "Arrival", "year": 2016},
+            candidates=[],
         )
         refresh_tmdb_batch([node1, node2], token=TOKEN)
         for n in [node1, node2]:
-            tmdb = [s for s in n.sources if s.name.startswith("TMDB")]
+            tmdb = [s for s in n.candidates if s.name.startswith("TMDB")]
             assert len(tmdb) >= 1
 
     def test_batch_deduplicates_queries(self, mock_tmdb) -> None:
@@ -376,31 +376,31 @@ class TestRefreshTmdbBatch:
 
         node1 = FileNode(
             path=Path("/media/show.s01e01.mkv"),
-            result={"title": "Breaking Bad", "season": 1, "episode": 1, "media_type": "episode"},
-            sources=[],
+            metadata={"title": "Breaking Bad", "season": 1, "episode": 1, "media_type": "episode"},
+            candidates=[],
         )
         node2 = FileNode(
             path=Path("/media/show.s01e01.nfo"),
-            result={"title": "Breaking Bad", "season": 1, "episode": 1, "media_type": "episode"},
-            sources=[],
+            metadata={"title": "Breaking Bad", "season": 1, "episode": 1, "media_type": "episode"},
+            candidates=[],
         )
         with patch("tapes.tmdb.search_multi", side_effect=_mock_search_multi) as mock_search:
             refresh_tmdb_batch([node1, node2], token=TOKEN)
             # Cache dedup: search_multi called once, not twice
             assert mock_search.call_count == 1
 
-    def test_batch_clears_existing_tmdb_sources(self, mock_tmdb) -> None:
+    def test_batch_clears_existing_tmdb_candidates(self, mock_tmdb) -> None:
         """Existing TMDB sources are cleared before refresh."""
         from tapes.pipeline import refresh_tmdb_batch
 
         node = FileNode(
             path=Path("/media/Dune.mkv"),
-            result={"title": "Dune", "year": 2021},
-            sources=[Source(name="TMDB #1", fields={"title": "Old"}, confidence=0.1)],
+            metadata={"title": "Dune", "year": 2021},
+            candidates=[Candidate(name="TMDB #1", metadata={"title": "Old"}, score=0.1)],
         )
         refresh_tmdb_batch([node], token=TOKEN)
-        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
-        assert all(s.fields.get("title") != "Old" for s in tmdb_sources)
+        tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
+        assert all(s.metadata.get("title") != "Old" for s in tmdb_candidates)
 
     def test_batch_reports_progress(self, mock_tmdb) -> None:
         """on_progress callback is invoked after each node."""
@@ -412,7 +412,7 @@ class TestRefreshTmdbBatch:
             progress_calls.append((done, total))
 
         nodes = [
-            FileNode(path=Path(f"/media/file{i}.mkv"), result={"title": "Dune", "year": 2021}, sources=[])
+            FileNode(path=Path(f"/media/file{i}.mkv"), metadata={"title": "Dune", "year": 2021}, candidates=[])
             for i in range(3)
         ]
         refresh_tmdb_batch(nodes, token=TOKEN, on_progress=on_progress)
@@ -424,83 +424,83 @@ class TestRefreshTmdbSource:
     def test_updates_tmdb_source(self, mock_tmdb) -> None:
         node = FileNode(
             path=Path("/media/Dune.mkv"),
-            result={"title": "Dune", "year": 2021},
-            sources=[],
+            metadata={"title": "Dune", "year": 2021},
+            candidates=[],
         )
         refresh_tmdb_source(node, token=TOKEN)
-        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
-        assert len(tmdb_sources) == 1
-        assert tmdb_sources[0].confidence == 1.0
+        tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
+        assert len(tmdb_candidates) == 1
+        assert tmdb_candidates[0].score == 1.0
 
     def test_updates_tmdb_source_no_year(self, mock_tmdb) -> None:
         """Without year, confidence is penalized (0.7, not 1.0)."""
         node = FileNode(
             path=Path("/media/Dune.mkv"),
-            result={"title": "Dune"},
-            sources=[],
+            metadata={"title": "Dune"},
+            candidates=[],
         )
         refresh_tmdb_source(node, token=TOKEN)
-        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
-        assert len(tmdb_sources) == 1
-        assert tmdb_sources[0].confidence == pytest.approx(0.7)
+        tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
+        assert len(tmdb_candidates) == 1
+        assert tmdb_candidates[0].score == pytest.approx(0.7)
 
     def test_replaces_existing_tmdb_source(self, mock_tmdb) -> None:
         node = FileNode(
             path=Path("/media/Dune.mkv"),
-            result={"title": "Dune", "year": 2021},
-            sources=[
-                Source(name="TMDB #1", fields={"title": "Old"}, confidence=0.5),
+            metadata={"title": "Dune", "year": 2021},
+            candidates=[
+                Candidate(name="TMDB #1", metadata={"title": "Old"}, score=0.5),
             ],
         )
         refresh_tmdb_source(node, token=TOKEN)
-        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
-        assert len(tmdb_sources) == 1
-        assert tmdb_sources[0].fields["title"] == "Dune"
-        assert tmdb_sources[0].confidence == 1.0
+        tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
+        assert len(tmdb_candidates) == 1
+        assert tmdb_candidates[0].metadata["title"] == "Dune"
+        assert tmdb_candidates[0].score == 1.0
 
     def test_no_match_removes_tmdb_source(self, mock_tmdb) -> None:
         node = FileNode(
             path=Path("/media/Unknown.mkv"),
-            result={"title": "Nonexistent"},
-            sources=[
-                Source(name="TMDB #1", fields={"title": "Old"}, confidence=0.5),
+            metadata={"title": "Nonexistent"},
+            candidates=[
+                Candidate(name="TMDB #1", metadata={"title": "Old"}, score=0.5),
             ],
         )
         refresh_tmdb_source(node, token=TOKEN)
-        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
-        assert len(tmdb_sources) == 0
+        tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
+        assert len(tmdb_candidates) == 0
 
     def test_confident_auto_accepts_with_year(self, mock_tmdb) -> None:
         node = FileNode(
             path=Path("/media/Dune.mkv"),
-            result={"title": "Dune", "year": 2021},
-            sources=[],
+            metadata={"title": "Dune", "year": 2021},
+            candidates=[],
         )
         refresh_tmdb_source(node, token=TOKEN)
-        assert node.result.get("year") == 2021
+        assert node.metadata.get("year") == 2021
         assert node.staged is True
 
     def test_clear_winner_auto_accepts_via_margin(self, mock_tmdb) -> None:
         """Breaking Bad without year: tier 2 auto-accept (clear margin to El Camino)."""
         node = FileNode(
             path=Path("/media/test.mkv"),
-            result={"title": "Breaking Bad"},
-            sources=[],
+            metadata={"title": "Breaking Bad"},
+            candidates=[],
         )
         refresh_tmdb_source(node, token=TOKEN)
         # Tier 2 accepts: 0.7 >= 0.6 and margin ~0.22 >= 0.15
-        assert node.result.get("year") == 2008
+        assert node.metadata.get("year") == 2008
         assert node.staged is True
 
     def test_no_token_skips(self) -> None:
         node = FileNode(
             path=Path("/media/Dune.mkv"),
-            result={"title": "Dune"},
-            sources=[],
+            metadata={"title": "Dune"},
+            candidates=[],
         )
         refresh_tmdb_source(node, token="")
-        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
-        assert len(tmdb_sources) == 0
+        tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
+        assert len(tmdb_candidates) == 0
 
 
 try:
@@ -530,7 +530,7 @@ class TestAutoPipelineIntegration:
         async with app.run_test() as _pilot:
             await app.workers.wait_for_complete()
             node = model.all_files()[0]
-            assert len(node.sources) >= 1
+            assert len(node.candidates) >= 1
             assert node.staged is True
 
 
@@ -542,8 +542,8 @@ class TestRefreshQueryIntegration:
 
         node = FileNode(
             path=Path("/media/Dune.mkv"),
-            result={"title": "Dune", "year": 2021},
-            sources=[],
+            metadata={"title": "Dune", "year": 2021},
+            candidates=[],
         )
         root = FolderNode(name="root", children=[node])
         model = TreeModel(root=root)
@@ -554,9 +554,9 @@ class TestRefreshQueryIntegration:
         async with app.run_test() as pilot:
             await pilot.press("r")
             await app.workers.wait_for_complete()
-            tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
-            assert len(tmdb_sources) == 1
-            assert tmdb_sources[0].confidence == 1.0
+            tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
+            assert len(tmdb_candidates) == 1
+            assert tmdb_candidates[0].score == 1.0
 
     @pytest.mark.asyncio()
     async def test_r_in_detail_refreshes_current_node(self, mock_tmdb) -> None:
@@ -564,8 +564,8 @@ class TestRefreshQueryIntegration:
 
         node = FileNode(
             path=Path("/media/Arrival.mkv"),
-            result={"title": "Arrival", "year": 2016},
-            sources=[],
+            metadata={"title": "Arrival", "year": 2016},
+            candidates=[],
         )
         folder = FolderNode(name="folder", children=[node])
         root = FolderNode(name="root", children=[folder])
@@ -580,9 +580,9 @@ class TestRefreshQueryIntegration:
             assert app.mode == AppMode.DETAIL
             await pilot.press("r")
             await app.workers.wait_for_complete()
-            tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
-            assert len(tmdb_sources) == 1
-            assert node.result.get("year") == 2016
+            tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
+            assert len(tmdb_candidates) == 1
+            assert node.metadata.get("year") == 2016
 
     @pytest.mark.asyncio()
     async def test_r_in_tree_range_refreshes_all(self, mock_tmdb) -> None:
@@ -590,13 +590,13 @@ class TestRefreshQueryIntegration:
 
         node1 = FileNode(
             path=Path("/media/Dune.mkv"),
-            result={"title": "Dune"},
-            sources=[],
+            metadata={"title": "Dune"},
+            candidates=[],
         )
         node2 = FileNode(
             path=Path("/media/Arrival.mkv"),
-            result={"title": "Arrival"},
-            sources=[],
+            metadata={"title": "Arrival"},
+            candidates=[],
         )
         root = FolderNode(name="root", children=[node1, node2])
         model = TreeModel(root=root)
@@ -610,7 +610,7 @@ class TestRefreshQueryIntegration:
             await pilot.press("r")
             await app.workers.wait_for_complete()
             for n in [node1, node2]:
-                tmdb = [s for s in n.sources if s.name.startswith("TMDB")]
+                tmdb = [s for s in n.candidates if s.name.startswith("TMDB")]
                 assert len(tmdb) == 1
 
     @pytest.mark.asyncio()
@@ -619,13 +619,13 @@ class TestRefreshQueryIntegration:
 
         node1 = FileNode(
             path=Path("/media/Dune.mkv"),
-            result={"title": "Dune"},
-            sources=[],
+            metadata={"title": "Dune"},
+            candidates=[],
         )
         node2 = FileNode(
             path=Path("/media/Arrival.mkv"),
-            result={"title": "Arrival"},
-            sources=[],
+            metadata={"title": "Arrival"},
+            candidates=[],
         )
         root = FolderNode(name="root", children=[node1, node2])
         model = TreeModel(root=root)
@@ -641,7 +641,7 @@ class TestRefreshQueryIntegration:
             await pilot.press("r")
             await app.workers.wait_for_complete()
             for n in [node1, node2]:
-                tmdb = [s for s in n.sources if s.name.startswith("TMDB")]
+                tmdb = [s for s in n.candidates if s.name.startswith("TMDB")]
                 assert len(tmdb) == 1
 
     @pytest.mark.asyncio()
@@ -651,13 +651,13 @@ class TestRefreshQueryIntegration:
 
         node1 = FileNode(
             path=Path("/media/Dune.mkv"),
-            result={"title": "Dune", "year": 2021},
-            sources=[],
+            metadata={"title": "Dune", "year": 2021},
+            candidates=[],
         )
         node2 = FileNode(
             path=Path("/media/Arrival.mkv"),
-            result={"title": "Arrival", "year": 2016},
-            sources=[],
+            metadata={"title": "Arrival", "year": 2016},
+            candidates=[],
         )
         root = FolderNode(name="root", children=[node1, node2])
         model = TreeModel(root=root)
@@ -675,7 +675,7 @@ class TestRefreshQueryIntegration:
             await pilot.press("r")
             await app.workers.wait_for_complete()
             for n in [node1, node2]:
-                tmdb = [s for s in n.sources if s.name.startswith("TMDB")]
+                tmdb = [s for s in n.candidates if s.name.startswith("TMDB")]
                 assert len(tmdb) >= 1
 
 
@@ -692,25 +692,43 @@ class TestMultiDetailAcceptTriggersEpisodeQuery:
 
         # 3 episode files with show-level TMDB sources but no tmdb_id in result.
         # Simulates: auto-pipeline found Breaking Bad but didn't auto-accept.
-        show_source = Source(
+        show_candidate = Candidate(
             name="TMDB #1",
-            fields={"tmdb_id": 1396, "title": "Breaking Bad", "year": 2008, "media_type": "episode"},
-            confidence=0.7,
+            metadata={"tmdb_id": 1396, "title": "Breaking Bad", "year": 2008, "media_type": "episode"},
+            score=0.7,
         )
         node1 = FileNode(
             path=Path("/media/Breaking.Bad.S01E01.mkv"),
-            result={"title": "Breaking Bad", "season": 1, "episode": 1, "media_type": "episode"},
-            sources=[Source(name=show_source.name, fields=dict(show_source.fields), confidence=show_source.confidence)],
+            metadata={"title": "Breaking Bad", "season": 1, "episode": 1, "media_type": "episode"},
+            candidates=[
+                Candidate(
+                    name=show_candidate.name,
+                    metadata=dict(show_candidate.metadata),
+                    score=show_candidate.score,
+                ),
+            ],
         )
         node2 = FileNode(
             path=Path("/media/Breaking.Bad.S01E02.mkv"),
-            result={"title": "Breaking Bad", "season": 1, "episode": 2, "media_type": "episode"},
-            sources=[Source(name=show_source.name, fields=dict(show_source.fields), confidence=show_source.confidence)],
+            metadata={"title": "Breaking Bad", "season": 1, "episode": 2, "media_type": "episode"},
+            candidates=[
+                Candidate(
+                    name=show_candidate.name,
+                    metadata=dict(show_candidate.metadata),
+                    score=show_candidate.score,
+                ),
+            ],
         )
         node3 = FileNode(
             path=Path("/media/Breaking.Bad.S01E03.mkv"),
-            result={"title": "Breaking Bad", "season": 1, "episode": 3, "media_type": "episode"},
-            sources=[Source(name=show_source.name, fields=dict(show_source.fields), confidence=show_source.confidence)],
+            metadata={"title": "Breaking Bad", "season": 1, "episode": 3, "media_type": "episode"},
+            candidates=[
+                Candidate(
+                    name=show_candidate.name,
+                    metadata=dict(show_candidate.metadata),
+                    score=show_candidate.score,
+                ),
+            ],
         )
         root = FolderNode(name="root", children=[node1, node2, node3])
         model = TreeModel(root=root)
@@ -738,8 +756,8 @@ class TestMultiDetailAcceptTriggersEpisodeQuery:
             await app.workers.wait_for_complete()
             # ALL nodes should have episode_title (from episode query)
             for node in [node1, node2, node3]:
-                assert node.result.get("tmdb_id") == 1396, f"{node.path}: missing tmdb_id"
-                assert node.result.get("episode_title") is not None, (
+                assert node.metadata.get("tmdb_id") == 1396, f"{node.path}: missing tmdb_id"
+                assert node.metadata.get("episode_title") is not None, (
                     f"{node.path}: missing episode_title -- episode query didn't run"
                 )
                 assert node.staged is True, f"{node.path}: not staged after episode accept"
@@ -819,8 +837,8 @@ class TestConfigForwarding:
         run_guessit_pass(model)
         run_tmdb_pass(model, token=TOKEN, max_results=1)
         node = model.all_files()[0]
-        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
-        assert len(tmdb_sources) <= 1
+        tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
+        assert len(tmdb_candidates) <= 1
 
     def test_run_tmdb_pass_default_max_results_keeps_all(self, mock_tmdb) -> None:
         """Default max_results=3 keeps all candidates when fewer than 3."""
@@ -830,27 +848,27 @@ class TestConfigForwarding:
         run_guessit_pass(model)
         run_tmdb_pass(model, token=TOKEN)
         node = model.all_files()[0]
-        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
-        assert len(tmdb_sources) == 2
+        tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
+        assert len(tmdb_candidates) == 2
 
     def test_run_auto_pipeline_forwards_max_results(self, mock_tmdb) -> None:
         """max_results flows from run_auto_pipeline through to sources."""
         model = _make_model("The.Office.S01E01.mkv")
         run_auto_pipeline(model, token=TOKEN, max_results=1)
         node = model.all_files()[0]
-        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
-        assert len(tmdb_sources) <= 1
+        tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
+        assert len(tmdb_candidates) <= 1
 
     def test_refresh_forwards_max_results(self, mock_tmdb) -> None:
         """refresh_tmdb_source respects max_results."""
         node = FileNode(
             path=Path("/media/The.Office.mkv"),
-            result={"title": "The Office"},
-            sources=[],
+            metadata={"title": "The Office"},
+            candidates=[],
         )
         refresh_tmdb_source(node, token=TOKEN, max_results=1)
-        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
-        assert len(tmdb_sources) <= 1
+        tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
+        assert len(tmdb_candidates) <= 1
 
     def test_margin_threshold_prevents_auto_accept(self, mock_tmdb) -> None:
         """High margin_threshold prevents tier 2 auto-accept."""
@@ -882,8 +900,8 @@ class TestConfigForwarding:
         """refresh_tmdb_source forwards margin_threshold and min_margin."""
         node = FileNode(
             path=Path("/media/test.mkv"),
-            result={"title": "Breaking Bad"},
-            sources=[],
+            metadata={"title": "Breaking Bad"},
+            candidates=[],
         )
         # With strict margin params, tier 2 auto-accept should be blocked
         refresh_tmdb_source(node, token=TOKEN, margin_threshold=0.99, min_margin=0.99)
@@ -918,13 +936,13 @@ class TestConfigForwarding:
         # Low threshold to trigger episode stage
         run_auto_pipeline(model, token=TOKEN, confidence_threshold=0.5, max_results=1)
         node = model.all_files()[0]
-        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
-        episode_sources = [s for s in tmdb_sources if "episode_title" in s.fields]
-        show_sources = [s for s in tmdb_sources if "episode_title" not in s.fields]
+        tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
+        episode_sources = [s for s in tmdb_candidates if "episode_title" in s.metadata]
+        show_candidates = [s for s in tmdb_candidates if "episode_title" not in s.metadata]
         # Even though 3 episodes are available, only max_results=1 kept
         assert len(episode_sources) == 1
         # Show-level sources also limited to max_results=1
-        assert len(show_sources) == 1
+        assert len(show_candidates) == 1
 
 
 class TestTmdbIdShortcut:
@@ -934,7 +952,7 @@ class TestTmdbIdShortcut:
         """With tmdb_id + media_type=episode, skip search_multi, query episodes directly."""
         node = FileNode(
             path=Path("/media/Breaking.Bad.S01E02.mkv"),
-            result={
+            metadata={
                 "title": "Breaking Bad",
                 "year": 2008,
                 "tmdb_id": 1396,
@@ -942,42 +960,42 @@ class TestTmdbIdShortcut:
                 "season": 1,
                 "episode": 2,
             },
-            sources=[],
+            candidates=[],
         )
         with patch("tapes.tmdb.search_multi", side_effect=_mock_search_multi) as mock_search:
             refresh_tmdb_source(node, token=TOKEN)
             mock_search.assert_not_called()
         # Should still have episode sources from direct episode query
-        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
-        assert len(tmdb_sources) >= 1
+        tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
+        assert len(tmdb_candidates) >= 1
         # Best episode should be S01E02
-        assert node.result.get("episode") == 2
-        assert node.result.get("episode_title") == "Cat's in the Bag..."
+        assert node.metadata.get("episode") == 2
+        assert node.metadata.get("episode_title") == "Cat's in the Bag..."
 
     def test_skips_search_when_tmdb_id_set_for_movie(self, mock_tmdb) -> None:
         """With tmdb_id + media_type=movie, skip entirely (movie fully identified)."""
         node = FileNode(
             path=Path("/media/Dune.mkv"),
-            result={
+            metadata={
                 "title": "Dune",
                 "year": 2021,
                 "tmdb_id": 438631,
                 "media_type": "movie",
             },
-            sources=[],
+            candidates=[],
         )
         with patch("tapes.tmdb.search_multi", side_effect=_mock_search_multi) as mock_search:
             refresh_tmdb_source(node, token=TOKEN)
             mock_search.assert_not_called()
         # No sources added (movie already identified)
-        assert len(node.sources) == 0
+        assert len(node.candidates) == 0
 
     def test_normal_flow_without_tmdb_id(self, mock_tmdb) -> None:
         """Without tmdb_id, normal search_multi flow is used."""
         node = FileNode(
             path=Path("/media/Dune.mkv"),
-            result={"title": "Dune", "year": 2021},
-            sources=[],
+            metadata={"title": "Dune", "year": 2021},
+            candidates=[],
         )
         with patch("tapes.tmdb.search_multi", side_effect=_mock_search_multi) as mock_search:
             refresh_tmdb_source(node, token=TOKEN)
@@ -991,7 +1009,7 @@ class TestEpisodeConfidenceGate:
         """When episode confidence is low, don't overwrite result fields."""
         node = FileNode(
             path=Path("/media/Breaking.Bad.S03E05.mkv"),
-            result={
+            metadata={
                 "title": "Breaking Bad",
                 "year": 2008,
                 "tmdb_id": 1396,
@@ -999,23 +1017,23 @@ class TestEpisodeConfidenceGate:
                 "season": 3,
                 "episode": 5,
             },
-            sources=[],
+            candidates=[],
         )
         # Mock returns only season 1 episodes. Season 3 won't match,
         # so episode confidence will be low (season mismatch).
         refresh_tmdb_source(node, token=TOKEN)
         # Season/episode should NOT be overwritten to S01E01
-        assert node.result["season"] == 3
-        assert node.result["episode"] == 5
+        assert node.metadata["season"] == 3
+        assert node.metadata["episode"] == 5
         # But episode sources should still be added for curation
-        tmdb_sources = [s for s in node.sources if s.name.startswith("TMDB")]
-        assert len(tmdb_sources) >= 1
+        tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
+        assert len(tmdb_candidates) >= 1
 
     def test_high_confidence_episode_applied(self, mock_tmdb) -> None:
         """When episode confidence is high, apply as before."""
         node = FileNode(
             path=Path("/media/Breaking.Bad.S01E01.mkv"),
-            result={
+            metadata={
                 "title": "Breaking Bad",
                 "year": 2008,
                 "tmdb_id": 1396,
@@ -1023,17 +1041,17 @@ class TestEpisodeConfidenceGate:
                 "season": 1,
                 "episode": 1,
             },
-            sources=[],
+            candidates=[],
         )
         refresh_tmdb_source(node, token=TOKEN)
-        assert node.result.get("episode_title") == "Pilot"
+        assert node.metadata.get("episode_title") == "Pilot"
         assert node.staged is True
 
     def test_low_confidence_episode_not_staged(self, mock_tmdb) -> None:
         """When episode confidence is low, node should not be staged."""
         node = FileNode(
             path=Path("/media/Breaking.Bad.S03E05.mkv"),
-            result={
+            metadata={
                 "title": "Breaking Bad",
                 "year": 2008,
                 "tmdb_id": 1396,
@@ -1041,7 +1059,7 @@ class TestEpisodeConfidenceGate:
                 "season": 3,
                 "episode": 5,
             },
-            sources=[],
+            candidates=[],
         )
         refresh_tmdb_source(node, token=TOKEN)
         assert node.staged is False
@@ -1055,7 +1073,7 @@ class TestEpisodeQueryAllSeasons:
         even when a confident match is found in the first season tried."""
         node = FileNode(
             path=Path("/media/Breaking.Bad.S01E01.mkv"),
-            result={
+            metadata={
                 "title": "Breaking Bad",
                 "year": 2008,
                 "tmdb_id": 1396,
@@ -1063,7 +1081,7 @@ class TestEpisodeQueryAllSeasons:
                 "season": 1,
                 "episode": 1,
             },
-            sources=[],
+            candidates=[],
         )
         # Override get_season_episodes to count calls per season
         with patch("tapes.tmdb.get_season_episodes", side_effect=_mock_get_season_episodes) as mock_eps:
@@ -1081,32 +1099,32 @@ class TestApplySourceAllClear:
 
         node = FileNode(
             path=Path("/media/Breaking.Bad.S01E01.mkv"),
-            result={
+            metadata={
                 "title": "breaking bad",
                 "season": 1,
                 "episode": 1,
                 "media_type": "episode",
             },
-            sources=[
-                Source(
+            candidates=[
+                Candidate(
                     name="TMDB #1",
-                    fields={"tmdb_id": 1396, "title": "Breaking Bad", "year": 2008, "media_type": "episode"},
-                    confidence=0.7,
+                    metadata={"tmdb_id": 1396, "title": "Breaking Bad", "year": 2008, "media_type": "episode"},
+                    score=0.7,
                 ),
             ],
         )
         dv = DetailView(node, movie_template="{title}.{ext}", tv_template="{title}.{ext}")
         dv._size = (120, 40)  # fake size for field computation
         dv.fields = ["title", "year", "season", "episode", "media_type", "tmdb_id"]
-        dv.source_index = 0
+        dv.candidate_index = 0
         dv.apply_source_all_clear()
         # Show-level fields applied
-        assert node.result["tmdb_id"] == 1396
-        assert node.result["title"] == "Breaking Bad"
-        assert node.result["year"] == 2008
+        assert node.metadata["tmdb_id"] == 1396
+        assert node.metadata["title"] == "Breaking Bad"
+        assert node.metadata["year"] == 2008
         # Per-file fields preserved (not popped)
-        assert node.result["season"] == 1
-        assert node.result["episode"] == 1
+        assert node.metadata["season"] == 1
+        assert node.metadata["episode"] == 1
 
     def test_preserves_per_file_fields_multi_node(self) -> None:
         """Multi-node: each node keeps its own season/episode."""
@@ -1114,34 +1132,34 @@ class TestApplySourceAllClear:
 
         node1 = FileNode(
             path=Path("/media/show.s01e01.mkv"),
-            result={"title": "show", "season": 1, "episode": 1, "media_type": "episode"},
-            sources=[
-                Source(
+            metadata={"title": "show", "season": 1, "episode": 1, "media_type": "episode"},
+            candidates=[
+                Candidate(
                     name="TMDB #1",
-                    fields={"tmdb_id": 100, "title": "Show", "year": 2020, "media_type": "episode"},
-                    confidence=0.7,
+                    metadata={"tmdb_id": 100, "title": "Show", "year": 2020, "media_type": "episode"},
+                    score=0.7,
                 ),
             ],
         )
         node2 = FileNode(
             path=Path("/media/show.s02e05.mkv"),
-            result={"title": "show", "season": 2, "episode": 5, "media_type": "episode"},
-            sources=[],
+            metadata={"title": "show", "season": 2, "episode": 5, "media_type": "episode"},
+            candidates=[],
         )
         dv = DetailView(node1, movie_template="{title}.{ext}", tv_template="{title}.{ext}")
         dv._size = (120, 40)
         dv.file_nodes = [node1, node2]
         dv.fields = ["title", "year", "season", "episode", "media_type", "tmdb_id"]
-        dv.source_index = 0
+        dv.candidate_index = 0
         dv.apply_source_all_clear()
         # Show-level fields applied to both
-        assert node1.result["tmdb_id"] == 100
-        assert node2.result["tmdb_id"] == 100
+        assert node1.metadata["tmdb_id"] == 100
+        assert node2.metadata["tmdb_id"] == 100
         # Per-file season/episode preserved
-        assert node1.result["season"] == 1
-        assert node1.result["episode"] == 1
-        assert node2.result["season"] == 2
-        assert node2.result["episode"] == 5
+        assert node1.metadata["season"] == 1
+        assert node1.metadata["episode"] == 1
+        assert node2.metadata["season"] == 2
+        assert node2.metadata["episode"] == 5
 
     def test_sets_fields_present_in_source(self) -> None:
         """Fields present in the source should be set on all nodes."""
@@ -1149,19 +1167,19 @@ class TestApplySourceAllClear:
 
         node = FileNode(
             path=Path("/media/test.mkv"),
-            result={"title": "old title"},
-            sources=[
-                Source(
+            metadata={"title": "old title"},
+            candidates=[
+                Candidate(
                     name="TMDB #1",
-                    fields={"title": "New Title", "year": 2020},
-                    confidence=0.9,
+                    metadata={"title": "New Title", "year": 2020},
+                    score=0.9,
                 ),
             ],
         )
         dv = DetailView(node, movie_template="{title}.{ext}", tv_template="{title}.{ext}")
         dv._size = (120, 40)
         dv.fields = ["title", "year"]
-        dv.source_index = 0
+        dv.candidate_index = 0
         dv.apply_source_all_clear()
-        assert node.result["title"] == "New Title"
-        assert node.result["year"] == 2020
+        assert node.metadata["title"] == "New Title"
+        assert node.metadata["year"] == 2020

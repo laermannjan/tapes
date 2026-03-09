@@ -28,7 +28,7 @@ class TestComputeDest:
     def test_movie_all_fields_present(self) -> None:
         node = FileNode(
             path=Path("/movies/Inception.mkv"),
-            result={"title": "Inception", "year": 2010},
+            metadata={"title": "Inception", "year": 2010},
         )
         result = compute_dest(node, MOVIE_TEMPLATE)
         assert result == "Inception (2010)/Inception (2010).mkv"
@@ -36,7 +36,7 @@ class TestComputeDest:
     def test_partial_dest_when_fields_missing(self) -> None:
         node = FileNode(
             path=Path("/movies/Inception.mkv"),
-            result={"title": "Inception"},
+            metadata={"title": "Inception"},
         )
         result = compute_dest(node, MOVIE_TEMPLATE)
         assert result is not None
@@ -46,7 +46,7 @@ class TestComputeDest:
     def test_tv_template_with_season_episode(self) -> None:
         node = FileNode(
             path=Path("/tv/breaking.bad.s01e02.mkv"),
-            result={
+            metadata={
                 "title": "Breaking Bad",
                 "year": 2008,
                 "season": 1,
@@ -120,7 +120,7 @@ class TestRenderFileRow:
     def test_returns_text_object(self) -> None:
         node = FileNode(
             path=Path("/movies/Inception.mkv"),
-            result={"title": "Inception", "year": 2010},
+            metadata={"title": "Inception", "year": 2010},
         )
         row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
         assert isinstance(row, Text)
@@ -129,7 +129,7 @@ class TestRenderFileRow:
         node = FileNode(
             path=Path("/movies/Inception.mkv"),
             staged=True,
-            result={"title": "Inception", "year": 2010},
+            metadata={"title": "Inception", "year": 2010},
         )
         row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
         plain = row.plain
@@ -140,7 +140,7 @@ class TestRenderFileRow:
         node = FileNode(
             path=Path("/movies/Inception.mkv"),
             staged=False,
-            result={"title": "Inception", "year": 2010},
+            metadata={"title": "Inception", "year": 2010},
         )
         row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
         assert "Inception.mkv" in row.plain
@@ -149,7 +149,7 @@ class TestRenderFileRow:
         node = FileNode(
             path=Path("/movies/Inception.mkv"),
             ignored=True,
-            result={"title": "Inception", "year": 2010},
+            metadata={"title": "Inception", "year": 2010},
         )
         row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
         assert "Inception.mkv" in row.plain
@@ -163,7 +163,7 @@ class TestRenderFileRow:
     def test_missing_dest_shows_partial(self) -> None:
         node = FileNode(
             path=Path("/movies/Inception.mkv"),
-            result={},
+            metadata={},
         )
         row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
         assert "?" in row.plain
@@ -171,7 +171,7 @@ class TestRenderFileRow:
     def test_with_indentation_depth_2(self) -> None:
         node = FileNode(
             path=Path("/movies/Inception.mkv"),
-            result={"title": "Inception", "year": 2010},
+            metadata={"title": "Inception", "year": 2010},
         )
         row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE, depth=2)
         assert row.plain.startswith("    ")  # 2 * "  " = 4 spaces
@@ -180,7 +180,7 @@ class TestRenderFileRow:
         root = Path("/media")
         node = FileNode(
             path=Path("/media/movies/Inception.mkv"),
-            result={"title": "Inception", "year": 2010},
+            metadata={"title": "Inception", "year": 2010},
         )
         row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE, depth=3, flat_mode=True, root_path=root)
         plain = row.plain
@@ -192,7 +192,7 @@ class TestRenderFileRow:
     def test_arrow_is_dim(self) -> None:
         node = FileNode(
             path=Path("/movies/Inception.mkv"),
-            result={"title": "Inception", "year": 2010},
+            metadata={"title": "Inception", "year": 2010},
         )
         row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
         # The arrow separator should be dim
@@ -232,7 +232,7 @@ class TestRenderRow:
     def test_dispatches_to_file(self) -> None:
         node = FileNode(
             path=Path("/movies/Inception.mkv"),
-            result={"title": "Inception", "year": 2010},
+            metadata={"title": "Inception", "year": 2010},
         )
         row = render_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
         assert isinstance(row, Text)
@@ -289,28 +289,28 @@ class TestSelectTemplate:
     def test_episode_returns_tv_template(self) -> None:
         node = FileNode(
             path=Path("/tv/show.mkv"),
-            result={"media_type": "episode"},
+            metadata={"media_type": "episode"},
         )
         assert select_template(node, MOVIE_TEMPLATE, TV_TEMPLATE) == TV_TEMPLATE
 
     def test_movie_returns_movie_template(self) -> None:
         node = FileNode(
             path=Path("/movies/film.mkv"),
-            result={"media_type": "movie"},
+            metadata={"media_type": "movie"},
         )
         assert select_template(node, MOVIE_TEMPLATE, TV_TEMPLATE) == MOVIE_TEMPLATE
 
     def test_unknown_media_type_defaults_to_movie(self) -> None:
         node = FileNode(
             path=Path("/other/file.mkv"),
-            result={"media_type": "other"},
+            metadata={"media_type": "other"},
         )
         assert select_template(node, MOVIE_TEMPLATE, TV_TEMPLATE) == MOVIE_TEMPLATE
 
     def test_missing_media_type_defaults_to_movie(self) -> None:
         node = FileNode(
             path=Path("/other/file.mkv"),
-            result={},
+            metadata={},
         )
         assert select_template(node, MOVIE_TEMPLATE, TV_TEMPLATE) == MOVIE_TEMPLATE
 
@@ -322,7 +322,7 @@ class TestRenderFileRowDualTemplate:
     def test_movie_node_uses_movie_template(self) -> None:
         node = FileNode(
             path=Path("/movies/Inception.mkv"),
-            result={"title": "Inception", "year": 2010, "media_type": "movie"},
+            metadata={"title": "Inception", "year": 2010, "media_type": "movie"},
         )
         row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
         assert "Inception (2010)/Inception (2010).mkv" in row.plain
@@ -330,7 +330,7 @@ class TestRenderFileRowDualTemplate:
     def test_episode_node_uses_tv_template(self) -> None:
         node = FileNode(
             path=Path("/tv/show.s01e02.mkv"),
-            result={
+            metadata={
                 "title": "Breaking Bad",
                 "year": 2008,
                 "season": 1,
@@ -468,7 +468,7 @@ class TestComputeDestSanitization:
     def test_slash_in_title_sanitized(self) -> None:
         node = FileNode(
             path=Path("/movies/acdc.mkv"),
-            result={"title": "AC/DC: Live", "year": 2010},
+            metadata={"title": "AC/DC: Live", "year": 2010},
         )
         result = compute_dest(node, MOVIE_TEMPLATE)
         assert result is not None
@@ -479,7 +479,7 @@ class TestComputeDestSanitization:
         tmpl = "{title} [{codec}].{ext}"
         node = FileNode(
             path=Path("/movies/movie.mkv"),
-            result={"title": "Movie", "codec": "H.265"},
+            metadata={"title": "Movie", "codec": "H.265"},
         )
         result = compute_dest(node, tmpl)
         assert result == "Movie [H_265].mkv"
@@ -487,7 +487,7 @@ class TestComputeDestSanitization:
     def test_integer_fields_unaffected(self) -> None:
         node = FileNode(
             path=Path("/movies/Inception.mkv"),
-            result={"title": "Inception", "year": 2010},
+            metadata={"title": "Inception", "year": 2010},
         )
         result = compute_dest(node, MOVIE_TEMPLATE)
         assert result == "Inception (2010)/Inception (2010).mkv"
@@ -499,21 +499,21 @@ class TestComputeDestSanitization:
 class TestReadyToStageIndicator:
     def test_staged_file_shows_check(self) -> None:
         node = FileNode(path=Path("movie.mkv"))
-        node.result = {"media_type": "movie", "title": "Inception", "year": 2010}
+        node.metadata = {"media_type": "movie", "title": "Inception", "year": 2010}
         node.staged = True
         row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
         assert "\u2713" in row.plain  # check mark
 
     def test_ready_file_shows_hollow_square(self) -> None:
         node = FileNode(path=Path("movie.mkv"))
-        node.result = {"media_type": "movie", "title": "Inception", "year": 2010}
+        node.metadata = {"media_type": "movie", "title": "Inception", "year": 2010}
         node.staged = False
         row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
         assert "\u2610" in row.plain  # hollow square
 
     def test_incomplete_file_shows_no_indicator(self) -> None:
         node = FileNode(path=Path("movie.mkv"))
-        node.result = {"media_type": "movie", "title": "Inception"}  # no year
+        node.metadata = {"media_type": "movie", "title": "Inception"}  # no year
         node.staged = False
         row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
         assert "\u2713" not in row.plain

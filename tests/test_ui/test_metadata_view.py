@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from tapes.tree_model import FileNode, Source
+from tapes.tree_model import Candidate, FileNode
 from tapes.ui.metadata_render import (
     display_val,
     get_display_fields,
@@ -22,32 +22,32 @@ def _make_node() -> FileNode:
     """Create a FileNode with sources for testing."""
     return FileNode(
         path=Path("/media/Breaking.Bad.S01E01.720p.BluRay.x264.mkv"),
-        result={
+        metadata={
             "title": "Breaking Bad",
             "year": 2008,
             "season": 1,
             "episode": 1,
         },
-        sources=[
-            Source(
+        candidates=[
+            Candidate(
                 name="filename",
-                fields={
+                metadata={
                     "title": "Breaking Bad",
                     "season": 1,
                     "episode": 1,
                 },
-                confidence=0.0,
+                score=0.0,
             ),
-            Source(
+            Candidate(
                 name="TMDB #1",
-                fields={
+                metadata={
                     "title": "Breaking Bad",
                     "year": 2008,
                     "season": 1,
                     "episode": 1,
                     "ep_title": "Pilot",
                 },
-                confidence=0.95,
+                score=0.95,
             ),
         ],
     )
@@ -113,7 +113,7 @@ class TestDetailViewCursor:
     def test_initial_position(self) -> None:
         view = self._make_view()
         assert view.cursor_row == 0
-        assert view.source_index == 0
+        assert view.candidate_index == 0
 
     def test_move_cursor_row_down(self) -> None:
         view = self._make_view()
@@ -138,27 +138,27 @@ class TestDetailViewCursor:
     def test_cycle_source_right(self) -> None:
         view = self._make_view()
         view.cycle_source(1)
-        assert view.source_index == 1
+        assert view.candidate_index == 1
 
     def test_cycle_source_wraps_at_zero(self) -> None:
         view = self._make_view()
         view.cycle_source(-1)
-        assert view.source_index == 1  # wraps to last
+        assert view.candidate_index == 1  # wraps to last
 
     def test_cycle_source_wraps_at_max(self) -> None:
         view = self._make_view()
         # 2 sources => wraps around
         view.cycle_source(1)
-        assert view.source_index == 1
+        assert view.candidate_index == 1
         view.cycle_source(1)
-        assert view.source_index == 0  # wraps to first
+        assert view.candidate_index == 0  # wraps to first
 
     def test_cycle_source_noop_no_sources(self) -> None:
-        node = FileNode(path=Path("/test.mkv"), result={}, sources=[])
+        node = FileNode(path=Path("/test.mkv"), metadata={}, candidates=[])
         view = DetailView(node, TEMPLATE, TEMPLATE)
         view.fields = get_display_fields(TEMPLATE)
         view.cycle_source(1)
-        assert view.source_index == 0
+        assert view.candidate_index == 0
 
     def test_move_cursor_noop_when_editing(self) -> None:
         view = self._make_view()
@@ -170,7 +170,7 @@ class TestDetailViewCursor:
         view = self._make_view()
         view.editing = True
         view.cycle_source(1)
-        assert view.source_index == 0
+        assert view.candidate_index == 0
 
 
 # --- DetailView editing ---
@@ -193,7 +193,7 @@ class TestDetailViewEditing:
 
     def test_start_edit_none_value(self) -> None:
         view = self._make_view()
-        view.node.result.pop("title", None)
+        view.node.metadata.pop("title", None)
         view.cursor_row = 1  # title
         view.start_edit()
         assert view.edit_value == ""
@@ -204,7 +204,7 @@ class TestDetailViewEditing:
         view.start_edit()
         view.edit_value = "Better Call Saul"
         view.commit_edit()
-        assert view.node.result["title"] == "Better Call Saul"
+        assert view.node.metadata["title"] == "Better Call Saul"
         assert view.editing is False
 
     def test_commit_edit_int_coercion_year(self) -> None:
@@ -213,8 +213,8 @@ class TestDetailViewEditing:
         view.start_edit()
         view.edit_value = "2015"
         view.commit_edit()
-        assert view.node.result["year"] == 2015
-        assert isinstance(view.node.result["year"], int)
+        assert view.node.metadata["year"] == 2015
+        assert isinstance(view.node.metadata["year"], int)
 
     def test_commit_edit_int_coercion_season(self) -> None:
         view = self._make_view()
@@ -222,8 +222,8 @@ class TestDetailViewEditing:
         view.start_edit()
         view.edit_value = "3"
         view.commit_edit()
-        assert view.node.result["season"] == 3
-        assert isinstance(view.node.result["season"], int)
+        assert view.node.metadata["season"] == 3
+        assert isinstance(view.node.metadata["season"], int)
 
     def test_commit_edit_int_coercion_episode(self) -> None:
         view = self._make_view()
@@ -231,7 +231,7 @@ class TestDetailViewEditing:
         view.start_edit()
         view.edit_value = "10"
         view.commit_edit()
-        assert view.node.result["episode"] == 10
+        assert view.node.metadata["episode"] == 10
 
     def test_commit_edit_invalid_int_stays_string(self) -> None:
         view = self._make_view()
@@ -239,7 +239,7 @@ class TestDetailViewEditing:
         view.start_edit()
         view.edit_value = "not_a_number"
         view.commit_edit()
-        assert view.node.result["year"] == "not_a_number"
+        assert view.node.metadata["year"] == "not_a_number"
 
     def test_cancel_edit_discards_changes(self) -> None:
         view = self._make_view()
@@ -248,7 +248,7 @@ class TestDetailViewEditing:
         view.edit_value = "Something Else"
         view.cancel_edit()
         assert view.editing is False
-        assert view.node.result["title"] == "Breaking Bad"
+        assert view.node.metadata["title"] == "Breaking Bad"
 
 
 # --- DetailView.set_node ---
@@ -260,17 +260,17 @@ class TestDetailViewSetNode:
         view = DetailView(node, TEMPLATE, TEMPLATE)
         view.fields = get_display_fields(TEMPLATE)
         view.cursor_row = 2
-        view.source_index = 1
+        view.candidate_index = 1
         view.editing = True
 
         new_node = FileNode(
             path=Path("/media/other.mkv"),
-            result={"title": "Other"},
+            metadata={"title": "Other"},
         )
         view.set_node(new_node)
         assert view.node is new_node
         assert view.cursor_row == 0
-        assert view.source_index == 0
+        assert view.candidate_index == 0
         assert view.editing is False
 
     def test_set_node_updates_fields(self) -> None:
@@ -294,27 +294,27 @@ class TestDetailViewApplyAllClear:
     def test_applies_present_and_preserves_absent(self) -> None:
         view = self._make_view()
         # filename source has title, season, episode but NOT year
-        view.node.result = {
+        view.node.metadata = {
             "title": "Old",
             "year": 9999,
             "season": 99,
             "episode": 99,
         }
-        view.source_index = 0  # filename source
+        view.candidate_index = 0  # filename source
         view.apply_source_all_clear()
-        assert view.node.result["title"] == "Breaking Bad"
-        assert view.node.result["season"] == 1
-        assert view.node.result["episode"] == 1
+        assert view.node.metadata["title"] == "Breaking Bad"
+        assert view.node.metadata["season"] == 1
+        assert view.node.metadata["episode"] == 1
         # year is preserved because the source doesn't have it
-        assert view.node.result["year"] == 9999
+        assert view.node.metadata["year"] == 9999
 
     def test_noop_without_sources(self) -> None:
-        node = FileNode(path=Path("/test.mkv"), result={"title": "Test"}, sources=[])
+        node = FileNode(path=Path("/test.mkv"), metadata={"title": "Test"}, candidates=[])
         view = DetailView(node, TEMPLATE, TEMPLATE)
         view.fields = get_display_fields(TEMPLATE)
-        original = dict(view.node.result)
+        original = dict(view.node.metadata)
         view.apply_source_all_clear()
-        assert view.node.result == original
+        assert view.node.metadata == original
 
 
 # --- Multi-file detail view (M15) ---
@@ -324,23 +324,23 @@ class TestMultiFileDetail:
     def _make_multi_view(self) -> tuple[DetailView, FileNode, FileNode]:
         node1 = FileNode(
             path=Path("/media/file1.mkv"),
-            result={"title": "Breaking Bad", "year": 2008, "season": 1, "episode": 1},
-            sources=[
-                Source(
+            metadata={"title": "Breaking Bad", "year": 2008, "season": 1, "episode": 1},
+            candidates=[
+                Candidate(
                     name="TMDB #1",
-                    fields={"title": "Breaking Bad", "year": 2008},
-                    confidence=0.75,
+                    metadata={"title": "Breaking Bad", "year": 2008},
+                    score=0.75,
                 ),
             ],
         )
         node2 = FileNode(
             path=Path("/media/file2.mkv"),
-            result={"title": "Breaking Bad", "year": 2008, "season": 1, "episode": 2},
-            sources=[
-                Source(
+            metadata={"title": "Breaking Bad", "year": 2008, "season": 1, "episode": 2},
+            candidates=[
+                Candidate(
                     name="TMDB #1",
-                    fields={"title": "Breaking Bad", "year": 2008},
-                    confidence=0.75,
+                    metadata={"title": "Breaking Bad", "year": 2008},
+                    score=0.75,
                 ),
             ],
         )
@@ -389,30 +389,30 @@ class TestMultiFileDetail:
         view.start_edit()
         view.edit_value = "Better Call Saul"
         view.commit_edit()
-        assert node1.result["title"] == "Better Call Saul"
-        assert node2.result["title"] == "Better Call Saul"
+        assert node1.metadata["title"] == "Better Call Saul"
+        assert node2.metadata["title"] == "Better Call Saul"
 
     def test_apply_source_all_applies_to_all_nodes(self) -> None:
         view, node1, node2 = self._make_multi_view()
         # Clear results
-        node1.result = {}
-        node2.result = {}
+        node1.metadata = {}
+        node2.metadata = {}
         # Apply all from TMDB source via shift-enter
-        view.source_index = 0
+        view.candidate_index = 0
         view.apply_source_all_clear()
-        assert node1.result["title"] == "Breaking Bad"
-        assert node2.result["title"] == "Breaking Bad"
-        assert node1.result["year"] == 2008
-        assert node2.result["year"] == 2008
+        assert node1.metadata["title"] == "Breaking Bad"
+        assert node2.metadata["title"] == "Breaking Bad"
+        assert node1.metadata["year"] == 2008
+        assert node2.metadata["year"] == 2008
 
     def test_set_nodes_resets_cursor(self) -> None:
         view, _, _ = self._make_multi_view()
         view.cursor_row = 2
-        view.source_index = 1
-        new_node = FileNode(path=Path("/x.mkv"), result={"title": "X"})
+        view.candidate_index = 1
+        new_node = FileNode(path=Path("/x.mkv"), metadata={"title": "X"})
         view.set_nodes([new_node])
         assert view.cursor_row == 0
-        assert view.source_index == 0
+        assert view.candidate_index == 0
         assert not view.is_multi
 
     def test_edit_various_field_starts_empty(self) -> None:
@@ -425,31 +425,31 @@ class TestMultiFileDetail:
     def test_apply_all_clear_applies_to_all_nodes(self) -> None:
         view, node1, node2 = self._make_multi_view()
         # Set up result with extra fields
-        node1.result = {"title": "Old", "year": 9999, "season": 99, "episode": 99}
-        node2.result = {"title": "Old", "year": 9999, "season": 99, "episode": 99}
+        node1.metadata = {"title": "Old", "year": 9999, "season": 99, "episode": 99}
+        node2.metadata = {"title": "Old", "year": 9999, "season": 99, "episode": 99}
         # TMDB source only has title and year
-        view.source_index = 0
+        view.candidate_index = 0
         view.apply_source_all_clear()
-        assert node1.result["title"] == "Breaking Bad"
-        assert node2.result["title"] == "Breaking Bad"
-        assert node1.result["year"] == 2008
-        assert node2.result["year"] == 2008
+        assert node1.metadata["title"] == "Breaking Bad"
+        assert node2.metadata["title"] == "Breaking Bad"
+        assert node1.metadata["year"] == 2008
+        assert node2.metadata["year"] == 2008
         # season and episode not in TMDB source, should be preserved
-        assert node1.result["season"] == 99
-        assert node2.result["season"] == 99
+        assert node1.metadata["season"] == 99
+        assert node2.metadata["season"] == 99
 
     def test_multi_value_count_reflects_distinct_values(self) -> None:
         node1 = FileNode(
             path=Path("/a.mkv"),
-            result={"title": "A", "year": 2020},
+            metadata={"title": "A", "year": 2020},
         )
         node2 = FileNode(
             path=Path("/b.mkv"),
-            result={"title": "B", "year": 2020},
+            metadata={"title": "B", "year": 2020},
         )
         node3 = FileNode(
             path=Path("/c.mkv"),
-            result={"title": "C", "year": 2020},
+            metadata={"title": "C", "year": 2020},
         )
         view = DetailView(node1, TEMPLATE, TEMPLATE)
         view.fields = get_display_fields(TEMPLATE)
@@ -488,25 +488,25 @@ class TestClearField:
     def test_clear_field_removes_value(self) -> None:
         node = FileNode(
             path=Path("/media/Inception.2010.mkv"),
-            result={"title": "Inception", "year": 2010, "media_type": "movie"},
+            metadata={"title": "Inception", "year": 2010, "media_type": "movie"},
         )
         dv = DetailView(node, MOVIE_TPL, TV_TPL)
         dv.fields = get_display_fields(dv._active_template())
         dv.cursor_row = dv.fields.index("title")
         dv.clear_field()
-        assert "title" not in node.result
+        assert "title" not in node.metadata
 
     def test_clear_field_noop_during_edit(self) -> None:
         node = FileNode(
             path=Path("/media/Inception.2010.mkv"),
-            result={"title": "Inception", "year": 2010, "media_type": "movie"},
+            metadata={"title": "Inception", "year": 2010, "media_type": "movie"},
         )
         dv = DetailView(node, MOVIE_TPL, TV_TPL)
         dv.fields = get_display_fields(dv._active_template())
         dv.cursor_row = dv.fields.index("title")
         dv.editing = True
         dv.clear_field()
-        assert node.result["title"] == "Inception"
+        assert node.metadata["title"] == "Inception"
 
 
 # --- Reset field to guessit ---
@@ -516,24 +516,24 @@ class TestResetFieldToGuessit:
     def test_reset_restores_guessit_value(self) -> None:
         node = FileNode(
             path=Path("/media/Inception.2010.mkv"),
-            result={"title": "Wrong Title", "year": 2010, "media_type": "movie"},
+            metadata={"title": "Wrong Title", "year": 2010, "media_type": "movie"},
         )
         dv = DetailView(node, MOVIE_TPL, TV_TPL)
         dv.fields = get_display_fields(dv._active_template())
         dv.cursor_row = dv.fields.index("title")
         dv.reset_field_to_guessit()
-        assert node.result["title"] == "Inception"
+        assert node.metadata["title"] == "Inception"
 
     def test_reset_clears_field_if_not_in_filename(self) -> None:
         node = FileNode(
             path=Path("/media/Inception.2010.mkv"),
-            result={"title": "Inception", "year": 2010, "tmdb_id": 12345, "media_type": "movie"},
+            metadata={"title": "Inception", "year": 2010, "tmdb_id": 12345, "media_type": "movie"},
         )
         dv = DetailView(node, MOVIE_TPL, TV_TPL)
         dv.fields = get_display_fields(dv._active_template())
         dv.cursor_row = dv.fields.index("tmdb_id")
         dv.reset_field_to_guessit()
-        assert "tmdb_id" not in node.result
+        assert "tmdb_id" not in node.metadata
 
 
 # --- Async integration: tree -> detail -> back ---
@@ -549,7 +549,7 @@ class TestDetailViewTemplateSelection:
     def test_movie_node_uses_movie_template_fields(self) -> None:
         node = FileNode(
             path=Path("/movies/Inception.mkv"),
-            result={"title": "Inception", "year": 2010, "media_type": "movie"},
+            metadata={"title": "Inception", "year": 2010, "media_type": "movie"},
         )
         view = DetailView(
             node,
@@ -566,7 +566,7 @@ class TestDetailViewTemplateSelection:
     def test_episode_node_uses_tv_template_fields(self) -> None:
         node = FileNode(
             path=Path("/tv/show.s01e01.mkv"),
-            result={
+            metadata={
                 "title": "Breaking Bad",
                 "year": 2008,
                 "season": 1,
@@ -588,11 +588,11 @@ class TestDetailViewTemplateSelection:
     def test_set_node_updates_fields_for_new_media_type(self) -> None:
         movie_node = FileNode(
             path=Path("/movies/Inception.mkv"),
-            result={"title": "Inception", "year": 2010, "media_type": "movie"},
+            metadata={"title": "Inception", "year": 2010, "media_type": "movie"},
         )
         tv_node = FileNode(
             path=Path("/tv/show.s01e01.mkv"),
-            result={
+            metadata={
                 "title": "Show",
                 "year": 2020,
                 "season": 1,
@@ -616,7 +616,7 @@ class TestDetailViewTemplateSelection:
     def test_template_selection_uses_media_type(self) -> None:
         node = FileNode(
             path=Path("/tv/show.mkv"),
-            result={"title": "Show", "media_type": "episode"},
+            metadata={"title": "Show", "media_type": "episode"},
         )
         view = DetailView(node, MOVIE_TEMPLATE, TV_TEMPLATE)
         assert view._active_template() == TV_TEMPLATE
@@ -656,31 +656,31 @@ class TestColumnFocus:
     def test_set_node_resets_focus(self) -> None:
         view = self._make_view()
         view.focus_column = "result"
-        new_node = FileNode(path=Path("/other.mkv"), result={"title": "X"})
+        new_node = FileNode(path=Path("/other.mkv"), metadata={"title": "X"})
         view.set_node(new_node)
         assert view.focus_column == "match"
 
     def test_set_nodes_resets_focus(self) -> None:
         view = self._make_view()
         view.focus_column = "result"
-        new_node = FileNode(path=Path("/other.mkv"), result={"title": "X"})
+        new_node = FileNode(path=Path("/other.mkv"), metadata={"title": "X"})
         view.set_nodes([new_node])
         assert view.focus_column == "match"
 
     def test_accept_focused_match_applies_source(self) -> None:
         view = self._make_view()
         view.focus_column = "match"
-        view.source_index = 1  # TMDB source with title, year, etc.
-        view.node.result["title"] = "Old Title"
+        view.candidate_index = 1  # TMDB source with title, year, etc.
+        view.node.metadata["title"] = "Old Title"
         view.accept_focused_column()
-        assert view.node.result["title"] == "Breaking Bad"  # from TMDB source
+        assert view.node.metadata["title"] == "Breaking Bad"  # from TMDB source
 
     def test_accept_focused_result_no_change(self) -> None:
         view = self._make_view()
         view.focus_column = "result"
-        view.node.result["title"] = "My Title"
+        view.node.metadata["title"] = "My Title"
         view.accept_focused_column()
-        assert view.node.result["title"] == "My Title"  # unchanged
+        assert view.node.metadata["title"] == "My Title"  # unchanged
 
 
 # --- Tab bar rendering ---
@@ -691,17 +691,17 @@ class TestTabBarMultipleSources:
 
     def _make_view_with_sources(self, num_sources: int) -> DetailView:
         sources = [
-            Source(
+            Candidate(
                 name=f"TMDB #{i + 1}",
-                fields={"title": f"Show {i + 1}", "year": 2020 + i, "media_type": "episode"},
-                confidence=0.8 - i * 0.1,
+                metadata={"title": f"Show {i + 1}", "year": 2020 + i, "media_type": "episode"},
+                score=0.8 - i * 0.1,
             )
             for i in range(num_sources)
         ]
         node = FileNode(
             path=Path("/media/show.s01e01.mkv"),
-            result={"title": "Show", "year": 2020, "media_type": "episode"},
-            sources=sources,
+            metadata={"title": "Show", "year": 2020, "media_type": "episode"},
+            candidates=sources,
         )
         view = DetailView(node, TEMPLATE, TEMPLATE)
         view.fields = get_display_fields(TEMPLATE)
@@ -726,11 +726,11 @@ class TestTabBarMultipleSources:
 
     def test_tab_cycle_changes_active_tab(self) -> None:
         view = self._make_view_with_sources(3)
-        assert view.source_index == 0
+        assert view.candidate_index == 0
         view.cycle_source(1)
-        assert view.source_index == 1
+        assert view.candidate_index == 1
         view.cycle_source(1)
-        assert view.source_index == 2
+        assert view.candidate_index == 2
 
 
 try:
@@ -786,16 +786,16 @@ class TestMultiFileDetailIntegration:
 
         node1 = FileNode(
             path=Path("/media/file1.mkv"),
-            result={"title": "Show", "year": 2020, "season": 1, "episode": 1},
-            sources=[
-                Source(name="TMDB", fields={"title": "Show"}, confidence=0.9),
+            metadata={"title": "Show", "year": 2020, "season": 1, "episode": 1},
+            candidates=[
+                Candidate(name="TMDB", metadata={"title": "Show"}, score=0.9),
             ],
         )
         node2 = FileNode(
             path=Path("/media/file2.mkv"),
-            result={"title": "Show", "year": 2020, "season": 1, "episode": 2},
-            sources=[
-                Source(name="TMDB", fields={"title": "Show"}, confidence=0.9),
+            metadata={"title": "Show", "year": 2020, "season": 1, "episode": 2},
+            candidates=[
+                Candidate(name="TMDB", metadata={"title": "Show"}, score=0.9),
             ],
         )
         root = FolderNode(name="root", children=[node1, node2])

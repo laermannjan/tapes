@@ -139,7 +139,7 @@ def render_file_row(
         # Staging indicator: checkmark staged, hollow square ready to stage, blank if incomplete
         if node.staged:
             row.append("\u2713 ", style=COLOR_STAGED)
-        elif can_fill_template(node, node.result, movie_template, tv_template):
+        elif can_fill_template(node, node.metadata, movie_template, tv_template):
             row.append("\u2610 ", style=COLOR_MUTED)
         else:
             row.append("  ")

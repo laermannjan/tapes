@@ -206,7 +206,7 @@ def get_season_episodes(
 ) -> list[dict]:
     """GET /tv/{show_id}/season/{season_number}. Returns list of episode dicts.
 
-    Each episode dict has all fields needed for a Source:
+    Each episode dict has all fields needed for a Candidate:
     tmdb_id, title, year, media_type, season, episode, episode_title.
     """
     if not token:

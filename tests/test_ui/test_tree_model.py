@@ -5,28 +5,28 @@ from __future__ import annotations
 from pathlib import Path
 
 from tapes.tree_model import (
+    Candidate,
     FileNode,
     FolderNode,
-    Source,
     TreeModel,
     build_tree,
     compute_shared_fields,
 )
 
-# --- Source ---
+# --- Candidate ---
 
 
-class TestSource:
+class TestCandidate:
     def test_creation(self) -> None:
-        s = Source(name="from filename", fields={"title": "Foo"}, confidence=0.8)
-        assert s.name == "from filename"
-        assert s.fields == {"title": "Foo"}
-        assert s.confidence == 0.8
+        c = Candidate(name="from filename", metadata={"title": "Foo"}, score=0.8)
+        assert c.name == "from filename"
+        assert c.metadata == {"title": "Foo"}
+        assert c.score == 0.8
 
     def test_defaults(self) -> None:
-        s = Source(name="x")
-        assert s.fields == {}
-        assert s.confidence == 0.0
+        c = Candidate(name="x")
+        assert c.metadata == {}
+        assert c.score == 0.0
 
 
 # --- FileNode ---
@@ -37,22 +37,22 @@ class TestFileNode:
         n = FileNode(path=Path("/a/b.mkv"))
         assert n.staged is False
         assert n.ignored is False
-        assert n.result == {}
-        assert n.sources == []
+        assert n.metadata == {}
+        assert n.candidates == []
 
     def test_with_values(self) -> None:
-        src = Source(name="tmdb", fields={"title": "X"}, confidence=0.95)
+        cand = Candidate(name="tmdb", metadata={"title": "X"}, score=0.95)
         n = FileNode(
             path=Path("/a.mkv"),
             staged=True,
             ignored=True,
-            result={"title": "X"},
-            sources=[src],
+            metadata={"title": "X"},
+            candidates=[cand],
         )
         assert n.staged is True
         assert n.ignored is True
-        assert n.result["title"] == "X"
-        assert len(n.sources) == 1
+        assert n.metadata["title"] == "X"
+        assert len(n.candidates) == 1
 
 
 # --- FolderNode ---
@@ -242,8 +242,8 @@ class TestBuildTree:
         assert isinstance(f, FileNode)
         assert f.staged is False
         assert f.ignored is False
-        assert f.result == {}
-        assert f.sources == []
+        assert f.metadata == {}
+        assert f.candidates == []
 
     def test_empty_file_list(self, tmp_path: Path) -> None:
         model = build_tree([], tmp_path)
@@ -257,16 +257,16 @@ class TestBuildTree:
 class TestComputeSharedFields:
     def test_all_same(self) -> None:
         nodes = [
-            FileNode(path=Path("/a.mkv"), result={"title": "Foo", "year": 2020}),
-            FileNode(path=Path("/b.mkv"), result={"title": "Foo", "year": 2020}),
+            FileNode(path=Path("/a.mkv"), metadata={"title": "Foo", "year": 2020}),
+            FileNode(path=Path("/b.mkv"), metadata={"title": "Foo", "year": 2020}),
         ]
         shared = compute_shared_fields(nodes)
         assert shared == {"title": "Foo", "year": 2020}
 
     def test_differing_values(self) -> None:
         nodes = [
-            FileNode(path=Path("/a.mkv"), result={"title": "Foo", "year": 2020}),
-            FileNode(path=Path("/b.mkv"), result={"title": "Bar", "year": 2020}),
+            FileNode(path=Path("/a.mkv"), metadata={"title": "Foo", "year": 2020}),
+            FileNode(path=Path("/b.mkv"), metadata={"title": "Bar", "year": 2020}),
         ]
         shared = compute_shared_fields(nodes)
         assert shared["title"] == "(2 values)"
@@ -274,8 +274,8 @@ class TestComputeSharedFields:
 
     def test_field_in_some_not_all(self) -> None:
         nodes = [
-            FileNode(path=Path("/a.mkv"), result={"title": "Foo", "season": 1}),
-            FileNode(path=Path("/b.mkv"), result={"title": "Foo"}),
+            FileNode(path=Path("/a.mkv"), metadata={"title": "Foo", "season": 1}),
+            FileNode(path=Path("/b.mkv"), metadata={"title": "Foo"}),
         ]
         shared = compute_shared_fields(nodes)
         assert shared["title"] == "Foo"
@@ -284,9 +284,9 @@ class TestComputeSharedFields:
 
     def test_field_in_some_with_different_values(self) -> None:
         nodes = [
-            FileNode(path=Path("/a.mkv"), result={"title": "Foo", "season": 1}),
-            FileNode(path=Path("/b.mkv"), result={"title": "Foo", "season": 2}),
-            FileNode(path=Path("/c.mkv"), result={"title": "Foo"}),
+            FileNode(path=Path("/a.mkv"), metadata={"title": "Foo", "season": 1}),
+            FileNode(path=Path("/b.mkv"), metadata={"title": "Foo", "season": 2}),
+            FileNode(path=Path("/c.mkv"), metadata={"title": "Foo"}),
         ]
         shared = compute_shared_fields(nodes)
         assert shared["title"] == "Foo"
@@ -296,7 +296,7 @@ class TestComputeSharedFields:
         assert compute_shared_fields([]) == {}
 
     def test_single_node(self) -> None:
-        nodes = [FileNode(path=Path("/a.mkv"), result={"title": "X", "year": 2021})]
+        nodes = [FileNode(path=Path("/a.mkv"), metadata={"title": "X", "year": 2021})]
         shared = compute_shared_fields(nodes)
         assert shared == {"title": "X", "year": 2021}
 
@@ -362,11 +362,11 @@ class TestStagingGate:
         from tapes.templates import can_fill_template
 
         node = FileNode(path=Path("movie.mkv"))
-        node.result = {MEDIA_TYPE: "movie", TITLE: "Inception"}  # no year
+        node.metadata = {MEDIA_TYPE: "movie", TITLE: "Inception"}  # no year
         model = TreeModel(root=FolderNode(name="root", children=[node]))
 
         def can_stage(n: FileNode) -> bool:
-            return can_fill_template(n, n.result, MOVIE_TEMPLATE, TV_TEMPLATE)
+            return can_fill_template(n, n.metadata, MOVIE_TEMPLATE, TV_TEMPLATE)
 
         model.toggle_staged(node, can_stage=can_stage)
         assert node.staged is False
@@ -377,11 +377,11 @@ class TestStagingGate:
         from tapes.templates import can_fill_template
 
         node = FileNode(path=Path("movie.mkv"))
-        node.result = {MEDIA_TYPE: "movie", TITLE: "Inception", YEAR: 2010}
+        node.metadata = {MEDIA_TYPE: "movie", TITLE: "Inception", YEAR: 2010}
         model = TreeModel(root=FolderNode(name="root", children=[node]))
 
         def can_stage(n: FileNode) -> bool:
-            return can_fill_template(n, n.result, MOVIE_TEMPLATE, TV_TEMPLATE)
+            return can_fill_template(n, n.metadata, MOVIE_TEMPLATE, TV_TEMPLATE)
 
         model.toggle_staged(node, can_stage=can_stage)
         assert node.staged is True
@@ -391,7 +391,7 @@ class TestStagingGate:
         from tapes.fields import MEDIA_TYPE, TITLE
 
         node = FileNode(path=Path("movie.mkv"))
-        node.result = {MEDIA_TYPE: "movie", TITLE: "Inception"}  # incomplete
+        node.metadata = {MEDIA_TYPE: "movie", TITLE: "Inception"}  # incomplete
         node.staged = True  # force staged
         model = TreeModel(root=FolderNode(name="root", children=[node]))
 
@@ -407,14 +407,14 @@ class TestStagingGate:
         from tapes.templates import can_fill_template
 
         complete = FileNode(path=Path("a.mkv"))
-        complete.result = {MEDIA_TYPE: "movie", TITLE: "A", YEAR: 2020}
+        complete.metadata = {MEDIA_TYPE: "movie", TITLE: "A", YEAR: 2020}
         incomplete = FileNode(path=Path("b.mkv"))
-        incomplete.result = {MEDIA_TYPE: "movie", TITLE: "B"}  # no year
+        incomplete.metadata = {MEDIA_TYPE: "movie", TITLE: "B"}  # no year
         folder = FolderNode(name="root", children=[complete, incomplete])
         model = TreeModel(root=folder)
 
         def can_stage(n: FileNode) -> bool:
-            return can_fill_template(n, n.result, MOVIE_TEMPLATE, TV_TEMPLATE)
+            return can_fill_template(n, n.metadata, MOVIE_TEMPLATE, TV_TEMPLATE)
 
         model.toggle_staged_recursive(folder, can_stage=can_stage)
         assert complete.staged is True

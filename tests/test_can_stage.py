@@ -15,22 +15,22 @@ TV_TEMPLATE = "{title} ({year})/Season {season:02d}/{title} - S{season:02d}E{epi
 class TestCanFillTemplate:
     def test_movie_all_fields_present(self) -> None:
         node = FileNode(path=Path("movie.mkv"))
-        node.result = {MEDIA_TYPE: "movie", TITLE: "Inception", YEAR: 2010}
-        assert can_fill_template(node, node.result, MOVIE_TEMPLATE, TV_TEMPLATE) is True
+        node.metadata = {MEDIA_TYPE: "movie", TITLE: "Inception", YEAR: 2010}
+        assert can_fill_template(node, node.metadata, MOVIE_TEMPLATE, TV_TEMPLATE) is True
 
     def test_movie_missing_year(self) -> None:
         node = FileNode(path=Path("movie.mkv"))
-        node.result = {MEDIA_TYPE: "movie", TITLE: "Inception"}
-        assert can_fill_template(node, node.result, MOVIE_TEMPLATE, TV_TEMPLATE) is False
+        node.metadata = {MEDIA_TYPE: "movie", TITLE: "Inception"}
+        assert can_fill_template(node, node.metadata, MOVIE_TEMPLATE, TV_TEMPLATE) is False
 
     def test_movie_missing_title(self) -> None:
         node = FileNode(path=Path("movie.mkv"))
-        node.result = {MEDIA_TYPE: "movie", YEAR: 2010}
-        assert can_fill_template(node, node.result, MOVIE_TEMPLATE, TV_TEMPLATE) is False
+        node.metadata = {MEDIA_TYPE: "movie", YEAR: 2010}
+        assert can_fill_template(node, node.metadata, MOVIE_TEMPLATE, TV_TEMPLATE) is False
 
     def test_tv_all_fields_present(self) -> None:
         node = FileNode(path=Path("episode.mkv"))
-        node.result = {
+        node.metadata = {
             MEDIA_TYPE: "episode",
             TITLE: "Breaking Bad",
             YEAR: 2008,
@@ -38,48 +38,48 @@ class TestCanFillTemplate:
             EPISODE: 1,
             EPISODE_TITLE: "Pilot",
         }
-        assert can_fill_template(node, node.result, MOVIE_TEMPLATE, TV_TEMPLATE) is True
+        assert can_fill_template(node, node.metadata, MOVIE_TEMPLATE, TV_TEMPLATE) is True
 
     def test_tv_missing_episode_title(self) -> None:
         node = FileNode(path=Path("episode.mkv"))
-        node.result = {
+        node.metadata = {
             MEDIA_TYPE: "episode",
             TITLE: "Breaking Bad",
             YEAR: 2008,
             SEASON: 1,
             EPISODE: 1,
         }
-        assert can_fill_template(node, node.result, MOVIE_TEMPLATE, TV_TEMPLATE) is False
+        assert can_fill_template(node, node.metadata, MOVIE_TEMPLATE, TV_TEMPLATE) is False
 
     def test_tv_missing_season(self) -> None:
         node = FileNode(path=Path("episode.mkv"))
-        node.result = {
+        node.metadata = {
             MEDIA_TYPE: "episode",
             TITLE: "Breaking Bad",
             YEAR: 2008,
             EPISODE: 1,
             EPISODE_TITLE: "Pilot",
         }
-        assert can_fill_template(node, node.result, MOVIE_TEMPLATE, TV_TEMPLATE) is False
+        assert can_fill_template(node, node.metadata, MOVIE_TEMPLATE, TV_TEMPLATE) is False
 
     def test_ext_excluded_from_check(self) -> None:
         """ext comes from the filename, not from metadata."""
         node = FileNode(path=Path("movie.mkv"))
         # No 'ext' in result, but should still pass because ext is excluded
-        node.result = {MEDIA_TYPE: "movie", TITLE: "Inception", YEAR: 2010}
-        assert can_fill_template(node, node.result, MOVIE_TEMPLATE, TV_TEMPLATE) is True
+        node.metadata = {MEDIA_TYPE: "movie", TITLE: "Inception", YEAR: 2010}
+        assert can_fill_template(node, node.metadata, MOVIE_TEMPLATE, TV_TEMPLATE) is True
 
     def test_uses_merged_result(self) -> None:
-        """can_fill_template checks the merged dict, not node.result."""
+        """can_fill_template checks the merged dict, not node.metadata."""
         node = FileNode(path=Path("movie.mkv"))
-        node.result = {MEDIA_TYPE: "movie", TITLE: "Inception"}
+        node.metadata = {MEDIA_TYPE: "movie", TITLE: "Inception"}
         merged = {MEDIA_TYPE: "movie", TITLE: "Inception", YEAR: 2010}
         assert can_fill_template(node, merged, MOVIE_TEMPLATE, TV_TEMPLATE) is True
 
     def test_none_value_treated_as_missing(self) -> None:
         node = FileNode(path=Path("movie.mkv"))
-        node.result = {MEDIA_TYPE: "movie", TITLE: "Inception", YEAR: None}
-        assert can_fill_template(node, node.result, MOVIE_TEMPLATE, TV_TEMPLATE) is False
+        node.metadata = {MEDIA_TYPE: "movie", TITLE: "Inception", YEAR: None}
+        assert can_fill_template(node, node.metadata, MOVIE_TEMPLATE, TV_TEMPLATE) is False
 
 
 class TestCanStagePipelineIntegration:
@@ -129,8 +129,8 @@ class TestCanStagePipelineIntegration:
             )
 
         # Fields should be applied (title from TMDB)
-        assert file_node.result.get(TITLE) == "Inception"
-        assert file_node.result.get(TMDB_ID) == 27205
+        assert file_node.metadata.get(TITLE) == "Inception"
+        assert file_node.metadata.get(TMDB_ID) == 27205
         # But NOT staged because year is missing
         assert file_node.staged is False
 
@@ -171,6 +171,6 @@ class TestCanStagePipelineIntegration:
                 can_stage=_can_stage,
             )
 
-        assert file_node.result.get(TITLE) == "Inception"
-        assert file_node.result.get(YEAR) == 2010
+        assert file_node.metadata.get(TITLE) == "Inception"
+        assert file_node.metadata.get(YEAR) == 2010
         assert file_node.staged is True

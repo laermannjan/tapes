@@ -17,7 +17,7 @@ def _touch(path: Path, content: bytes = b"") -> Path:
 
 def _node(path: Path, staged: bool = True, **result_fields: object) -> FileNode:
     """Create a FileNode with the given path, staged flag, and result fields."""
-    return FileNode(path=path, staged=staged, result=dict(result_fields))
+    return FileNode(path=path, staged=staged, metadata=dict(result_fields))
 
 
 class TestDuplicateDetection:

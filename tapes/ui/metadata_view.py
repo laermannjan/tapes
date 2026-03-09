@@ -27,7 +27,7 @@ from tapes.ui.tree_render import render_dest, render_separator
 if TYPE_CHECKING:
     from rich.console import RenderableType
 
-# Column gap between field names, values, and source values.
+# Column gap between field names, values, and candidate values.
 COL_GAP = "   "
 
 
@@ -38,13 +38,13 @@ class DetailView(Widget):
     shared values are shown and edits apply to all nodes.
     """
 
-    class FieldsChanged(Message):
-        """Posted when result fields are mutated (edit, ctrl+a, clear, etc.)."""
+    class MetadataChanged(Message):
+        """Posted when metadata fields are mutated (edit, ctrl+a, clear, etc.)."""
 
     can_focus = True
 
     cursor_row: reactive[int] = reactive(0)  # 0+ = fields
-    source_index: reactive[int] = reactive(0)  # which TMDB source tab
+    candidate_index: reactive[int] = reactive(0)  # which TMDB candidate tab
     editing: reactive[bool] = reactive(False)
     quit_hint: reactive[str] = reactive("")
 
@@ -84,7 +84,7 @@ class DetailView(Widget):
         self.node = node
         self.file_nodes = [node]
         self.cursor_row = 0
-        self.source_index = 0
+        self.candidate_index = 0
         self.focus_column = "match"
         self.fields = get_display_fields(self._active_template(node))
         self.editing = False
@@ -97,16 +97,16 @@ class DetailView(Widget):
         self.file_nodes = list(nodes)
         self.node = nodes[0]
         self.cursor_row = 0
-        self.source_index = 0
+        self.candidate_index = 0
         self.focus_column = "match"
         self.fields = get_display_fields(self._active_template(self.node))
         self.editing = False
         self.refresh()
 
     def _shared_result(self) -> dict[str, Any]:
-        """Compute the shared result for multi-node display."""
+        """Compute the shared metadata for multi-node display."""
         if not self.is_multi:
-            return self.node.result
+            return self.node.metadata
         return compute_shared_fields(self.file_nodes)
 
     def _display_path(self, node: FileNode) -> str:
@@ -124,14 +124,14 @@ class DetailView(Widget):
         return Text("\n").join(self._build_content(inner_width))
 
     def _compute_col_widths(self) -> tuple[int, int, int]:
-        """Compute auto-sized column widths: (label_w, value_w, source_w).
+        """Compute auto-sized column widths: (label_w, value_w, candidate_w).
 
-        Label and value columns are measured by content. The source column
+        Label and value columns are measured by content. The candidate column
         starts after a gap. The label+gap+value portion is capped at 50%
-        of the widget width so the source column stays visible.
+        of the widget width so the candidate column stays visible.
         """
         shared = self._shared_result()
-        sources = self.node.sources
+        candidates = self.node.candidates
         gap = len(COL_GAP)
         inner = self.size.width
 
@@ -144,23 +144,23 @@ class DetailView(Widget):
             v = display_val(shared.get(f))
             val_w = max(val_w, len(v))
 
-        # Measure source column
-        src_w = 0
-        if sources and self.source_index < len(sources):
-            src = sources[self.source_index]
+        # Measure candidate column
+        cand_w = 0
+        if candidates and self.candidate_index < len(candidates):
+            cand = candidates[self.candidate_index]
             for f in self.fields:
-                v = display_val(src.fields.get(f))
-                src_w = max(src_w, len(v))
-            src_w = max(src_w, 6)  # minimum
+                v = display_val(cand.metadata.get(f))
+                cand_w = max(cand_w, len(v))
+            cand_w = max(cand_w, 6)  # minimum
 
-        # Cap label+gap+value at 50% of width when source column exists
-        if src_w > 0:
+        # Cap label+gap+value at 50% of width when candidate column exists
+        if cand_w > 0:
             max_left = inner // 2
             left_used = label_w + gap + val_w
             if left_used > max_left:
                 val_w = max(6, max_left - label_w - gap)
 
-        return (label_w, val_w, src_w)
+        return (label_w, val_w, cand_w)
 
     def _col(self, text: str, width: int) -> str:
         """Pad or truncate text to width."""
@@ -193,9 +193,9 @@ class DetailView(Widget):
         content.append(Text())
 
         # Field rows
-        label_w, val_w, src_w = self._compute_col_widths()
+        label_w, val_w, cand_w = self._compute_col_widths()
         for row_idx, field_name in enumerate(self.fields):
-            content.append(self._render_field_row(row_idx, field_name, label_w, val_w, src_w, inner_width))
+            content.append(self._render_field_row(row_idx, field_name, label_w, val_w, cand_w, inner_width))
 
         # Blank line + footer hints
         content.append(Text())
@@ -204,19 +204,19 @@ class DetailView(Widget):
         return content
 
     def _render_tab_bar(self, inner_width: int) -> Text:  # noqa: ARG002
-        """Render the tab bar with source tabs."""
-        sources = self.node.sources
+        """Render the tab bar with candidate tabs."""
+        candidates = self.node.candidates
 
         line = Text()
         line.append("    ")  # 4-space indent matching content
-        # Tabs for sources
-        if sources:
-            for idx, src in enumerate(sources):
+        # Tabs for candidates
+        if candidates:
+            for idx, cand in enumerate(candidates):
                 if idx > 0:
                     line.append("  ")
-                conf = f" [{src.confidence:.0%}]" if src.confidence else ""
+                conf = f" [{cand.score:.0%}]" if cand.score else ""
                 tab_text = f" TMDB #{idx + 1}{conf} "
-                if idx == self.source_index:
+                if idx == self.candidate_index:
                     line.append(tab_text, style=f"on {COLOR_ACCENT} #000000")
                 else:
                     line.append(tab_text)
@@ -283,12 +283,12 @@ class DetailView(Widget):
         field_name: str,
         label_w: int,
         val_w: int,
-        src_w: int,
+        cand_w: int,
         inner_width: int = 0,
     ) -> Text:
         """Render a single field row with auto-sized columns."""
         shared = self._shared_result()
-        sources = self.node.sources
+        candidates = self.node.candidates
         is_cursor = self.cursor_row == row_idx
 
         line = Text()
@@ -312,18 +312,18 @@ class DetailView(Widget):
                 val_style += f" {COLOR_COLUMN_FOCUS_BG}"
             line.append(self._col(result_val, val_w), style=val_style)
 
-        # Source value (from active tab, if any)
-        if sources and src_w > 0 and self.source_index < len(sources):
-            src = sources[self.source_index]
-            src_raw = src.fields.get(field_name)
-            src_val = display_val(src_raw)
+        # Candidate value (from active tab, if any)
+        if candidates and cand_w > 0 and self.candidate_index < len(candidates):
+            cand = candidates[self.candidate_index]
+            cand_raw = cand.metadata.get(field_name)
+            cand_val = display_val(cand_raw)
 
             line.append(COL_GAP)
 
-            base_style = "dim" if is_multi_value(result_raw) else diff_style(result_raw, src_raw)
+            base_style = "dim" if is_multi_value(result_raw) else diff_style(result_raw, cand_raw)
             if self.focus_column == "match":
                 base_style += f" {COLOR_COLUMN_FOCUS_BG}"
-            line.append(self._col(src_val, src_w), style=base_style)
+            line.append(self._col(cand_val, cand_w), style=base_style)
 
         # Pad to full width and apply background highlight to cursor row
         if is_cursor and inner_width > 0:
@@ -347,39 +347,39 @@ class DetailView(Widget):
         self.cursor_row = max(0, min(max_row, new_row))
 
     def cycle_source(self, delta: int) -> None:
-        """Cycle through source tabs."""
+        """Cycle through candidate tabs."""
         if self.editing:
             return
-        sources = self.node.sources
-        if not sources:
+        candidates = self.node.candidates
+        if not candidates:
             return
-        self.source_index = (self.source_index + delta) % len(sources)
+        self.candidate_index = (self.candidate_index + delta) % len(candidates)
         self.focus_column = "match"
 
     def apply_source_all_clear(self) -> None:
-        """Handle ctrl+a: accept all fields from current source.
+        """Handle ctrl+a: accept all fields from current candidate.
 
-        Only sets fields that are present in the source. Fields the source
+        Only sets fields that are present in the candidate. Fields the candidate
         doesn't have are left untouched, preserving per-file metadata like
         season/episode when accepting a show-level TMDB match.
         """
-        sources = self.node.sources
-        if not sources:
+        candidates = self.node.candidates
+        if not candidates:
             return
-        src_idx = self.source_index
-        if src_idx >= len(sources):
+        cand_idx = self.candidate_index
+        if cand_idx >= len(candidates):
             return
-        src = sources[src_idx]
+        cand = candidates[cand_idx]
         for field_name in self.fields:
-            val = src.fields.get(field_name)
+            val = cand.metadata.get(field_name)
             if val is not None:
                 for n in self.file_nodes:
-                    n.result[field_name] = val
+                    n.metadata[field_name] = val
         self.refresh()
-        self.post_message(self.FieldsChanged())
+        self.post_message(self.MetadataChanged())
 
     def start_edit(self) -> None:
-        """Enter inline edit mode for the current result field."""
+        """Enter inline edit mode for the current metadata field."""
         if self.cursor_row < 0:
             return
         field_name = self.fields[self.cursor_row]
@@ -393,19 +393,19 @@ class DetailView(Widget):
         self.refresh()
 
     def commit_edit(self) -> None:
-        """Save the edited value to the result for all nodes."""
+        """Save the edited value to the metadata for all nodes."""
         field_name = self.fields[self.cursor_row]
         val: str | int = self.edit_value
         if field_name in INT_FIELDS:
             with contextlib.suppress(ValueError):
                 val = int(val)
         for n in self.file_nodes:
-            n.result[field_name] = val
+            n.metadata[field_name] = val
             if field_name != "tmdb_id":
-                n.result.pop("tmdb_id", None)
+                n.metadata.pop("tmdb_id", None)
         self.editing = False
         self.refresh()
-        self.post_message(self.FieldsChanged())
+        self.post_message(self.MetadataChanged())
 
     def cancel_edit(self) -> None:
         """Discard the edit and exit edit mode."""
@@ -413,14 +413,14 @@ class DetailView(Widget):
         self.refresh()
 
     def clear_field(self) -> None:
-        """Clear the current field (remove from result)."""
+        """Clear the current field (remove from metadata)."""
         if self.editing:
             return
         field_name = self.fields[self.cursor_row]
         for n in self.file_nodes:
-            n.result.pop(field_name, None)
+            n.metadata.pop(field_name, None)
         self.refresh()
-        self.post_message(self.FieldsChanged())
+        self.post_message(self.MetadataChanged())
 
     def reset_field_to_guessit(self) -> None:
         """Reset the current field to its guessit-extracted value."""
@@ -433,9 +433,9 @@ class DetailView(Widget):
             guessit_fields = extract_guessit_fields(n.path.name)
             val = guessit_fields.get(field_name)
             if val is not None:
-                n.result[field_name] = val
+                n.metadata[field_name] = val
             else:
-                n.result.pop(field_name, None)
+                n.metadata.pop(field_name, None)
         self.refresh()
 
     def toggle_column_focus(self) -> None:
@@ -450,8 +450,8 @@ class DetailView(Widget):
         """Accept the focused column's values.
 
         If match is focused, copies non-None fields from the current
-        source to the result (preserving fields the source doesn't have).
-        If result is focused, no changes needed -- result is kept as-is.
+        candidate to the metadata (preserving fields the candidate doesn't have).
+        If result is focused, no changes needed -- metadata is kept as-is.
         """
         if self.focus_column == "match":
             self.apply_source_all_clear()

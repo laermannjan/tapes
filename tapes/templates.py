@@ -28,7 +28,7 @@ def select_template(node: FileNode, movie_template: str, tv_template: str) -> st
     Returns ``tv_template`` if ``media_type`` is ``"episode"``,
     otherwise ``movie_template``.
     """
-    media_type = node.result.get(MEDIA_TYPE)
+    media_type = node.metadata.get(MEDIA_TYPE)
     if media_type == MEDIA_TYPE_EPISODE:
         return tv_template
     return movie_template
@@ -111,7 +111,7 @@ def can_fill_template(node: FileNode, merged_result: dict, movie_template: str, 
 def compute_dest(node: FileNode, template: str) -> str | None:
     """Compute the destination path for a file node using a template.
 
-    Extracts fields from ``node.result`` and adds ``ext`` from the file
+    Extracts fields from ``node.metadata`` and adds ``ext`` from the file
     suffix. Returns None if any required template field is missing or None.
 
     Format specs (e.g. ``{season:02d}``) are applied when all fields are
@@ -121,7 +121,7 @@ def compute_dest(node: FileNode, template: str) -> str | None:
     String field values are sanitized to remove characters that are illegal
     in filenames (``/ \\ : * ? " < > |`` and control characters).
     """
-    fields: dict[str, Any] = {k: _sanitize_field(v) for k, v in node.result.items()}
+    fields: dict[str, Any] = {k: _sanitize_field(v) for k, v in node.metadata.items()}
     fields["ext"] = full_extension(node.path)
 
     needed = template_field_names(template)

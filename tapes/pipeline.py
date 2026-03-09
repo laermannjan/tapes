@@ -1,4 +1,4 @@
-"""Auto-pipeline: populate sources and auto-accept confident matches."""
+"""Auto-pipeline: populate candidates and auto-accept confident matches."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from tapes.fields import (
     YEAR,
 )
 from tapes.similarity import compute_episode_similarity, compute_similarity, should_auto_accept
-from tapes.tree_model import FileNode, Source, TreeModel
+from tapes.tree_model import Candidate, FileNode, TreeModel
 
 DEFAULT_MAX_WORKERS = 4
 DEFAULT_MAX_RESULTS = 3
@@ -185,11 +185,11 @@ def run_auto_pipeline(
     language: str = "",
     can_stage: Callable[[FileNode, dict], bool] | None = None,
 ) -> None:
-    """Populate sources and auto-accept confident matches (synchronous).
+    """Populate candidates and auto-accept confident matches (synchronous).
 
     For each file node:
-    1. Extract metadata from filename via guessit -> result + "from filename" source
-    2. Query TMDB (two-stage: show/movie, then episodes) -> add TMDB sources
+    1. Extract metadata from filename via guessit -> metadata + "from filename" candidate
+    2. Query TMDB (two-stage: show/movie, then episodes) -> add TMDB candidates
     3. Auto-accept via should_auto_accept (high similarity OR clear winner)
     """
 
@@ -224,11 +224,11 @@ def refresh_tmdb_source(
     language: str = "",
     can_stage: Callable[[FileNode, dict], bool] | None = None,
 ) -> None:
-    """Re-query TMDB for a file and update its sources.
+    """Re-query TMDB for a file and update its candidates.
 
-    Uses the node's current result title/year for the query.
-    Removes existing TMDB sources, adds new ones if found.
-    Auto-accepts if confidence >= threshold.
+    Uses the node's current metadata title/year for the query.
+    Removes existing TMDB candidates, adds new ones if found.
+    Auto-accepts if score >= threshold.
     """
 
     if confidence_threshold is None:
@@ -236,9 +236,9 @@ def refresh_tmdb_source(
 
     _post = post_update if post_update is not None else lambda fn: fn()
 
-    # Remove existing TMDB sources
+    # Remove existing TMDB candidates
     def _clear_tmdb(node: FileNode = node) -> None:
-        node.sources = [s for s in node.sources if not s.name.startswith("TMDB")]
+        node.candidates = [c for c in node.candidates if not c.name.startswith("TMDB")]
 
     _post(_clear_tmdb)
 
@@ -274,7 +274,7 @@ def refresh_tmdb_batch(
     """Re-query TMDB for multiple files with shared cache and deduplication.
 
     Like run_tmdb_pass but operates on a specific list of nodes and clears
-    existing TMDB sources before querying. Uses a shared cache and httpx
+    existing TMDB candidates before querying. Uses a shared cache and httpx
     client to deduplicate identical queries.
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -299,9 +299,9 @@ def refresh_tmdb_batch(
         def _refresh_one(node: FileNode) -> None:
             nonlocal done_count
 
-            # Clear existing TMDB sources
+            # Clear existing TMDB candidates
             def _clear_tmdb(n: FileNode = node) -> None:
-                n.sources = [s for s in n.sources if not s.name.startswith("TMDB")]
+                n.candidates = [c for c in n.candidates if not c.name.startswith("TMDB")]
 
             _post(_clear_tmdb)
 
@@ -356,10 +356,10 @@ def extract_guessit_fields(filename: str) -> dict[str, Any]:
 
 
 def _populate_node_guessit(node: FileNode, extract_metadata_fn: Callable[[str], Any]) -> None:
-    """Extract metadata from filename via guessit and set as result (base layer).
+    """Extract metadata from filename via guessit and set as metadata (base layer).
 
-    The filename extraction is the base layer, not a source. It populates
-    ``node.result`` directly. Sources are reserved for TMDB matches only.
+    The filename extraction is the base layer, not a candidate. It populates
+    ``node.metadata`` directly. Candidates are reserved for TMDB matches only.
     """
     meta = extract_metadata_fn(node.path.name)
     filename_fields: dict = {}
@@ -376,8 +376,8 @@ def _populate_node_guessit(node: FileNode, extract_metadata_fn: Callable[[str], 
     # Add raw fields (codec, media_source, etc.)
     filename_fields.update({k: v for k, v in meta.raw.items() if v is not None})
 
-    node.result = dict(filename_fields)
-    node.sources = []
+    node.metadata = dict(filename_fields)
+    node.candidates = []
 
 
 def _query_tmdb_for_node(
@@ -397,15 +397,15 @@ def _query_tmdb_for_node(
     """Two-stage TMDB query for a single node.
 
     Stage 1: Find movie/show
-    - search_multi with title (+year if available) -> up to max_results Sources
+    - search_multi with title (+year if available) -> up to max_results Candidates
     - Auto-accept via should_auto_accept (high similarity OR clear winner)
     - If accepted media_type == "movie": done
 
     Stage 2: Find episode (only if stage 1 accepted a TV show)
-    - If season in result: fetch that season's episodes
-    - Score episodes against result, create Sources with full fields
+    - If season in metadata: fetch that season's episodes
+    - Score episodes against metadata, create Candidates with full fields
     - If no auto-accept from that season: try all other seasons
-    - If still no auto-accept: keep top max_results episode Sources
+    - If still no auto-accept: keep top max_results episode Candidates
     - Auto-accept best episode if confident
     """
     from tapes import tmdb
@@ -415,16 +415,16 @@ def _query_tmdb_for_node(
     if not token:
         return
 
-    title = str(node.result.get(TITLE, ""))
+    title = str(node.metadata.get(TITLE, ""))
     if not title:
         return
 
-    year = node.result.get(YEAR)
+    year = node.metadata.get(YEAR)
 
     # --- tmdb_id shortcut: skip show search when already identified ---
-    existing_tmdb_id = node.result.get(TMDB_ID)
+    existing_tmdb_id = node.metadata.get(TMDB_ID)
     if existing_tmdb_id is not None:
-        media_type = node.result.get(MEDIA_TYPE)
+        media_type = node.metadata.get(MEDIA_TYPE)
         if media_type == MEDIA_TYPE_EPISODE:
             # Show identified -- go directly to episode queries
             show_fields = {
@@ -486,70 +486,70 @@ def _query_tmdb_for_node(
     if not search_results:
         return
 
-    # Create sources for each search result
-    tmdb_sources: list[Source] = []
+    # Create candidates for each search result
+    tmdb_candidates: list[Candidate] = []
     for i, sr in enumerate(search_results[:max_results]):
-        confidence = compute_similarity(node.result, sr)
-        source = Source(
+        sim = compute_similarity(node.metadata, sr)
+        cand = Candidate(
             name=f"TMDB #{i + 1}",
-            fields=dict(sr),
-            confidence=confidence,
+            metadata=dict(sr),
+            score=sim,
         )
-        tmdb_sources.append(source)
+        tmdb_candidates.append(cand)
 
     # Sort by similarity for should_auto_accept (expects descending order)
-    tmdb_sources.sort(key=lambda s: s.confidence, reverse=True)
-    for i, src in enumerate(tmdb_sources):
-        src.name = f"TMDB #{i + 1}"
-    similarities = [s.confidence for s in tmdb_sources]
-    best = tmdb_sources[0]
+    tmdb_candidates.sort(key=lambda c: c.score, reverse=True)
+    for i, cand in enumerate(tmdb_candidates):
+        cand.name = f"TMDB #{i + 1}"
+    similarities = [c.score for c in tmdb_candidates]
+    best = tmdb_candidates[0]
 
     logger.debug(
         "%s: candidates=%s",
         node.path.name,
-        [(s.name, s.fields.get(TITLE), f"{s.confidence:.2f}") for s in tmdb_sources],
+        [(c.name, c.metadata.get(TITLE), f"{c.score:.2f}") for c in tmdb_candidates],
     )
 
     if should_auto_accept(similarities, threshold=threshold, **_accept_kwargs):
-        # Auto-accept: apply non-empty fields to result
-        # Snapshot fields before dispatching -- the dict may be mutated later
-        _best_fields = dict(best.fields)
+        # Auto-accept: apply non-empty fields to metadata
+        # Snapshot metadata before dispatching -- the dict may be mutated later
+        _best_metadata = dict(best.metadata)
 
-        # Check if merged result would fill the template
+        # Check if merged metadata would fill the template
         _stageable = True
         if can_stage is not None:
-            merged = {**node.result, **{k: v for k, v in _best_fields.items() if v is not None}}
+            merged = {**node.metadata, **{k: v for k, v in _best_metadata.items() if v is not None}}
             if not can_stage(node, merged):
                 logger.debug("%s: auto-accept skipped, template fields incomplete", node.path.name)
                 _stageable = False
 
-        # Apply best fields (always), stage only if template is complete
+        # Apply best metadata (always), stage only if template is complete
         _stage = _stageable
 
-        def _apply_best(_n: FileNode = node, _f: dict = _best_fields, _s: bool = _stage) -> None:
+        def _apply_best(_n: FileNode = node, _f: dict = _best_metadata, _s: bool = _stage) -> None:
             for field, val in _f.items():
                 if val is not None:
-                    _n.result[field] = val
+                    _n.metadata[field] = val
             if _s:
                 _n.staged = True
 
         _post(_apply_best)
 
-        # Always add show/movie-level sources (invariant #1)
-        _sources_auto = list(tmdb_sources)
+        # Always add show/movie-level candidates (invariant #1)
+        _candidates_auto = list(tmdb_candidates)
 
-        def _extend_auto(_n: FileNode = node, _s: list[Source] = _sources_auto) -> None:
-            _n.sources.extend(_s)
+        def _extend_auto(_n: FileNode = node, _c: list[Candidate] = _candidates_auto) -> None:
+            _n.candidates.extend(_c)
 
         _post(_extend_auto)
 
-        # Stage 2: if TV show, fetch episodes (which add their own sources)
-        if best.fields.get(MEDIA_TYPE) == MEDIA_TYPE_EPISODE:
+        # Stage 2: if TV show, fetch episodes (which add their own candidates)
+        if best.metadata.get(MEDIA_TYPE) == MEDIA_TYPE_EPISODE:
             _query_episodes(
                 node,
                 token,
                 threshold,
-                best.fields,
+                best.metadata,
                 cache=cache,
                 client=client,
                 post_update=_post,
@@ -561,13 +561,13 @@ def _query_tmdb_for_node(
 
         return
 
-    # Add show-level TMDB sources (not episode sources yet)
-    _sources_copy = list(tmdb_sources)
+    # Add show-level TMDB candidates (not episode candidates yet)
+    _candidates_copy = list(tmdb_candidates)
 
-    def _extend_sources(_n: FileNode = node, _s: list[Source] = _sources_copy) -> None:
-        _n.sources.extend(_s)
+    def _extend_candidates(_n: FileNode = node, _c: list[Candidate] = _candidates_copy) -> None:
+        _n.candidates.extend(_c)
 
-    _post(_extend_sources)
+    _post(_extend_candidates)
 
 
 def _query_episodes(
@@ -607,7 +607,7 @@ def _query_episodes(
         return
 
     available_seasons = show_info.get("seasons", [])
-    query_season = node.result.get(SEASON)
+    query_season = node.metadata.get(SEASON)
 
     # Try the query season first, then others
     seasons_to_try: list[int] = []
@@ -618,7 +618,7 @@ def _query_episodes(
         if s not in seasons_to_try:
             seasons_to_try.append(s)
 
-    all_episode_sources: list[Source] = []
+    all_episode_candidates: list[Candidate] = []
 
     for season_num in seasons_to_try:
         if cache is not None:
@@ -648,33 +648,33 @@ def _query_episodes(
             )
 
         for ep in episodes:
-            confidence = compute_episode_similarity(node.result, ep)
-            source = Source(
-                name=f"TMDB #{len(all_episode_sources) + 1}",
-                fields=dict(ep),
-                confidence=confidence,
+            sim = compute_episode_similarity(node.metadata, ep)
+            cand = Candidate(
+                name=f"TMDB #{len(all_episode_candidates) + 1}",
+                metadata=dict(ep),
+                score=sim,
             )
-            all_episode_sources.append(source)
+            all_episode_candidates.append(cand)
 
-    # Keep top max_results episode sources by confidence
-    all_episode_sources.sort(key=lambda s: s.confidence, reverse=True)
-    top_sources = all_episode_sources[:max_results]
+    # Keep top max_results episode candidates by score
+    all_episode_candidates.sort(key=lambda c: c.score, reverse=True)
+    top_candidates = all_episode_candidates[:max_results]
 
     # Re-number them
-    for i, src in enumerate(top_sources):
-        src.name = f"TMDB #{i + 1}"
+    for i, cand in enumerate(top_candidates):
+        cand.name = f"TMDB #{i + 1}"
 
-    # Auto-apply episode only if confident; otherwise just add sources for curation
-    ep_similarities = [s.confidence for s in top_sources]
-    _top_copy = list(top_sources)
+    # Auto-apply episode only if confident; otherwise just add candidates for curation
+    ep_similarities = [c.score for c in top_candidates]
+    _top_copy = list(top_candidates)
 
     if should_auto_accept(ep_similarities, threshold=threshold):
-        _best_fields = dict(top_sources[0].fields)
+        _best_metadata = dict(top_candidates[0].metadata)
 
-        # Check if merged result would fill the template
+        # Check if merged metadata would fill the template
         stage = True
         if can_stage is not None:
-            merged = {**node.result, **{k: v for k, v in _best_fields.items() if v is not None}}
+            merged = {**node.metadata, **{k: v for k, v in _best_metadata.items() if v is not None}}
             if not can_stage(node, merged):
                 logger.debug("%s: episode auto-accept skipped, template fields incomplete", node.path.name)
                 stage = False
@@ -682,19 +682,19 @@ def _query_episodes(
         _stage = stage
 
         def _apply_episode(
-            _n: FileNode = node, _f: dict = _best_fields, _top: list[Source] = _top_copy, _s: bool = _stage
+            _n: FileNode = node, _f: dict = _best_metadata, _top: list[Candidate] = _top_copy, _s: bool = _stage
         ) -> None:
             for field, val in _f.items():
                 if val is not None:
-                    _n.result[field] = val
+                    _n.metadata[field] = val
             if _s:
                 _n.staged = True
-            _n.sources.extend(_top)
+            _n.candidates.extend(_top)
 
         _post(_apply_episode)
     else:
 
-        def _add_episode_sources(_n: FileNode = node, _top: list[Source] = _top_copy) -> None:
-            _n.sources.extend(_top)
+        def _add_episode_candidates(_n: FileNode = node, _top: list[Candidate] = _top_copy) -> None:
+            _n.candidates.extend(_top)
 
-        _post(_add_episode_sources)
+        _post(_add_episode_candidates)

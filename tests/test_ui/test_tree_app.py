@@ -7,9 +7,9 @@ from pathlib import Path
 import pytest
 
 from tapes.tree_model import (
+    Candidate,
     FileNode,
     FolderNode,
-    Source,
     TreeModel,
 )
 from tapes.ui.tree_app import AppMode
@@ -536,7 +536,7 @@ class TestTreeAppKeys:
 
         # File needs complete metadata to pass the staging gate
         node = FileNode(path=Path("/root/top.mkv"))
-        node.result = {"media_type": "movie", "title": "Top", "year": 2020}
+        node.metadata = {"media_type": "movie", "title": "Top", "year": 2020}
         root = FolderNode(name="root", children=[node])
         model = TreeModel(root=root)
         app = TreeApp(model=model, movie_template=template, tv_template=template)
@@ -552,7 +552,7 @@ class TestTreeAppKeys:
 
         # File needs complete metadata to pass the staging gate
         node = FileNode(path=Path("/root/top.mkv"))
-        node.result = {"media_type": "movie", "title": "Top", "year": 2020}
+        node.metadata = {"media_type": "movie", "title": "Top", "year": 2020}
         root = FolderNode(name="root", children=[node])
         model = TreeModel(root=root)
         app = TreeApp(model=model, movie_template=template, tv_template=template)
@@ -567,9 +567,9 @@ class TestTreeAppKeys:
 
         # Files need complete metadata to pass the staging gate
         file_a = FileNode(path=Path("/root/folderA/file_a.mkv"))
-        file_a.result = {"media_type": "movie", "title": "File A", "year": 2020}
+        file_a.metadata = {"media_type": "movie", "title": "File A", "year": 2020}
         file_b = FileNode(path=Path("/root/folderB/file_b.mkv"))
-        file_b.result = {"media_type": "movie", "title": "File B", "year": 2021}
+        file_b.metadata = {"media_type": "movie", "title": "File B", "year": 2021}
         root = FolderNode(
             name="root",
             children=[
@@ -978,7 +978,7 @@ class TestSearchModeAsync:
 
         node = FileNode(
             path=Path("/media/test.mkv"),
-            result={"title": "Test"},
+            metadata={"title": "Test"},
         )
         folder = FolderNode(name="folder", children=[node])
         root = FolderNode(name="root", children=[folder])
@@ -1018,7 +1018,7 @@ class TestBottomBar:
         from tapes.ui.bottom_bar import BottomBar
         from tapes.ui.tree_app import TreeApp
 
-        node = FileNode(path=Path("/media/test.mkv"), result={"title": "Test"})
+        node = FileNode(path=Path("/media/test.mkv"), metadata={"title": "Test"})
         folder = FolderNode(name="folder", children=[node])
         root = FolderNode(name="root", children=[folder])
         model = TreeModel(root=root)
@@ -1100,7 +1100,7 @@ class TestVisualIntegration:
         """Pressing ? in detail opens help, closing returns to detail."""
         from tapes.ui.tree_app import TreeApp
 
-        node = FileNode(path=Path("/media/test.mkv"), result={"title": "Test"})
+        node = FileNode(path=Path("/media/test.mkv"), metadata={"title": "Test"})
         folder = FolderNode(name="folder", children=[node])
         root = FolderNode(name="root", children=[folder])
         model = TreeModel(root=root)
@@ -1131,8 +1131,8 @@ class TestDetailConfirmDiscard:
 
         node = FileNode(
             path=Path("/media/test.mkv"),
-            result={"title": "Original"},
-            sources=[Source(name="TMDB #1", fields={"title": "Changed"}, confidence=0.9)],
+            metadata={"title": "Original"},
+            candidates=[Candidate(name="TMDB #1", metadata={"title": "Changed"}, score=0.9)],
         )
         folder = FolderNode(name="folder", children=[node])
         root = FolderNode(name="root", children=[folder])
@@ -1144,10 +1144,10 @@ class TestDetailConfirmDiscard:
             await pilot.press("enter")
             assert app.mode == AppMode.DETAIL
             # Manually edit result to simulate a change
-            node.result["title"] = "Changed"
+            node.metadata["title"] = "Changed"
             await pilot.press("escape")
             assert app.mode == AppMode.TREE
-            assert node.result["title"] == "Original"
+            assert node.metadata["title"] == "Original"
 
     @pytest.mark.asyncio()
     async def test_enter_accepts_changes(self) -> None:
@@ -1155,8 +1155,8 @@ class TestDetailConfirmDiscard:
 
         node = FileNode(
             path=Path("/media/test.mkv"),
-            result={"title": "Original"},
-            sources=[Source(name="TMDB #1", fields={"title": "Changed"}, confidence=0.9)],
+            metadata={"title": "Original"},
+            candidates=[Candidate(name="TMDB #1", metadata={"title": "Changed"}, score=0.9)],
         )
         folder = FolderNode(name="folder", children=[node])
         root = FolderNode(name="root", children=[folder])
@@ -1168,11 +1168,11 @@ class TestDetailConfirmDiscard:
             await pilot.press("enter")
             assert app.mode == AppMode.DETAIL
             # Manually edit result
-            node.result["title"] = "Changed"
+            node.metadata["title"] = "Changed"
             # Enter accepts changes and returns to tree
             await pilot.press("enter")
             assert app.mode == AppMode.TREE
-            assert node.result["title"] == "Changed"
+            assert node.metadata["title"] == "Changed"
 
     @pytest.mark.asyncio()
     async def test_esc_during_edit_cancels_edit_not_detail(self) -> None:
@@ -1182,7 +1182,7 @@ class TestDetailConfirmDiscard:
 
         node = FileNode(
             path=Path("/media/test.mkv"),
-            result={"title": "Original"},
+            metadata={"title": "Original"},
         )
         folder = FolderNode(name="folder", children=[node])
         root = FolderNode(name="root", children=[folder])
@@ -1221,7 +1221,7 @@ class TestAppModeTransitions:
     async def test_enter_detail_and_back(self) -> None:
         from tapes.ui.tree_app import TreeApp
 
-        node = FileNode(path=Path("/media/test.mkv"), result={"title": "Test"})
+        node = FileNode(path=Path("/media/test.mkv"), metadata={"title": "Test"})
         folder = FolderNode(name="folder", children=[node])
         root = FolderNode(name="root", children=[folder])
         model = TreeModel(root=root)
@@ -1288,7 +1288,7 @@ class TestTreeKeyRedesign:
         from tapes.ui.tree_app import TreeApp
 
         node = FileNode(path=Path("/media/test.mkv"))
-        node.result = {"media_type": "movie", "title": "Test", "year": 2020}
+        node.metadata = {"media_type": "movie", "title": "Test", "year": 2020}
         root = FolderNode(name="root", children=[node])
         model = TreeModel(root=root)
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)

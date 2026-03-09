@@ -9,12 +9,12 @@ from typing import Any
 
 
 @dataclass
-class Source:
-    """A metadata source (e.g. guessit parse, TMDB result)."""
+class Candidate:
+    """A metadata candidate (e.g. TMDB search result)."""
 
     name: str
-    fields: dict[str, Any] = field(default_factory=dict)
-    confidence: float = 0.0
+    metadata: dict[str, Any] = field(default_factory=dict)
+    score: float = 0.0
 
 
 @dataclass
@@ -24,8 +24,8 @@ class FileNode:
     path: Path
     staged: bool = False
     ignored: bool = False
-    result: dict[str, Any] = field(default_factory=dict)
-    sources: list[Source] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+    candidates: list[Candidate] = field(default_factory=list)
 
 
 @dataclass
@@ -234,7 +234,7 @@ def _compress_single_child_dirs(folder: FolderNode) -> None:
 
 
 def compute_shared_fields(nodes: list[FileNode]) -> dict[str, Any]:
-    """Compute shared result fields across multiple file nodes.
+    """Compute shared metadata fields across multiple file nodes.
 
     Fields present in all nodes with identical values are kept as-is.
     Fields with differing values become ``"(N values)"`` where N is the
@@ -247,20 +247,20 @@ def compute_shared_fields(nodes: list[FileNode]) -> dict[str, Any]:
     # Collect all field names
     all_keys: set[str] = set()
     for node in nodes:
-        all_keys.update(node.result.keys())
+        all_keys.update(node.metadata.keys())
 
-    result: dict[str, Any] = {}
+    shared: dict[str, Any] = {}
     for key in sorted(all_keys):
-        values: list[Any] = [node.result[key] for node in nodes if key in node.result]
+        values: list[Any] = [node.metadata[key] for node in nodes if key in node.metadata]
 
         if not values:
             continue
 
         first = values[0]
         if all(v == first for v in values):
-            result[key] = first
+            shared[key] = first
         else:
             n_unique = len({str(v) for v in values})
-            result[key] = f"({n_unique} values)"
+            shared[key] = f"({n_unique} values)"
 
-    return result
+    return shared
