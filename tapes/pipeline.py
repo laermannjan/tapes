@@ -102,6 +102,7 @@ def run_tmdb_pass(
     tmdb_retries: int = 3,
     margin_threshold: float | None = None,
     min_margin: float | None = None,
+    language: str = "",
 ) -> None:
     """Query TMDB for all files using a thread pool.
 
@@ -156,6 +157,7 @@ def run_tmdb_pass(
                 max_retries=tmdb_retries,
                 margin_threshold=margin_threshold,
                 min_margin=min_margin,
+                language=language,
             )
             with lock:
                 done_count += 1
@@ -178,6 +180,7 @@ def run_auto_pipeline(
     tmdb_retries: int = 3,
     margin_threshold: float | None = None,
     min_margin: float | None = None,
+    language: str = "",
 ) -> None:
     """Populate sources and auto-accept confident matches (synchronous).
 
@@ -201,6 +204,7 @@ def run_auto_pipeline(
         tmdb_retries=tmdb_retries,
         margin_threshold=margin_threshold,
         min_margin=min_margin,
+        language=language,
     )
 
 
@@ -213,6 +217,7 @@ def refresh_tmdb_source(
     max_retries: int = 3,
     margin_threshold: float | None = None,
     min_margin: float | None = None,
+    language: str = "",
 ) -> None:
     """Re-query TMDB for a file and update its sources.
 
@@ -241,6 +246,7 @@ def refresh_tmdb_source(
         max_retries=max_retries,
         margin_threshold=margin_threshold,
         min_margin=min_margin,
+        language=language,
     )
 
 
@@ -256,6 +262,7 @@ def refresh_tmdb_batch(
     max_retries: int = 3,
     margin_threshold: float | None = None,
     min_margin: float | None = None,
+    language: str = "",
 ) -> None:
     """Re-query TMDB for multiple files with shared cache and deduplication.
 
@@ -303,6 +310,7 @@ def refresh_tmdb_batch(
                 max_retries=max_retries,
                 margin_threshold=margin_threshold,
                 min_margin=min_margin,
+                language=language,
             )
 
             with lock:
@@ -375,6 +383,7 @@ def _query_tmdb_for_node(
     max_retries: int = 3,
     margin_threshold: float | None = None,
     min_margin: float | None = None,
+    language: str = "",
 ) -> None:
     """Two-stage TMDB query for a single node.
 
@@ -425,6 +434,7 @@ def _query_tmdb_for_node(
                 post_update=_post,
                 max_results=max_results,
                 max_retries=max_retries,
+                language=language,
             )
             return
         # Movie already identified -- nothing more to fetch
@@ -443,12 +453,24 @@ def _query_tmdb_for_node(
         search_results = cache.get_or_fetch(
             search_key,
             lambda: tmdb.search_multi(
-                title, token, year=year, client=client, max_results=max_results, max_retries=max_retries
+                title,
+                token,
+                year=year,
+                language=language,
+                client=client,
+                max_results=max_results,
+                max_retries=max_retries,
             ),
         )
     else:
         search_results = tmdb.search_multi(
-            title, token, year=year, client=client, max_results=max_results, max_retries=max_retries
+            title,
+            token,
+            year=year,
+            language=language,
+            client=client,
+            max_results=max_results,
+            max_retries=max_retries,
         )
 
     if not search_results:
@@ -503,6 +525,7 @@ def _query_tmdb_for_node(
                 post_update=_post,
                 max_results=max_results,
                 max_retries=max_retries,
+                language=language,
             )
             return
 
@@ -525,6 +548,7 @@ def _query_episodes(
     post_update: Callable[[Callable[[], None]], None] | None = None,
     max_results: int = DEFAULT_MAX_RESULTS,
     max_retries: int = 3,
+    language: str = "",
 ) -> None:
     """Stage 2: fetch episode data for a TV show match."""
     from tapes import tmdb
@@ -542,10 +566,10 @@ def _query_episodes(
     if cache is not None:
         show_info = cache.get_or_fetch(
             ("show", show_id),
-            lambda: tmdb.get_show(show_id, token, client=client, max_retries=max_retries),
+            lambda: tmdb.get_show(show_id, token, language=language, client=client, max_retries=max_retries),
         )
     else:
-        show_info = tmdb.get_show(show_id, token, client=client, max_retries=max_retries)
+        show_info = tmdb.get_show(show_id, token, language=language, client=client, max_retries=max_retries)
     if not show_info:
         return
 
@@ -573,6 +597,7 @@ def _query_episodes(
                     token,
                     show_title=show_title,
                     show_year=show_year,
+                    language=language,
                     client=client,
                     max_retries=max_retries,
                 ),
@@ -584,6 +609,7 @@ def _query_episodes(
                 token,
                 show_title=show_title,
                 show_year=show_year,
+                language=language,
                 client=client,
                 max_retries=max_retries,
             )

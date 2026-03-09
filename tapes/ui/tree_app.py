@@ -200,6 +200,7 @@ class TreeApp(App):
         tmdb_retries = self.config.advanced.tmdb_retries
         margin_threshold = self.config.metadata.margin_accept_threshold
         min_margin = self.config.metadata.min_accept_margin
+        language = self.config.metadata.language
 
         def worker() -> None:
             def on_progress(done: int, total: int) -> None:
@@ -217,6 +218,7 @@ class TreeApp(App):
                 tmdb_retries=tmdb_retries,
                 margin_threshold=margin_threshold,
                 min_margin=min_margin,
+                language=language,
             )
             self.call_from_thread(self._on_tmdb_done)
 
@@ -672,6 +674,7 @@ class TreeApp(App):
         tmdb_retries = self.config.advanced.tmdb_retries
         margin_threshold = self.config.metadata.margin_accept_threshold
         min_margin = self.config.metadata.min_accept_margin
+        language = self.config.metadata.language
 
         def worker() -> None:
             def on_progress(done: int, total: int) -> None:
@@ -689,6 +692,7 @@ class TreeApp(App):
                 max_retries=tmdb_retries,
                 margin_threshold=margin_threshold,
                 min_margin=min_margin,
+                language=language,
             )
             self.call_from_thread(self._on_tmdb_done)
 
