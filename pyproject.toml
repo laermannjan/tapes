@@ -67,6 +67,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = [
     "S101",     # assert -- expected in tests
+    "S103",     # permissive chmod -- needed for writability tests
     "PLR2004",  # magic values -- expected in tests
     "SLF001",   # private access -- needed for testing internals
     "ARG",      # unused arguments -- mocks and fixtures
