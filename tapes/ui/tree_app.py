@@ -534,7 +534,9 @@ class TreeApp(App):
     def action_tab_forward(self) -> None:
         """Tab key: open commit preview from tree, cycle sources in detail."""
         if self._mode == AppMode.DETAIL:
-            self.query_one(DetailView).cycle_source(1)
+            dv = self.query_one(DetailView)
+            dv.cycle_source(1)
+            dv.refresh()
             return
         if self._mode != AppMode.TREE:
             return
