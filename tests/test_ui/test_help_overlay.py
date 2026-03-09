@@ -38,7 +38,7 @@ class TestHelpContent:
     def test_contains_commit_key(self) -> None:
         lines = _build_help_content(80)
         plain = "\n".join(line.plain for line in lines)
-        assert "commit staged" in plain
+        assert "commit preview" in plain
 
 
 class TestHelpView:
