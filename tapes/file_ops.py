@@ -60,11 +60,17 @@ def _copy(
             # Cannot interrupt shutil.copy2 -- wait for it to finish,
             # then clean up the destination.
             copy_thread.join()
-            dest.unlink(missing_ok=True)
+            try:
+                dest.unlink(missing_ok=True)
+            except OSError:
+                logger.debug("Could not clean up cancelled destination %s", dest)
             raise OperationCancelledError
 
     if error is not None:
-        dest.unlink(missing_ok=True)
+        try:
+            dest.unlink(missing_ok=True)
+        except OSError:
+            logger.debug("Could not clean up partial destination %s", dest)
         raise error
 
 

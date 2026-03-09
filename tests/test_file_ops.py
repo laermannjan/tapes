@@ -272,3 +272,38 @@ class TestCancellation:
         assert len(results) == 1
         assert dest1.exists()
         assert not dest2.exists()
+
+    def test_cancel_during_copy_breaks_process_staged(self, tmp_path: Path) -> None:
+        """OperationCancelledError from _copy causes process_staged to stop."""
+        from unittest.mock import patch
+
+        from tapes.file_ops import OperationCancelledError
+
+        src1 = tmp_path / "a.mkv"
+        src1.write_text("aaa")
+        src2 = tmp_path / "b.mkv"
+        src2.write_text("bbb")
+        dest1 = tmp_path / "lib" / "a.mkv"
+        dest2 = tmp_path / "lib" / "b.mkv"
+
+        original_copy = __import__("tapes.file_ops", fromlist=["_copy"])._copy
+
+        call_count = 0
+
+        def cancelling_copy(*args, **kwargs):  # type: ignore[no-untyped-def]
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise OperationCancelledError
+            return original_copy(*args, **kwargs)
+
+        with patch("tapes.file_ops._copy", side_effect=cancelling_copy):
+            results = process_staged(
+                [(src1, dest1), (src2, dest2)],
+                "copy",
+            )
+
+        # First file cancelled, second never attempted
+        assert len(results) == 0
+        assert not dest1.exists()
+        assert not dest2.exists()
