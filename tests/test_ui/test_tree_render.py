@@ -493,3 +493,30 @@ class TestComputeDestSanitization:
         )
         result = compute_dest(node, MOVIE_TEMPLATE)
         assert result == "Inception (2010)/Inception (2010).mkv"
+
+
+# --- Ready-to-stage indicator ---
+
+
+class TestReadyToStageIndicator:
+    def test_staged_file_shows_check(self) -> None:
+        node = FileNode(path=Path("movie.mkv"))
+        node.result = {"media_type": "movie", "title": "Inception", "year": 2010}
+        node.staged = True
+        row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
+        assert "\u2713" in row.plain  # check mark
+
+    def test_ready_file_shows_hollow_square(self) -> None:
+        node = FileNode(path=Path("movie.mkv"))
+        node.result = {"media_type": "movie", "title": "Inception", "year": 2010}
+        node.staged = False
+        row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
+        assert "\u2610" in row.plain  # hollow square
+
+    def test_incomplete_file_shows_no_indicator(self) -> None:
+        node = FileNode(path=Path("movie.mkv"))
+        node.result = {"media_type": "movie", "title": "Inception"}  # no year
+        node.staged = False
+        row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
+        assert "\u2713" not in row.plain
+        assert "\u2610" not in row.plain

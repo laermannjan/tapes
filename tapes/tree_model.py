@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -54,9 +55,21 @@ class TreeModel:
             self._cached_files = collect_files(self.root)
         return list(self._cached_files)
 
-    def toggle_staged(self, node: FileNode) -> None:
-        """Toggle staged flag on a file node."""
-        node.staged = not node.staged
+    def toggle_staged(
+        self,
+        node: FileNode,
+        can_stage: Callable[[FileNode], bool] | None = None,
+    ) -> None:
+        """Toggle staged flag on a file node.
+
+        If *can_stage* is provided and the node is not currently staged,
+        staging is only allowed when ``can_stage(node)`` returns True.
+        Unstaging is always allowed.
+        """
+        if node.staged:
+            node.staged = False
+        elif can_stage is None or can_stage(node):
+            node.staged = True
 
     def toggle_ignored(self, node: FileNode) -> None:
         """Toggle ignored flag on a file node."""
@@ -84,17 +97,27 @@ class TreeModel:
                 result.extend(self._all_folders(child))
         return result
 
-    def toggle_staged_recursive(self, node: FolderNode) -> None:
+    def toggle_staged_recursive(
+        self,
+        node: FolderNode,
+        can_stage: Callable[[FileNode], bool] | None = None,
+    ) -> None:
         """Toggle staged on all file descendants.
 
-        If ALL are staged, unstage all. Otherwise stage all.
+        If ALL are staged, unstage all. Otherwise stage only those
+        that pass *can_stage* (if provided).
         """
         files = collect_files(node)
         if not files:
             return
         all_staged = all(f.staged for f in files)
-        for f in files:
-            f.staged = not all_staged
+        if all_staged:
+            for f in files:
+                f.staged = False
+        else:
+            for f in files:
+                if not f.staged and (can_stage is None or can_stage(f)):
+                    f.staged = True
 
     def toggle_ignored_recursive(self, node: FolderNode) -> None:
         """Toggle ignored on all file descendants.

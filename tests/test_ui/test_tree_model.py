@@ -347,3 +347,75 @@ class TestRemoveNodes:
         model = TreeModel(root=FolderNode(name="root", children=[f1, f2, f3]))
         model.remove_nodes([f1, f3])
         assert model.all_files() == [f2]
+
+
+# --- Staging gate ---
+
+MOVIE_TEMPLATE = "{title} ({year})/{title} ({year}).{ext}"
+TV_TEMPLATE = "{title} ({year})/Season {season:02d}/{title} - S{season:02d}E{episode:02d} - {episode_title}.{ext}"
+
+
+class TestStagingGate:
+    def test_toggle_staged_blocked_when_not_ready(self) -> None:
+        """toggle_staged does nothing when can_stage returns False."""
+        from tapes.fields import MEDIA_TYPE, TITLE
+        from tapes.ui.tree_render import can_fill_template
+
+        node = FileNode(path=Path("movie.mkv"))
+        node.result = {MEDIA_TYPE: "movie", TITLE: "Inception"}  # no year
+        model = TreeModel(root=FolderNode(name="root", children=[node]))
+
+        def can_stage(n: FileNode) -> bool:
+            return can_fill_template(n, n.result, MOVIE_TEMPLATE, TV_TEMPLATE)
+
+        model.toggle_staged(node, can_stage=can_stage)
+        assert node.staged is False
+
+    def test_toggle_staged_allowed_when_ready(self) -> None:
+        """toggle_staged works when can_stage returns True."""
+        from tapes.fields import MEDIA_TYPE, TITLE, YEAR
+        from tapes.ui.tree_render import can_fill_template
+
+        node = FileNode(path=Path("movie.mkv"))
+        node.result = {MEDIA_TYPE: "movie", TITLE: "Inception", YEAR: 2010}
+        model = TreeModel(root=FolderNode(name="root", children=[node]))
+
+        def can_stage(n: FileNode) -> bool:
+            return can_fill_template(n, n.result, MOVIE_TEMPLATE, TV_TEMPLATE)
+
+        model.toggle_staged(node, can_stage=can_stage)
+        assert node.staged is True
+
+    def test_toggle_staged_unstage_always_allowed(self) -> None:
+        """Unstaging is always allowed regardless of can_stage."""
+        from tapes.fields import MEDIA_TYPE, TITLE
+
+        node = FileNode(path=Path("movie.mkv"))
+        node.result = {MEDIA_TYPE: "movie", TITLE: "Inception"}  # incomplete
+        node.staged = True  # force staged
+        model = TreeModel(root=FolderNode(name="root", children=[node]))
+
+        def can_stage(n: FileNode) -> bool:
+            return False  # would block staging
+
+        model.toggle_staged(node, can_stage=can_stage)
+        assert node.staged is False  # unstaging still works
+
+    def test_toggle_staged_recursive_skips_incomplete(self) -> None:
+        """toggle_staged_recursive only stages files that pass can_stage."""
+        from tapes.fields import MEDIA_TYPE, TITLE, YEAR
+        from tapes.ui.tree_render import can_fill_template
+
+        complete = FileNode(path=Path("a.mkv"))
+        complete.result = {MEDIA_TYPE: "movie", TITLE: "A", YEAR: 2020}
+        incomplete = FileNode(path=Path("b.mkv"))
+        incomplete.result = {MEDIA_TYPE: "movie", TITLE: "B"}  # no year
+        folder = FolderNode(name="root", children=[complete, incomplete])
+        model = TreeModel(root=folder)
+
+        def can_stage(n: FileNode) -> bool:
+            return can_fill_template(n, n.result, MOVIE_TEMPLATE, TV_TEMPLATE)
+
+        model.toggle_staged_recursive(folder, can_stage=can_stage)
+        assert complete.staged is True
+        assert incomplete.staged is False

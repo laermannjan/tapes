@@ -284,9 +284,11 @@ def render_file_row(
         else:
             row.append("  \u2192  ", style=MUTED)
 
-        # Staged tick (green ✓) or blank placeholder for alignment
+        # Staging indicator: ✓ staged, ☐ ready to stage, blank if incomplete
         if node.staged:
             row.append("\u2713 ", style=STAGED_COLOR)
+        elif can_fill_template(node, node.result, movie_template, tv_template):
+            row.append("\u2610 ", style=MUTED)
         else:
             row.append("  ")
 
