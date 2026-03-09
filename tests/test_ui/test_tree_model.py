@@ -306,3 +306,44 @@ class TestComputeSharedFields:
             FileNode(path=Path("/b.mkv")),
         ]
         assert compute_shared_fields(nodes) == {}
+
+
+class TestRemoveNodes:
+    def test_removes_file_from_root(self) -> None:
+        f1 = FileNode(path=Path("/a.mkv"))
+        f2 = FileNode(path=Path("/b.mkv"))
+        model = TreeModel(root=FolderNode(name="root", children=[f1, f2]))
+        model.remove_nodes([f1])
+        assert model.all_files() == [f2]
+
+    def test_removes_from_subfolder(self) -> None:
+        f1 = FileNode(path=Path("/sub/a.mkv"))
+        sub = FolderNode(name="sub", children=[f1])
+        f2 = FileNode(path=Path("/b.mkv"))
+        model = TreeModel(root=FolderNode(name="root", children=[sub, f2]))
+        model.remove_nodes([f1])
+        assert model.all_files() == [f2]
+
+    def test_prunes_empty_folder(self) -> None:
+        f1 = FileNode(path=Path("/sub/a.mkv"))
+        sub = FolderNode(name="sub", children=[f1])
+        model = TreeModel(root=FolderNode(name="root", children=[sub]))
+        model.remove_nodes([f1])
+        assert model.all_files() == []
+        assert model.root.children == []
+
+    def test_invalidates_cache(self) -> None:
+        f1 = FileNode(path=Path("/a.mkv"))
+        f2 = FileNode(path=Path("/b.mkv"))
+        model = TreeModel(root=FolderNode(name="root", children=[f1, f2]))
+        _ = model.all_files()  # populate cache
+        model.remove_nodes([f1])
+        assert model.all_files() == [f2]
+
+    def test_remove_multiple(self) -> None:
+        f1 = FileNode(path=Path("/a.mkv"))
+        f2 = FileNode(path=Path("/b.mkv"))
+        f3 = FileNode(path=Path("/c.mkv"))
+        model = TreeModel(root=FolderNode(name="root", children=[f1, f2, f3]))
+        model.remove_nodes([f1, f3])
+        assert model.all_files() == [f2]

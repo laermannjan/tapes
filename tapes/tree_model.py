@@ -108,6 +108,12 @@ class TreeModel:
         for f in files:
             f.ignored = not all_ignored
 
+    def remove_nodes(self, nodes: list[FileNode]) -> None:
+        """Remove file nodes from the tree and prune empty folders."""
+        to_remove = {id(n) for n in nodes}
+        _prune(self.root, to_remove)
+        self._cached_files = None
+
 
 def collect_files(node: FolderNode) -> list[FileNode]:
     """Collect all FileNode descendants of a folder, depth-first."""
@@ -118,6 +124,15 @@ def collect_files(node: FolderNode) -> list[FileNode]:
         elif isinstance(child, FolderNode):
             result.extend(collect_files(child))
     return result
+
+
+def _prune(folder: FolderNode, to_remove: set[int]) -> None:
+    """Remove matching file nodes and empty folders recursively."""
+    folder.children = [c for c in folder.children if id(c) not in to_remove]
+    for c in folder.children:
+        if isinstance(c, FolderNode):
+            _prune(c, to_remove)
+    folder.children = [c for c in folder.children if not isinstance(c, FolderNode) or c.children]
 
 
 def build_tree(files: list[Path], root_path: Path) -> TreeModel:

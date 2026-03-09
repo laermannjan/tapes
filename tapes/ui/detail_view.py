@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from rich.text import Text
 from textual import events
+from textual.message import Message
 from textual.reactive import reactive
 from textual.widget import Widget
 
@@ -42,6 +43,9 @@ class DetailView(Widget):
     Supports single-node and multi-node modes. In multi-node mode,
     shared values are shown and edits apply to all nodes.
     """
+
+    class FieldsChanged(Message):
+        """Posted when result fields are mutated (edit, ctrl+a, clear, etc.)."""
 
     can_focus = True
 
@@ -369,6 +373,7 @@ class DetailView(Widget):
                 for n in self.file_nodes:
                     n.result[field_name] = val
         self.refresh()
+        self.post_message(self.FieldsChanged())
 
     def start_edit(self) -> None:
         """Enter inline edit mode for the current result field."""
@@ -397,6 +402,7 @@ class DetailView(Widget):
                 n.result.pop("tmdb_id", None)
         self.editing = False
         self.refresh()
+        self.post_message(self.FieldsChanged())
 
     def cancel_edit(self) -> None:
         """Discard the edit and exit edit mode."""
@@ -411,6 +417,7 @@ class DetailView(Widget):
         for n in self.file_nodes:
             n.result.pop(field_name, None)
         self.refresh()
+        self.post_message(self.FieldsChanged())
 
     def reset_field_to_guessit(self) -> None:
         """Reset the current field to its guessit-extracted value."""

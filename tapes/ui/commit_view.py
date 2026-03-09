@@ -11,10 +11,12 @@ from textual.widget import Widget
 from tapes.categorize import categorize_staged
 from tapes.tree_model import FileNode
 from tapes.ui.bottom_bar import OP_COLORS, cycle_operation_index
-from tapes.ui.tree_render import ACCENT, MUTED, render_separator
+from tapes.ui.tree_render import ACCENT, MUTED, SOFT_RED, STAGED_COLOR, render_separator
 
 if TYPE_CHECKING:
     from rich.console import RenderableType
+
+    from tapes.conflicts import ConflictReport
 
 
 class CommitView(Widget):
@@ -24,24 +26,53 @@ class CommitView(Widget):
 
     operation: reactive[str] = reactive("copy")
     quit_hint: reactive[str] = reactive("")
+    progress_text: reactive[str] = reactive("")
 
-    def __init__(self, files: list[FileNode], operation: str, *, widget_id: str | None = None) -> None:
+    def __init__(
+        self,
+        files: list[FileNode],
+        operation: str,
+        *,
+        movies_path: str = "",
+        tv_path: str = "",
+        widget_id: str | None = None,
+    ) -> None:
         super().__init__(id=widget_id)
         self._files = files
         self.operation = operation
         self._categories = categorize_staged(files)
+        self.movies_path = movies_path
+        self.tv_path = tv_path
+        self.conflict_report: ConflictReport | None = None
 
     @property
     def computed_height(self) -> int:
         """Compute the height needed for this view."""
-        # blank + separator + blank + blank + stats lines + blank + total + blank + op line
+        if self.progress_text:
+            return 7  # blank + separator + blank + blank + progress line + blank + hint
+        # blank + separator + blank + blank + stats lines + blank + total + blank + lib + blank + op line
         lines = 6  # blank + separator + blank + blank-before-total + total + blank-after-total
         cats = self._categories
         if cats["movies"] or cats["subtitles"] or cats["sidecars"] or cats["other"]:
             lines += 1
         if cats["episodes"]:
             lines += 1
-        lines += 2  # blank + op line
+        if self.conflict_report:
+            resolved = self.conflict_report.resolved
+            problems = self.conflict_report.problems
+            if resolved or problems:
+                lines += 1  # blank before conflicts
+                if resolved:
+                    lines += 1 + len(resolved)  # header + items
+                if problems:
+                    if resolved:
+                        lines += 1  # blank between sections
+                    lines += 1  # header
+                    for p in problems:
+                        lines += 1  # problem line
+                        if p.skipped_nodes:
+                            lines += 1  # skipped count
+        lines += 4  # lib paths + blank + blank + op line
         return lines
 
     def render(self) -> RenderableType:
@@ -56,6 +87,9 @@ class CommitView(Widget):
         content.append(Text())
         content.append(render_separator(width, title="Commit", color=ACCENT))
         content.append(Text())
+
+        if self.progress_text:
+            return self._build_progress(content, width)
 
         # Blank
         content.append(Text())
@@ -98,6 +132,52 @@ class CommitView(Widget):
         total = cats["total"]
         content.append(Text(f"  {total} {'file' if total == 1 else 'files'} total"))
 
+        # Conflict report (if any)
+        if self.conflict_report:
+            resolved = self.conflict_report.resolved
+            problems = self.conflict_report.problems
+            if resolved or problems:
+                content.append(Text())
+                if resolved:
+                    n_resolved = len(resolved)
+                    content.append(
+                        Text(f"  {n_resolved} conflict{'s' if n_resolved != 1 else ''} resolved:", style=MUTED)
+                    )
+                    for r in resolved:
+                        line = Text()
+                        line.append("    \u2713 ", style=STAGED_COLOR)
+                        line.append(r.description, style=MUTED)
+                        content.append(line)
+                if problems:
+                    if resolved:
+                        content.append(Text())
+                    n_problems = len(problems)
+                    content.append(Text(f"  {n_problems} problem{'s' if n_problems != 1 else ''}:", style=SOFT_RED))
+                    for p in problems:
+                        line = Text()
+                        line.append("    \u2717 ", style=SOFT_RED)
+                        line.append(p.description, style=SOFT_RED)
+                        content.append(line)
+                        if p.skipped_nodes:
+                            skip_line = Text()
+                            skip_line.append(f"       {len(p.skipped_nodes)} file(s) skipped", style=MUTED)
+                            content.append(skip_line)
+
+        # Blank
+        content.append(Text())
+
+        # Library paths
+        lib_line = Text()
+        lib_line.append("  ")
+        lib_line.append("movies", style=MUTED)
+        lib_line.append(" \u2192 ", style=MUTED)
+        lib_line.append(self.movies_path or "(not set)", style=MUTED)
+        lib_line.append("  \u00b7  ", style=MUTED)
+        lib_line.append("tv", style=MUTED)
+        lib_line.append(" \u2192 ", style=MUTED)
+        lib_line.append(self.tv_path or "(not set)", style=MUTED)
+        content.append(lib_line)
+
         # Blank
         content.append(Text())
 
@@ -111,10 +191,33 @@ class CommitView(Widget):
         bottom.append("       ")
         if self.quit_hint:
             bottom.append(self.quit_hint, style=f"italic {MUTED}")
+        elif self.conflict_report and self.conflict_report.skipped_count > 0:
+            total_valid = len(self._files)
+            bottom.append(
+                f"enter to confirm {total_valid} file{'s' if total_valid != 1 else ''} \u00b7 esc to cancel",
+                style=f"italic {MUTED}",
+            )
         else:
             bottom.append("enter to confirm \u00b7 esc to cancel", style=f"italic {MUTED}")
         content.append(bottom)
 
+        return content
+
+    def _build_progress(self, content: list[Text], width: int) -> list[Text]:  # noqa: ARG002
+        """Build progress display during file processing."""
+        content.append(Text())
+        op_color = OP_COLORS.get(self.operation, "")
+        status = Text()
+        status.append("  ")
+        status.append(self.operation, style=op_color)
+        status.append("  ")
+        status.append(self.progress_text, style=MUTED)
+        content.append(status)
+        content.append(Text())
+        hint = Text()
+        hint.append("  ")
+        hint.append("esc to interrupt", style=f"italic {MUTED}")
+        content.append(hint)
         return content
 
     def cycle_operation(self, delta: int = 1) -> None:

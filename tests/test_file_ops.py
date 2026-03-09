@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from tapes.file_ops import process_file, process_staged
+from tapes.file_ops import OperationCancelledError, process_file, process_staged
 
 
 class TestProcessFileCopy:
@@ -212,3 +212,101 @@ class TestProcessStaged:
         assert all("[dry-run]" in r for r in results)
         assert not dest1.exists()
         assert not dest2.exists()
+
+    def test_on_file_start_called(self, tmp_path: Path) -> None:
+        src1 = tmp_path / "a.mkv"
+        src1.write_text("aaa")
+        src2 = tmp_path / "b.mkv"
+        src2.write_text("bbb")
+        dest1 = tmp_path / "lib" / "a.mkv"
+        dest2 = tmp_path / "lib" / "b.mkv"
+
+        calls: list[tuple[int, int, Path, Path]] = []
+        process_staged(
+            [(src1, dest1), (src2, dest2)],
+            "copy",
+            on_file_start=lambda i, t, s, d: calls.append((i, t, s, d)),
+        )
+
+        assert len(calls) == 2
+        assert calls[0] == (0, 2, src1, dest1)
+        assert calls[1] == (1, 2, src2, dest2)
+
+
+class TestCancellation:
+    def test_cancel_stops_between_files(self, tmp_path: Path) -> None:
+        src1 = tmp_path / "a.mkv"
+        src1.write_text("aaa")
+        src2 = tmp_path / "b.mkv"
+        src2.write_text("bbb")
+        dest1 = tmp_path / "lib" / "a.mkv"
+        dest2 = tmp_path / "lib" / "b.mkv"
+
+        files_started: list[int] = []
+
+        def on_start(i: int, t: int, s: Path, d: Path) -> None:
+            files_started.append(i)
+
+        # Cancel fires when second file's copy loop starts
+        results = process_staged(
+            [(src1, dest1), (src2, dest2)],
+            "copy",
+            on_file_start=on_start,
+            cancelled=lambda: len(files_started) >= 2,
+        )
+
+        assert len(results) == 1
+        assert dest1.exists()
+        assert not dest2.exists()
+
+    def test_cancel_mid_copy_cleans_up(self, tmp_path: Path) -> None:
+        src = tmp_path / "big.bin"
+        # Write >1 MB so copy loop iterates at least twice
+        src.write_bytes(b"x" * (2 * 1024 * 1024))
+        dest = tmp_path / "lib" / "big.bin"
+
+        chunk_count = 0
+
+        def cancel_after_one_chunk() -> bool:
+            return chunk_count > 0
+
+        def count_progress(copied: int, total: int) -> None:
+            nonlocal chunk_count
+            chunk_count += 1
+
+        with pytest.raises(OperationCancelledError):
+            process_file(
+                src,
+                dest,
+                "copy",
+                progress_callback=count_progress,
+                cancelled=cancel_after_one_chunk,
+            )
+
+        # Partial file should be cleaned up
+        assert not dest.exists()
+        assert src.exists()  # source untouched
+
+    def test_cancel_passes_through_process_staged(self, tmp_path: Path) -> None:
+        src = tmp_path / "big.bin"
+        src.write_bytes(b"x" * (2 * 1024 * 1024))
+        dest = tmp_path / "lib" / "big.bin"
+
+        chunk_count = 0
+
+        def cancel_after_chunk() -> bool:
+            return chunk_count > 0
+
+        def count_progress(copied: int, total: int) -> None:
+            nonlocal chunk_count
+            chunk_count += 1
+
+        results = process_staged(
+            [(src, dest)],
+            "copy",
+            on_file_progress=count_progress,
+            cancelled=cancel_after_chunk,
+        )
+
+        assert len(results) == 0  # cancelled before completing
+        assert not dest.exists()

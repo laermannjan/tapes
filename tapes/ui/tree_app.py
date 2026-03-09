@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import logging
+import threading
 import time
 from enum import Enum
 from pathlib import Path
@@ -30,6 +31,17 @@ from tapes.ui.tree_view import TreeView
 logger = logging.getLogger(__name__)
 
 DETAIL_CHROME_LINES = 9
+
+
+def _format_bytes(n: int) -> str:
+    """Format byte count for human display."""
+    if n < 1024:
+        return f"{n} B"
+    if n < 1024 * 1024:
+        return f"{n / 1024:.0f} KB"
+    if n < 1024 * 1024 * 1024:
+        return f"{n / (1024 * 1024):.1f} MB"
+    return f"{n / (1024 * 1024 * 1024):.1f} GB"
 
 
 class AppMode(Enum):
@@ -124,6 +136,7 @@ class TreeApp(App):
         self._tmdb_progress = (0, 0)
         self._search_query = ""
         self._last_ctrl_c: float = 0.0
+        self._commit_cancelled: threading.Event | None = None
 
     @property
     def mode(self) -> AppMode:
@@ -251,14 +264,30 @@ class TreeApp(App):
         self._update_footer()
 
     def _show_commit(self) -> None:
-        """Show the commit confirmation view."""
-        self._mode = AppMode.COMMIT
+        """Show the commit confirmation view with conflict report."""
+        from tapes.conflicts import detect_conflicts
+
         staged = [f for f in self.model.all_files() if f.staged]
+        node_pairs = self._compute_file_pairs(staged)
+
+        report = detect_conflicts(
+            node_pairs,
+            duplicate_resolution=self.config.metadata.duplicate_resolution,
+            disambiguation=self.config.metadata.disambiguation,
+        )
+
+        self._mode = AppMode.COMMIT
         bar = self.query_one(BottomBar)
         cv = self.query_one(CommitView)
-        cv._files = staged  # noqa: SLF001
-        cv._categories = categorize_staged(staged)  # noqa: SLF001
+
+        # Recollect staged (conflict detection may have unstaged some)
+        remaining_staged = [n for n, _ in report.valid_pairs]
+        cv._files = remaining_staged  # noqa: SLF001
+        cv._categories = categorize_staged(remaining_staged)  # noqa: SLF001
         cv.operation = bar.operation
+        cv.movies_path = self.config.library.movies
+        cv.tv_path = self.config.library.tv
+        cv.conflict_report = report
         cv.styles.height = cv.computed_height
         cv.styles.display = "block"
         self.query_one(TreeView).add_class("dimmed")
@@ -368,15 +397,14 @@ class TreeApp(App):
             return
         self.query_one(BottomBar).cycle_operation()
 
-    def _compute_file_pairs(self, staged: list[FileNode]) -> list[tuple[Path, Path]]:
-        """Compute (source, destination) pairs for staged files."""
+    def _compute_file_pairs(self, staged: list[FileNode]) -> list[tuple[FileNode, Path]]:
+        """Compute (node, destination) pairs for staged files."""
         from tapes.ui.tree_render import compute_dest, select_template
 
         cfg = self.config
-        pairs: list[tuple[Path, Path]] = []
+        pairs: list[tuple[FileNode, Path]] = []
         for node in staged:
             tmpl = select_template(node, self.movie_template, self.tv_template)
-            # Choose library sub-root based on media_type
             media_type = node.result.get(MEDIA_TYPE)
             if media_type == MEDIA_TYPE_EPISODE and cfg.library.tv:
                 library_root = Path(cfg.library.tv)
@@ -386,13 +414,12 @@ class TreeApp(App):
                 library_root = Path()
             dest_rel = compute_dest(node, tmpl)
             if dest_rel is not None:
-                pairs.append((node.path, library_root / dest_rel))
+                pairs.append((node, library_root / dest_rel))
         return pairs
 
     def action_toggle_or_enter(self) -> None:
         if self._mode == AppMode.COMMIT:
             cv = self.query_one(CommitView)
-            self._hide_commit()
             self._do_commit(cv.operation)
             return
         if self._mode == AppMode.DETAIL:
@@ -433,7 +460,12 @@ class TreeApp(App):
             self._hide_help()
             return
         if self._mode == AppMode.COMMIT:
-            self._hide_commit()
+            if self._commit_cancelled is not None:
+                # Processing in progress -- signal cancellation.
+                self._commit_cancelled.set()
+                self.query_one(CommitView).progress_text = "cancelling ..."
+            else:
+                self._hide_commit()
             return
         if self._mode == AppMode.DETAIL:
             dv = self.query_one(DetailView)
@@ -459,7 +491,6 @@ class TreeApp(App):
             return
         if self._mode == AppMode.COMMIT:
             cv = self.query_one(CommitView)
-            self._hide_commit()
             self._do_commit(cv.operation)
             return
         if self._mode != AppMode.TREE:
@@ -471,17 +502,131 @@ class TreeApp(App):
         self._show_commit()
 
     def _do_commit(self, operation: str) -> None:
-        """Execute the commit: process staged files and exit."""
-        staged = [f for f in self.model.all_files() if f.staged]
-        pairs = self._compute_file_pairs(staged)
+        """Execute the commit: process staged files in a worker thread."""
+        cv = self.query_one(CommitView)
+        report = cv.conflict_report
+        if report is None:
+            return
+
+        # Convert valid_pairs to (Path, Path) for file_ops
+        pairs = [(n.path, d) for n, d in report.valid_pairs]
+        staged = [n for n, _ in report.valid_pairs]
+
+        if not pairs:
+            self.notify("No files to process")
+            return
+
+        # Validate: reject files with no library path (relative destinations).
+        bad = [src for src, dest in pairs if not dest.is_absolute()]
+        if bad:
+            self.notify(
+                f"{len(bad)} file(s) have no library path configured",
+                severity="error",
+            )
+            return
+
+        self._commit_cancelled = threading.Event()
+        cv.progress_text = f"0/{len(pairs)} files ..."
+        cv.styles.height = cv.computed_height
+        self.run_worker(
+            self._run_commit_worker(pairs, staged, operation),  # ty: ignore[invalid-argument-type]  # Textual WorkType stubs
+            thread=True,
+        )
+
+    def _run_commit_worker(
+        self,
+        pairs: list[tuple[Path, Path]],
+        staged: list[FileNode],
+        operation: str,
+    ) -> object:
+        """Return a callable that processes files in a background thread."""
         from tapes.file_ops import process_staged
 
-        results = process_staged(
-            pairs,
-            operation,
-            dry_run=self.config.dry_run,
-        )
-        self.exit(result=results)
+        dry_run = self.config.dry_run
+        cancel = self._commit_cancelled
+        if cancel is None:  # pragma: no cover -- caller always sets this
+            return lambda: None
+
+        def worker() -> None:
+            last_update = 0.0
+            current_file = ""
+            file_counter = ""
+
+            def on_file_start(i: int, total: int, src: Path, dest: Path) -> None:
+                nonlocal current_file, file_counter
+                file_counter = f"{i + 1}/{total} files"
+                current_file = f"{src.name} \u2192 {dest}"
+                self.call_from_thread(
+                    self._on_commit_progress,
+                    f"{file_counter} ... {current_file}",
+                )
+
+            def on_file_progress(copied: int, total: int) -> None:
+                nonlocal last_update
+                now = time.monotonic()
+                if now - last_update < 0.2:
+                    return
+                last_update = now
+                self.call_from_thread(
+                    self._on_commit_progress,
+                    f"{file_counter} ... {current_file}  ({_format_bytes(copied)} / {_format_bytes(total)})",
+                )
+
+            results = process_staged(
+                pairs,
+                operation,
+                dry_run=dry_run,
+                on_file_start=on_file_start,
+                on_file_progress=on_file_progress,
+                cancelled=cancel.is_set,
+            )
+
+            if cancel.is_set():
+                self.call_from_thread(self._on_commit_cancelled, len(results), len(pairs))
+            else:
+                self.call_from_thread(self._on_commit_done, pairs, results, staged)
+
+        return worker
+
+    def _on_commit_progress(self, text: str) -> None:
+        """Update commit view progress from worker thread."""
+        cv = self.query_one(CommitView)
+        cv.progress_text = text
+        cv.styles.height = cv.computed_height
+
+    def _on_commit_done(
+        self,
+        pairs: list[tuple[Path, Path]],
+        results: list[str],
+        staged: list[FileNode],
+    ) -> None:
+        """Handle successful commit -- remove processed files and return to tree."""
+        self._commit_cancelled = None
+
+        # Identify successfully processed source paths.
+        ok_srcs = {src for (src, _dest), msg in zip(pairs, results, strict=False) if not msg.startswith("Error")}
+        processed = [n for n in staged if n.path in ok_srcs]
+        errors = len(results) - len(ok_srcs)
+
+        if processed:
+            self.model.remove_nodes(processed)
+
+        self._hide_commit()
+        self.query_one(CommitView).progress_text = ""
+        self.query_one(TreeView).refresh_tree()
+        self._update_footer()
+
+        msg = f"{len(processed)} file(s) processed"
+        if errors:
+            msg += f", {errors} error(s)"
+        self.notify(msg)
+
+    def _on_commit_cancelled(self, done: int, total: int) -> None:
+        """Handle commit cancellation -- return to tree view."""
+        self._commit_cancelled = None
+        self._hide_commit()
+        self.query_one(CommitView).progress_text = ""
+        self.notify(f"Cancelled ({done}/{total} files processed)")
 
     def action_refresh_query(self) -> None:
         if self._mode in _MODAL_MODES:
@@ -681,6 +826,15 @@ class TreeApp(App):
         else:
             self.query_one(TreeView).refresh()
         self._update_footer()
+
+    def on_detail_view_fields_changed(self, _event: DetailView.FieldsChanged) -> None:
+        """Auto-refresh TMDB when detail view fields are edited."""
+        if self._tmdb_querying:
+            return
+        token = self.config.metadata.tmdb_token
+        if not token:
+            return
+        self.action_refresh_query()
 
     def _clear_quit_hint(self) -> None:
         """Clear the quit hint from detail/commit view."""
