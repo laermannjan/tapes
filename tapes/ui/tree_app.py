@@ -497,6 +497,9 @@ class TreeApp(App):
         """Accept detail view changes, auto-stage if possible, return to tree."""
         from tapes.ui.tree_render import can_fill_template
 
+        dv = self.query_one(DetailView)
+        dv.accept_focused_column()
+
         mt, tt = self.movie_template, self.tv_template
         if self._detail_snapshot:
             for snap in self._detail_snapshot:
