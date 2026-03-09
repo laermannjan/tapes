@@ -435,6 +435,10 @@ class DetailView(Widget):
                 n.result.pop(field_name, None)
         self.refresh()
 
+    def toggle_column_focus(self) -> None:
+        """Toggle focus between result and match columns (stub for Task 3)."""
+        self.refresh()
+
     def on_key(self, event: events.Key) -> None:
         """Handle key events for inline editing."""
         if event.key == "tab" and not self.editing:

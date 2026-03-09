@@ -269,6 +269,25 @@ class TreeView(Widget):
                 self.cursor_index = 0
             self.refresh()
 
+    def move_to_parent(self) -> None:
+        """Move cursor to the parent folder of the current node."""
+        node = self.cursor_node()
+        if node is None:
+            return
+        items = self._items
+        cursor_idx = self.cursor_index
+        if cursor_idx >= len(items):
+            return
+        current_depth = items[cursor_idx][1]
+        if current_depth == 0:
+            return
+        for i in range(cursor_idx - 1, -1, -1):
+            item, depth = items[i]
+            if isinstance(item, FolderNode) and depth < current_depth:
+                self.cursor_index = i
+                self.refresh()
+                return
+
     def refresh_tree(self) -> None:
         """Re-flatten and refresh the display."""
         self._refresh_items()

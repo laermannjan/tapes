@@ -70,15 +70,12 @@ class TreeApp(App):
     BINDINGS: ClassVar[list[Binding]] = [
         Binding("j,down", "cursor_down", "Down"),
         Binding("k,up", "cursor_up", "Up"),
-        Binding("h,left", "cursor_left", "Left"),
-        Binding("l,right", "cursor_right", "Right"),
-        Binding("enter", "toggle_or_enter", "Toggle"),
-        Binding("ctrl+a", "apply_all_clear", "Accept All", show=False),
+        Binding("enter", "primary_action", "Stage/Enter"),
         Binding("space", "toggle_staged", "Stage"),
         Binding("v", "range_select", "Range Select"),
         Binding("escape", "cancel", "Cancel"),
         Binding("x", "toggle_ignored", "Ignore"),
-        Binding("c", "commit", "Commit"),
+        Binding("e", "start_edit", "Edit", show=False),
         Binding("r", "refresh_query", "Refresh"),
         Binding("grave_accent", "toggle_flat", "Flat/Tree"),
         Binding("slash", "start_search", "Search"),
@@ -86,7 +83,7 @@ class TreeApp(App):
         Binding("equals_sign", "expand_all", "Expand All"),
         Binding("question_mark", "toggle_help", "Help"),
         Binding("backspace", "clear_field", "Clear Field", show=False),
-        Binding("f", "reset_guessit", "Extract from filename", show=False),
+        Binding("ctrl+r", "reset_guessit", "Reset to filename", show=False),
     ]
 
     CSS = """
@@ -382,23 +379,45 @@ class TreeApp(App):
             self.query_one(TreeView).move_cursor(-1)
 
     def action_cursor_left(self) -> None:
-        if self._mode in _MODAL_MODES:
-            return
-        if self._mode == AppMode.DETAIL:
-            self.query_one(DetailView).cycle_source(-1)
+        pass
 
     def action_cursor_right(self) -> None:
-        if self._mode in _MODAL_MODES:
-            return
-        if self._mode == AppMode.DETAIL:
-            self.query_one(DetailView).cycle_source(1)
+        pass
 
     def action_toggle_staged(self) -> None:
         if self._mode != AppMode.TREE:
             return
         tv = self.query_one(TreeView)
-        tv.toggle_staged_at_cursor()
-        self._update_footer()
+        if tv.in_range_mode:
+            from tapes.ui.tree_render import can_fill_template
+
+            mt, tt = self.movie_template, self.tv_template
+            nodes = tv.selected_nodes()
+            file_nodes = [n for n in nodes if isinstance(n, FileNode)]
+            if file_nodes:
+                all_staged = all(f.staged for f in file_nodes)
+                for f in file_nodes:
+                    if all_staged:
+                        f.staged = False
+                    elif can_fill_template(f, f.result, mt, tt):
+                        f.staged = True
+            tv.clear_range_select()
+            tv.refresh()
+            self._update_footer()
+            return
+        node = tv.cursor_node()
+        if isinstance(node, FileNode):
+            self._toggle_staged_with_gate(node)
+        elif isinstance(node, FolderNode):
+            from tapes.ui.tree_render import can_fill_template
+
+            mt, tt = self.movie_template, self.tv_template
+            self.model.toggle_staged_recursive(
+                node,
+                can_stage=lambda n: can_fill_template(n, n.result, mt, tt),
+            )
+            tv.refresh()
+            self._update_footer()
 
     def action_cycle_op(self) -> None:
         if self._mode != AppMode.TREE:
@@ -425,14 +444,18 @@ class TreeApp(App):
                 pairs.append((node, library_root / dest_rel))
         return pairs
 
-    def action_toggle_or_enter(self) -> None:
+    def action_primary_action(self) -> None:
+        """Enter key: context-dependent primary action."""
         if self._mode == AppMode.COMMIT:
             cv = self.query_one(CommitView)
             self._do_commit(cv.operation)
             return
         if self._mode == AppMode.DETAIL:
             dv = self.query_one(DetailView)
-            dv.start_edit()
+            if dv.editing:
+                dv.commit_edit()
+            else:
+                self._accept_detail_and_return()
             return
         if self._mode != AppMode.TREE:
             return
@@ -446,14 +469,42 @@ class TreeApp(App):
             return
         node = tv.cursor_node()
         if isinstance(node, FolderNode):
-            tv.toggle_folder_at_cursor()
-        elif isinstance(node, FileNode):
-            self._show_detail(node)
+            from tapes.tree_model import collect_files
 
-    def action_apply_all_clear(self) -> None:
-        if self._mode != AppMode.DETAIL:
-            return
-        self.query_one(DetailView).apply_source_all_clear()
+            files = collect_files(node)
+            if files:
+                self._show_detail_multi(files)
+        elif isinstance(node, FileNode):
+            self._toggle_staged_with_gate(node)
+
+    def _toggle_staged_with_gate(self, node: FileNode) -> None:
+        """Toggle staging with the can_fill_template gate."""
+        from tapes.ui.tree_render import can_fill_template
+
+        mt, tt = self.movie_template, self.tv_template
+
+        def _can_stage(n: FileNode) -> bool:
+            return can_fill_template(n, n.result, mt, tt)
+
+        old = node.staged
+        self.model.toggle_staged(node, can_stage=_can_stage)
+        if not old and not node.staged:
+            self.notify("Incomplete metadata -- cannot stage")
+        self.query_one(TreeView).refresh()
+        self._update_footer()
+
+    def _accept_detail_and_return(self) -> None:
+        """Accept detail view changes, auto-stage if possible, return to tree."""
+        from tapes.ui.tree_render import can_fill_template
+
+        mt, tt = self.movie_template, self.tv_template
+        if self._detail_snapshot:
+            for snap in self._detail_snapshot:
+                node = snap.node
+                if can_fill_template(node, node.result, mt, tt):
+                    node.staged = True
+        self._detail_snapshot = None
+        self._show_tree()
 
     def action_range_select(self) -> None:
         if self._mode != AppMode.TREE:
@@ -493,13 +544,10 @@ class TreeApp(App):
         tv.toggle_ignored_at_cursor()
         self._update_footer()
 
-    def action_commit(self) -> None:
+    def action_tab_forward(self) -> None:
+        """Tab key: open commit preview from tree, cycle sources in detail."""
         if self._mode == AppMode.DETAIL:
-            self._confirm_detail()
-            return
-        if self._mode == AppMode.COMMIT:
-            cv = self.query_one(CommitView)
-            self._do_commit(cv.operation)
+            self.query_one(DetailView).cycle_source(1)
             return
         if self._mode != AppMode.TREE:
             return
@@ -508,6 +556,12 @@ class TreeApp(App):
             self.notify("No staged files to commit")
             return
         self._show_commit()
+
+    def action_start_edit(self) -> None:
+        """e key: start inline edit in detail view."""
+        if self._mode != AppMode.DETAIL:
+            return
+        self.query_one(DetailView).start_edit()
 
     def _do_commit(self, operation: str) -> None:
         """Execute the commit: process staged files in a worker thread."""
@@ -746,7 +800,35 @@ class TreeApp(App):
         self._update_footer()
 
     def on_key(self, event: Key) -> None:
-        """Intercept key events for ctrl+c quit, shift+tab, and search mode."""
+        """Intercept key events for h/l navigation, ctrl+c quit, shift+tab, and search mode."""
+        # h/left = collapse, l/right = expand in tree mode
+        if self._mode == AppMode.TREE and event.key in ("h", "left"):
+            tv = self.query_one(TreeView)
+            node = tv.cursor_node()
+            if isinstance(node, FolderNode) and not node.collapsed:
+                tv.toggle_folder_at_cursor()
+            else:
+                tv.move_to_parent()
+            event.prevent_default()
+            event.stop()
+            return
+        if self._mode == AppMode.TREE and event.key in ("l", "right"):
+            tv = self.query_one(TreeView)
+            node = tv.cursor_node()
+            if isinstance(node, FolderNode) and node.collapsed:
+                tv.toggle_folder_at_cursor()
+            event.prevent_default()
+            event.stop()
+            return
+
+        # Tab key: commit preview from tree, cycle sources in detail
+        # Must be intercepted here because Textual uses tab for focus cycling.
+        if event.key == "tab" and self._mode != AppMode.SEARCHING:
+            self.action_tab_forward()
+            event.prevent_default()
+            event.stop()
+            return
+
         # Double ctrl+c to quit
         if event.key == "ctrl+c":
             now = time.monotonic()
@@ -770,9 +852,11 @@ class TreeApp(App):
             event.stop()
             return
 
-        # Intercept shift+tab for op cycling (Textual captures it for focus)
-        if event.key == "shift+tab" and self._mode not in (AppMode.DETAIL, AppMode.SEARCHING):
-            if self._mode == AppMode.COMMIT:
+        # Intercept shift+tab for op cycling / detail column toggle
+        if event.key == "shift+tab" and self._mode != AppMode.SEARCHING:
+            if self._mode == AppMode.DETAIL:
+                self.query_one(DetailView).toggle_column_focus()
+            elif self._mode == AppMode.COMMIT:
                 self.query_one(CommitView).cycle_operation()
             else:
                 self.query_one(BottomBar).cycle_operation()
@@ -879,4 +963,4 @@ class TreeApp(App):
         if self._mode == AppMode.SEARCHING:
             bar.hint_text = "enter to confirm \u00b7 esc to cancel"
         else:
-            bar.hint_text = "space to stage \u00b7 enter to expand \u00b7 c to commit \u00b7 ? for help"
+            bar.hint_text = "enter/space to stage \u00b7 tab to commit \u00b7 ? for help"

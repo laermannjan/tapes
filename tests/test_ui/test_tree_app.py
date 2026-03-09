@@ -473,15 +473,38 @@ class TestTreeAppKeys:
             assert tv.cursor_index == 0
 
     @pytest.mark.asyncio()
-    async def test_enter_toggles_folder(self, model: TreeModel, template: str) -> None:
+    async def test_enter_on_folder_opens_detail(self, model: TreeModel, template: str) -> None:
+        from tapes.ui.tree_app import TreeApp
+
+        # Enter on a folder opens detail view for all files in it
+        app = TreeApp(model=model, movie_template=template, tv_template=template)
+        async with app.run_test() as pilot:
+            await pilot.press("enter")
+            assert app.mode == AppMode.DETAIL
+
+    @pytest.mark.asyncio()
+    async def test_h_collapses_folder(self, model: TreeModel, template: str) -> None:
+        from tapes.ui.tree_app import TreeApp
+
+        # First expand via l, then collapse via h
+        app = TreeApp(model=model, movie_template=template, tv_template=template)
+        async with app.run_test() as pilot:
+            tv = app.query_one(TreeView)
+            assert tv.item_count == 3
+            await pilot.press("l")  # expand folderA
+            assert tv.item_count == 4
+            await pilot.press("h")  # collapse folderA
+            assert tv.item_count == 3
+
+    @pytest.mark.asyncio()
+    async def test_l_expands_folder(self, model: TreeModel, template: str) -> None:
         from tapes.ui.tree_app import TreeApp
 
         app = TreeApp(model=model, movie_template=template, tv_template=template)
         async with app.run_test() as pilot:
             tv = app.query_one(TreeView)
             assert tv.item_count == 3
-            await pilot.press("enter")
-            # folderA expanded
+            await pilot.press("l")  # expand folderA
             assert tv.item_count == 4
 
     @pytest.mark.asyncio()
@@ -508,41 +531,54 @@ class TestTreeAppKeys:
             assert not tv.in_range_mode
 
     @pytest.mark.asyncio()
-    async def test_space_toggles_staged_file(self, model: TreeModel, template: str) -> None:
+    async def test_space_toggles_staged_file(self, template: str) -> None:
         from tapes.ui.tree_app import TreeApp
 
+        # File needs complete metadata to pass the staging gate
+        node = FileNode(path=Path("/root/top.mkv"))
+        node.result = {"media_type": "movie", "title": "Top", "year": 2020}
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
         app = TreeApp(model=model, movie_template=template, tv_template=template)
         async with app.run_test() as pilot:
-            tv = app.query_one(TreeView)
-            # Move to top.mkv (index 2)
-            await pilot.press("j")
-            await pilot.press("j")
-            node = tv.cursor_node()
-            assert isinstance(node, FileNode)
             assert not node.staged
             await pilot.press("space")
             assert node.staged
 
     @pytest.mark.asyncio()
-    async def test_space_updates_status(self, model: TreeModel, template: str) -> None:
+    async def test_space_updates_status(self, template: str) -> None:
         from tapes.ui.bottom_bar import BottomBar
         from tapes.ui.tree_app import TreeApp
 
+        # File needs complete metadata to pass the staging gate
+        node = FileNode(path=Path("/root/top.mkv"))
+        node.result = {"media_type": "movie", "title": "Top", "year": 2020}
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
         app = TreeApp(model=model, movie_template=template, tv_template=template)
         async with app.run_test() as pilot:
-            # Move to top.mkv and stage it
-            await pilot.press("j")
-            await pilot.press("j")
             await pilot.press("space")
             bar = app.query_one(BottomBar)
             assert "1 staged" in bar.stats_text
 
     @pytest.mark.asyncio()
-    async def test_space_in_range_stages_range(self, model: TreeModel, template: str) -> None:
+    async def test_space_in_range_stages_range(self, template: str) -> None:
         from tapes.ui.tree_app import TreeApp
 
-        # Use expanded model so files are visible
-        expanded = _expanded_model()
+        # Files need complete metadata to pass the staging gate
+        file_a = FileNode(path=Path("/root/folderA/file_a.mkv"))
+        file_a.result = {"media_type": "movie", "title": "File A", "year": 2020}
+        file_b = FileNode(path=Path("/root/folderB/file_b.mkv"))
+        file_b.result = {"media_type": "movie", "title": "File B", "year": 2021}
+        root = FolderNode(
+            name="root",
+            children=[
+                FolderNode(name="folderA", children=[file_a], collapsed=False),
+                FolderNode(name="folderB", children=[file_b], collapsed=False),
+                FileNode(path=Path("/root/top.mkv")),
+            ],
+        )
+        expanded = TreeModel(root=root)
         app = TreeApp(model=expanded, movie_template=template, tv_template=template)
         async with app.run_test() as pilot:
             tv = app.query_one(TreeView)
@@ -554,9 +590,8 @@ class TestTreeAppKeys:
             await pilot.press("j")
             await pilot.press("space")  # stage range
             assert not tv.in_range_mode
-            files = expanded.all_files()
-            assert files[0].staged  # file_a
-            assert files[1].staged  # file_b
+            assert file_a.staged
+            assert file_b.staged
 
     @pytest.mark.asyncio()
     async def test_ctrl_c_twice_quits(self, model: TreeModel, template: str) -> None:
@@ -636,11 +671,11 @@ class TestCommitAction:
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
-            await pilot.press("c")
+            await pilot.press("tab")
             assert app.mode == AppMode.TREE
 
     @pytest.mark.asyncio()
-    async def test_c_shows_commit_view(self) -> None:
+    async def test_tab_shows_commit_view(self) -> None:
         from tapes.ui.tree_app import TreeApp
 
         model = _expanded_model()
@@ -648,7 +683,7 @@ class TestCommitAction:
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
-            await pilot.press("c")
+            await pilot.press("tab")
             assert app.mode == AppMode.COMMIT
 
     @pytest.mark.asyncio()
@@ -660,7 +695,7 @@ class TestCommitAction:
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
-            await pilot.press("c")
+            await pilot.press("tab")
             assert app.mode == AppMode.COMMIT
             await pilot.press("escape")
             assert app.mode == AppMode.TREE
@@ -945,12 +980,13 @@ class TestSearchModeAsync:
             path=Path("/media/test.mkv"),
             result={"title": "Test"},
         )
-        root = FolderNode(name="root", children=[node])
+        folder = FolderNode(name="folder", children=[node])
+        root = FolderNode(name="root", children=[folder])
         model = TreeModel(root=root)
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
-            # Enter detail view
+            # Enter detail view via folder (enter on folder opens detail)
             await pilot.press("enter")
             assert app.mode == AppMode.DETAIL
             await pilot.press("slash")
@@ -983,12 +1019,14 @@ class TestBottomBar:
         from tapes.ui.tree_app import TreeApp
 
         node = FileNode(path=Path("/media/test.mkv"), result={"title": "Test"})
-        root = FolderNode(name="root", children=[node])
+        folder = FolderNode(name="folder", children=[node])
+        root = FolderNode(name="root", children=[folder])
         model = TreeModel(root=root)
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
             bar = app.query_one(BottomBar)
+            # Enter detail via folder
             await pilot.press("enter")
             assert str(bar.styles.display) == "none"
 
@@ -1063,11 +1101,13 @@ class TestVisualIntegration:
         from tapes.ui.tree_app import TreeApp
 
         node = FileNode(path=Path("/media/test.mkv"), result={"title": "Test"})
-        root = FolderNode(name="root", children=[node])
+        folder = FolderNode(name="folder", children=[node])
+        root = FolderNode(name="root", children=[folder])
         model = TreeModel(root=root)
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
+            # Enter detail via folder
             await pilot.press("enter")
             assert app.mode == AppMode.DETAIL
             await pilot.press("question_mark")
@@ -1094,21 +1134,23 @@ class TestDetailConfirmDiscard:
             result={"title": "Original"},
             sources=[Source(name="TMDB #1", fields={"title": "Changed"}, confidence=0.9)],
         )
-        root = FolderNode(name="root", children=[node])
+        folder = FolderNode(name="folder", children=[node])
+        root = FolderNode(name="root", children=[folder])
         model = TreeModel(root=root)
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
+            # Enter detail via folder
             await pilot.press("enter")
             assert app.mode == AppMode.DETAIL
-            await pilot.press("ctrl+a")
-            assert node.result["title"] == "Changed"
+            # Manually edit result to simulate a change
+            node.result["title"] = "Changed"
             await pilot.press("escape")
             assert app.mode == AppMode.TREE
             assert node.result["title"] == "Original"
 
     @pytest.mark.asyncio()
-    async def test_c_confirms_changes(self) -> None:
+    async def test_enter_accepts_changes(self) -> None:
         from tapes.ui.tree_app import TreeApp
 
         node = FileNode(
@@ -1116,15 +1158,19 @@ class TestDetailConfirmDiscard:
             result={"title": "Original"},
             sources=[Source(name="TMDB #1", fields={"title": "Changed"}, confidence=0.9)],
         )
-        root = FolderNode(name="root", children=[node])
+        folder = FolderNode(name="folder", children=[node])
+        root = FolderNode(name="root", children=[folder])
         model = TreeModel(root=root)
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
+            # Enter detail via folder
             await pilot.press("enter")
-            await pilot.press("ctrl+a")
-            assert node.result["title"] == "Changed"
-            await pilot.press("c")
+            assert app.mode == AppMode.DETAIL
+            # Manually edit result
+            node.result["title"] = "Changed"
+            # Enter accepts changes and returns to tree
+            await pilot.press("enter")
             assert app.mode == AppMode.TREE
             assert node.result["title"] == "Changed"
 
@@ -1138,15 +1184,17 @@ class TestDetailConfirmDiscard:
             path=Path("/media/test.mkv"),
             result={"title": "Original"},
         )
-        root = FolderNode(name="root", children=[node])
+        folder = FolderNode(name="folder", children=[node])
+        root = FolderNode(name="root", children=[folder])
         model = TreeModel(root=root)
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
+            # Enter detail via folder
             await pilot.press("enter")
             dv = app.query_one(DetailView)
             assert app.mode == AppMode.DETAIL
-            await pilot.press("enter")  # start edit
+            await pilot.press("e")  # start edit via e key
             assert dv.editing
             await pilot.press("escape")  # cancel edit
             assert not dv.editing
@@ -1174,11 +1222,13 @@ class TestAppModeTransitions:
         from tapes.ui.tree_app import TreeApp
 
         node = FileNode(path=Path("/media/test.mkv"), result={"title": "Test"})
-        root = FolderNode(name="root", children=[node])
+        folder = FolderNode(name="folder", children=[node])
+        root = FolderNode(name="root", children=[folder])
         model = TreeModel(root=root)
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
         async with app.run_test() as pilot:
             assert app.mode == AppMode.TREE
+            # Enter detail via folder
             await pilot.press("enter")
             assert app.mode == AppMode.DETAIL
             await pilot.press("escape")
@@ -1193,7 +1243,7 @@ class TestAppModeTransitions:
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
         async with app.run_test() as pilot:
             assert app.mode == AppMode.TREE
-            await pilot.press("c")
+            await pilot.press("tab")
             assert app.mode == AppMode.COMMIT
             await pilot.press("escape")
             assert app.mode == AppMode.TREE
@@ -1223,3 +1273,108 @@ class TestAppModeTransitions:
             assert app.mode == AppMode.SEARCHING
             await pilot.press("escape")
             assert app.mode == AppMode.TREE
+
+
+# ---------------------------------------------------------------------------
+# Tree key redesign tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(not HAS_PILOT, reason="textual pilot not available")
+class TestTreeKeyRedesign:
+    @pytest.mark.asyncio()
+    async def test_enter_stages_file(self) -> None:
+        """enter on a file with complete metadata toggles staging."""
+        from tapes.ui.tree_app import TreeApp
+
+        node = FileNode(path=Path("/media/test.mkv"))
+        node.result = {"media_type": "movie", "title": "Test", "year": 2020}
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
+        async with app.run_test() as pilot:
+            await pilot.press("enter")
+            assert node.staged is True
+
+    @pytest.mark.asyncio()
+    async def test_enter_blocked_incomplete(self) -> None:
+        """enter on a file with incomplete metadata does not stage."""
+        from tapes.ui.tree_app import TreeApp
+
+        node = FileNode(path=Path("/media/test.mkv"))
+        node.result = {"media_type": "movie", "title": "Test"}  # no year
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
+        async with app.run_test() as pilot:
+            await pilot.press("enter")
+            assert node.staged is False
+
+    @pytest.mark.asyncio()
+    async def test_tab_opens_commit(self) -> None:
+        """tab from tree opens commit preview when files are staged."""
+        from tapes.ui.tree_app import TreeApp
+
+        model = _expanded_model()
+        model.all_files()[0].staged = True
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
+        async with app.run_test() as pilot:
+            await pilot.press("tab")
+            assert app.mode == AppMode.COMMIT
+
+    @pytest.mark.asyncio()
+    async def test_h_collapses_expanded_folder(self) -> None:
+        """h collapses an expanded folder."""
+        from tapes.ui.tree_app import TreeApp
+
+        model = _expanded_model()
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
+        async with app.run_test() as pilot:
+            tv = app.query_one(TreeView)
+            # Cursor on folderA (expanded), 5 items total
+            assert tv.item_count == 5
+            await pilot.press("h")
+            # folderA collapsed: folderA, folderB, file_b.mkv, top.mkv = 4 items
+            assert tv.item_count == 4
+
+    @pytest.mark.asyncio()
+    async def test_l_expands_collapsed_folder(self) -> None:
+        """l expands a collapsed folder."""
+        from tapes.ui.tree_app import TreeApp
+
+        model = _simple_model()  # all collapsed
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
+        async with app.run_test() as pilot:
+            tv = app.query_one(TreeView)
+            assert tv.item_count == 3
+            await pilot.press("l")  # expand folderA
+            assert tv.item_count == 4
+
+    @pytest.mark.asyncio()
+    async def test_enter_on_folder_opens_detail_for_files(self) -> None:
+        """enter on a folder opens detail view for all files in that folder."""
+        from tapes.ui.tree_app import TreeApp
+
+        model = _expanded_model()
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
+        async with app.run_test() as pilot:
+            # Cursor on folderA
+            await pilot.press("enter")
+            assert app.mode == AppMode.DETAIL
+
+    @pytest.mark.asyncio()
+    async def test_h_moves_to_parent_on_file(self) -> None:
+        """h on a file moves cursor to its parent folder."""
+        from tapes.ui.tree_app import TreeApp
+
+        model = _expanded_model()
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
+        async with app.run_test() as pilot:
+            tv = app.query_one(TreeView)
+            # Move to file_a.mkv (index 1)
+            await pilot.press("j")
+            assert isinstance(tv.cursor_node(), FileNode)
+            await pilot.press("h")
+            # Should move to parent folderA (index 0)
+            assert tv.cursor_index == 0
+            assert isinstance(tv.cursor_node(), FolderNode)

@@ -522,13 +522,15 @@ class TestRefreshQueryIntegration:
             result={"title": "Arrival", "year": 2016},
             sources=[],
         )
-        root = FolderNode(name="root", children=[node])
+        folder = FolderNode(name="folder", children=[node])
+        root = FolderNode(name="root", children=[folder])
         model = TreeModel(root=root)
         config_obj = _make_config(TOKEN)
         _tmpl = "{title} ({year}).{ext}"
         app = TreeApp(model=model, movie_template=_tmpl, tv_template=_tmpl, config=config_obj)
 
         async with app.run_test() as pilot:
+            # Enter detail via folder
             await pilot.press("enter")
             assert app.mode == AppMode.DETAIL
             await pilot.press("r")

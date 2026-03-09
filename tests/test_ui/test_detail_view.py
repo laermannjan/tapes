@@ -633,13 +633,14 @@ except ImportError:
 @pytest.mark.skipif(not HAS_PILOT, reason="textual pilot not available")
 class TestTreeDetailIntegration:
     @pytest.mark.asyncio()
-    async def test_enter_on_file_shows_detail_esc_returns(self) -> None:
+    async def test_enter_on_folder_shows_detail_esc_returns(self) -> None:
         from tapes.tree_model import FolderNode, TreeModel
         from tapes.ui.tree_app import TreeApp
         from tapes.ui.tree_view import TreeView
 
         node = _make_node()
-        root = FolderNode(name="root", children=[node])
+        folder = FolderNode(name="folder", children=[node])
+        root = FolderNode(name="root", children=[folder])
         model = TreeModel(root=root)
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
@@ -650,7 +651,7 @@ class TestTreeDetailIntegration:
             # Initially detail is not shown
             assert app.mode == AppMode.TREE
 
-            # Enter on the file node opens detail
+            # Enter on folder opens detail for all files in it
             await pilot.press("enter")
             assert app.mode == AppMode.DETAIL
             assert dv.node is node
@@ -658,8 +659,6 @@ class TestTreeDetailIntegration:
             # Navigate in detail view
             await pilot.press("j")
             assert dv.cursor_row == 1
-            await pilot.press("l")
-            assert dv.source_index == 1
 
             # Escape returns to tree
             await pilot.press("escape")
