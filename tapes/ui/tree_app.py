@@ -459,7 +459,7 @@ class TreeApp(App):
             if files:
                 self._show_detail_multi(files)
         elif isinstance(node, FileNode):
-            self._toggle_staged_with_gate(node)
+            self._show_detail(node)
 
     def _toggle_staged_with_gate(self, node: FileNode) -> None:
         """Toggle staging with the can_fill_template gate."""
@@ -950,4 +950,4 @@ class TreeApp(App):
         if self._mode == AppMode.SEARCHING:
             bar.hint_text = "enter to confirm \u00b7 esc to cancel"
         else:
-            bar.hint_text = "enter/space to stage \u00b7 tab to commit \u00b7 ? for help"
+            bar.hint_text = "enter to view \u00b7 space to stage \u00b7 tab to commit \u00b7 ? for help"

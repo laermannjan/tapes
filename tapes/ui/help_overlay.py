@@ -49,7 +49,7 @@ def _build_help_content(width: int) -> list[Text]:
     # File browser keys
     lines.append(heading("File browser"))
     lines.append(key_row("j / k", "move cursor"))
-    lines.append(key_row("enter", "stage file or open folder detail"))
+    lines.append(key_row("enter", "open detail view"))
     lines.append(key_row("space", "stage / unstage for commit"))
     lines.append(key_row("h / l", "collapse / expand folder"))
     lines.append(key_row("x", "ignore file (skip entirely)"))

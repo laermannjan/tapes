@@ -1283,8 +1283,8 @@ class TestAppModeTransitions:
 @pytest.mark.skipif(not HAS_PILOT, reason="textual pilot not available")
 class TestTreeKeyRedesign:
     @pytest.mark.asyncio()
-    async def test_enter_stages_file(self) -> None:
-        """enter on a file with complete metadata toggles staging."""
+    async def test_enter_opens_detail_for_file(self) -> None:
+        """enter on a file opens the detail/info view."""
         from tapes.ui.tree_app import TreeApp
 
         node = FileNode(path=Path("/media/test.mkv"))
@@ -1294,21 +1294,7 @@ class TestTreeKeyRedesign:
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
         async with app.run_test() as pilot:
             await pilot.press("enter")
-            assert node.staged is True
-
-    @pytest.mark.asyncio()
-    async def test_enter_blocked_incomplete(self) -> None:
-        """enter on a file with incomplete metadata does not stage."""
-        from tapes.ui.tree_app import TreeApp
-
-        node = FileNode(path=Path("/media/test.mkv"))
-        node.result = {"media_type": "movie", "title": "Test"}  # no year
-        root = FolderNode(name="root", children=[node])
-        model = TreeModel(root=root)
-        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
-        async with app.run_test() as pilot:
-            await pilot.press("enter")
-            assert node.staged is False
+            assert app._mode == AppMode.DETAIL
 
     @pytest.mark.asyncio()
     async def test_tab_opens_commit(self) -> None:
