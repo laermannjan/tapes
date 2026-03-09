@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from tapes.categorize import categorize_staged
+from tapes.conflicts import ConflictReport, Problem, ResolvedConflict
 from tapes.tree_model import FileNode
 from tapes.ui.commit_view import CommitView
 from tests.test_ui.conftest import render_plain
@@ -176,3 +177,76 @@ class TestCommitViewHeight:
         view = CommitView(files, "copy")
         # Must be at least 7 lines
         assert view.computed_height >= 7
+
+
+class TestCommitViewConflicts:
+    def test_no_conflicts_renders_normally(self) -> None:
+        files = [FileNode(path=Path("/a.mkv"), result={"media_type": "movie"})]
+        view = CommitView(files, "copy")
+        view.conflict_report = ConflictReport(valid_pairs=[(files[0], Path("/lib/a.mkv"))])
+        plain = render_plain(view)
+        assert "conflict" not in plain.lower()
+
+    def test_resolved_conflicts_shown(self) -> None:
+        files = [FileNode(path=Path("/a.mkv"), result={"media_type": "movie"})]
+        report = ConflictReport(
+            resolved=[ResolvedConflict(description="Unstaged duplicate: b.mkv (same as a.mkv)")],
+            valid_pairs=[(files[0], Path("/lib/a.mkv"))],
+        )
+        view = CommitView(files, "copy")
+        view.conflict_report = report
+        plain = render_plain(view)
+        assert "1 conflict resolved" in plain
+        assert "Unstaged duplicate" in plain
+
+    def test_resolved_plural(self) -> None:
+        files = [FileNode(path=Path("/a.mkv"), result={"media_type": "movie"})]
+        report = ConflictReport(
+            resolved=[
+                ResolvedConflict(description="Resolved A"),
+                ResolvedConflict(description="Resolved B"),
+            ],
+            valid_pairs=[(files[0], Path("/lib/a.mkv"))],
+        )
+        view = CommitView(files, "copy")
+        view.conflict_report = report
+        plain = render_plain(view)
+        assert "2 conflicts resolved" in plain
+
+    def test_problems_shown(self) -> None:
+        files = [FileNode(path=Path("/a.mkv"), result={"media_type": "movie"})]
+        problem_node = FileNode(path=Path("/b.mkv"), result={})
+        report = ConflictReport(
+            problems=[Problem(description="Cannot write to /lib", skipped_nodes=[problem_node])],
+            valid_pairs=[(files[0], Path("/lib/a.mkv"))],
+        )
+        view = CommitView(files, "copy")
+        view.conflict_report = report
+        plain = render_plain(view)
+        assert "1 problem" in plain
+        assert "Cannot write" in plain
+        assert "skipped" in plain
+
+    def test_confirm_shows_count_when_skipped(self) -> None:
+        files = [FileNode(path=Path("/a.mkv"), result={"media_type": "movie"})]
+        problem_node = FileNode(path=Path("/b.mkv"), result={})
+        report = ConflictReport(
+            problems=[Problem(description="test", skipped_nodes=[problem_node])],
+            valid_pairs=[(files[0], Path("/lib/a.mkv"))],
+        )
+        view = CommitView(files, "copy")
+        view.conflict_report = report
+        plain = render_plain(view)
+        assert "confirm 1 file" in plain
+
+    def test_height_includes_conflict_lines(self) -> None:
+        files = [FileNode(path=Path("/a.mkv"), result={"media_type": "movie"})]
+        view_no_conflict = CommitView(files, "copy")
+        h_no = view_no_conflict.computed_height
+
+        view_with = CommitView(files, "copy")
+        view_with.conflict_report = ConflictReport(
+            resolved=[ResolvedConflict(description="test")],
+            valid_pairs=[(files[0], Path("/lib/a.mkv"))],
+        )
+        assert view_with.computed_height > h_no
