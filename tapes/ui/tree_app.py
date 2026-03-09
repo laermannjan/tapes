@@ -408,11 +408,6 @@ class TreeApp(App):
             tv.refresh()
             self._update_footer()
 
-    def action_cycle_op(self) -> None:
-        if self._mode != AppMode.TREE:
-            return
-        self.query_one(BottomBar).cycle_operation()
-
     def _compute_file_pairs(self, staged: list[FileNode]) -> list[tuple[FileNode, Path]]:
         """Compute (node, destination) pairs for staged files."""
         from tapes.ui.tree_render import compute_dest, select_template
