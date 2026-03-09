@@ -37,13 +37,11 @@ metadata:
   # TMDB v4 read access token (or set TMDB_TOKEN / TAPES_METADATA__TMDB_TOKEN).
   # tmdb_token: ""
 
-  # Auto-accept threshold (tier 1): accept best match if similarity >= this.
-  # auto_accept_threshold: 0.85
-
-  # Auto-accept tier 2: accept if similarity >= margin_accept_threshold AND
-  # the gap to the second-best match >= min_accept_margin.
-  # margin_accept_threshold: 0.6
-  # min_accept_margin: 0.15
+  # Auto-accept: accept best match if score >= min_score AND the gap to the
+  # second-best match (prominence) >= min_prominence. A single candidate has
+  # infinite prominence and always passes the prominence check.
+  # min_score: 0.6
+  # min_prominence: 0.15
 
   # Maximum TMDB search results to keep per query.
   # max_results: 3

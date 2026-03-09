@@ -124,7 +124,7 @@ class TestCanStagePipelineIntegration:
             run_auto_pipeline(
                 model,
                 token="fake-token",  # noqa: S106
-                confidence_threshold=0.5,
+                min_score=0.5,
                 can_stage=_can_stage,
             )
 
@@ -167,7 +167,7 @@ class TestCanStagePipelineIntegration:
             run_auto_pipeline(
                 model,
                 token="fake-token",  # noqa: S106
-                confidence_threshold=0.5,
+                min_score=0.5,
                 can_stage=_can_stage,
             )
 

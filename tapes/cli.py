@@ -32,9 +32,8 @@ def _build_overrides(**kwargs: Any) -> dict[str, Any]:
         "tv_template": ("library", "tv_template"),
         "operation": ("library", "operation"),
         "tmdb_token": ("metadata", "tmdb_token"),
-        "auto_accept_threshold": ("metadata", "auto_accept_threshold"),
-        "margin_accept_threshold": ("metadata", "margin_accept_threshold"),
-        "min_accept_margin": ("metadata", "min_accept_margin"),
+        "min_score": ("metadata", "min_score"),
+        "min_prominence": ("metadata", "min_prominence"),
         "max_results": ("metadata", "max_results"),
         "duplicate_resolution": ("metadata", "duplicate_resolution"),
         "disambiguation": ("metadata", "disambiguation"),
@@ -111,14 +110,11 @@ def import_cmd(
     tmdb_token: str | None = typer.Option(
         None, "--tmdb-token", help="TMDB API bearer token", rich_help_panel="Metadata"
     ),
-    auto_accept_threshold: float | None = typer.Option(
-        None, "--auto-accept-threshold", help="Auto-accept similarity threshold", rich_help_panel="Metadata"
+    min_score: float | None = typer.Option(
+        None, "--min-score", help="Minimum similarity score for auto-accept", rich_help_panel="Metadata"
     ),
-    margin_accept_threshold: float | None = typer.Option(
-        None, "--margin-accept-threshold", help="Margin-based accept threshold", rich_help_panel="Metadata"
-    ),
-    min_accept_margin: float | None = typer.Option(
-        None, "--min-accept-margin", help="Minimum margin for margin-based accept", rich_help_panel="Metadata"
+    min_prominence: float | None = typer.Option(
+        None, "--min-prominence", help="Minimum prominence (gap to second) for auto-accept", rich_help_panel="Metadata"
     ),
     max_results: int | None = typer.Option(
         None, "--max-results", help="Max TMDB search results", rich_help_panel="Metadata"
@@ -159,9 +155,8 @@ def import_cmd(
         tv_template=tv_template,
         operation=operation,
         tmdb_token=tmdb_token,
-        auto_accept_threshold=auto_accept_threshold,
-        margin_accept_threshold=margin_accept_threshold,
-        min_accept_margin=min_accept_margin,
+        min_score=min_score,
+        min_prominence=min_prominence,
         max_results=max_results,
         duplicate_resolution=duplicate_resolution,
         disambiguation=disambiguation,

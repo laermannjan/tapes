@@ -191,13 +191,12 @@ class TreeApp(App):
         """Return a callable that runs TMDB queries in a background thread."""
         from tapes.pipeline import run_tmdb_pass
 
-        threshold = self.config.metadata.auto_accept_threshold
+        min_score = self.config.metadata.min_score
         max_workers = self.config.advanced.max_workers
         max_results = self.config.metadata.max_results
         tmdb_timeout = self.config.advanced.tmdb_timeout
         tmdb_retries = self.config.advanced.tmdb_retries
-        margin_threshold = self.config.metadata.margin_accept_threshold
-        min_margin = self.config.metadata.min_accept_margin
+        min_prominence = self.config.metadata.min_prominence
         language = self.config.metadata.language
         mt, tt = self.movie_template, self.tv_template
 
@@ -211,15 +210,14 @@ class TreeApp(App):
             run_tmdb_pass(
                 self.model,
                 token=token,
-                confidence_threshold=threshold,
+                min_score=min_score,
                 on_progress=on_progress,
                 max_workers=max_workers,
                 post_update=self.call_from_thread,
                 max_results=max_results,
                 tmdb_timeout=tmdb_timeout,
                 tmdb_retries=tmdb_retries,
-                margin_threshold=margin_threshold,
-                min_margin=min_margin,
+                min_prominence=min_prominence,
                 language=language,
                 can_stage=_can_stage,
             )
@@ -725,13 +723,12 @@ class TreeApp(App):
         """Return a callable that refreshes TMDB data in a background thread."""
         from tapes.pipeline import refresh_tmdb_batch
 
-        threshold = self.config.metadata.auto_accept_threshold
+        min_score = self.config.metadata.min_score
         max_workers = self.config.advanced.max_workers
         max_results = self.config.metadata.max_results
         tmdb_timeout = self.config.advanced.tmdb_timeout
         tmdb_retries = self.config.advanced.tmdb_retries
-        margin_threshold = self.config.metadata.margin_accept_threshold
-        min_margin = self.config.metadata.min_accept_margin
+        min_prominence = self.config.metadata.min_prominence
         language = self.config.metadata.language
         mt, tt = self.movie_template, self.tv_template
 
@@ -745,15 +742,14 @@ class TreeApp(App):
             refresh_tmdb_batch(
                 nodes,
                 token=token,
-                confidence_threshold=threshold,
+                min_score=min_score,
                 on_progress=on_progress,
                 max_workers=max_workers,
                 post_update=self.call_from_thread,
                 max_results=max_results,
                 tmdb_timeout=tmdb_timeout,
                 max_retries=tmdb_retries,
-                margin_threshold=margin_threshold,
-                min_margin=min_margin,
+                min_prominence=min_prominence,
                 language=language,
                 can_stage=_can_stage,
             )

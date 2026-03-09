@@ -146,7 +146,7 @@ class TestRunAutoPipeline:
         assert node.metadata["year"] == 2021
 
     def test_clear_winner_no_year_auto_staged(self, mock_tmdb) -> None:
-        """Without year but clear winner (margin to second), auto-staged via tier 2."""
+        """Without year but clear winner (prominent gap to second), auto-staged."""
         model = _make_model("Breaking.Bad.S01E01.720p.mkv")
         run_auto_pipeline(model, token=TOKEN)
         node = model.all_files()[0]
@@ -155,7 +155,7 @@ class TestRunAutoPipeline:
     def test_title_only_auto_stages_with_low_threshold(self, mock_tmdb) -> None:
         """With a low threshold, title-only matches can auto-stage."""
         model = _make_model("Breaking.Bad.S01E01.720p.mkv")
-        run_auto_pipeline(model, token=TOKEN, confidence_threshold=0.5)
+        run_auto_pipeline(model, token=TOKEN, min_score=0.5)
         node = model.all_files()[0]
         assert node.staged is True
         assert node.metadata["year"] == 2008
@@ -194,7 +194,7 @@ class TestRunAutoPipeline:
     def test_tmdb_episode_data_merged(self, mock_tmdb) -> None:
         """With low threshold, episode data is fetched and merged."""
         model = _make_model("Breaking.Bad.S01E01.mkv")
-        run_auto_pipeline(model, token=TOKEN, confidence_threshold=0.5)
+        run_auto_pipeline(model, token=TOKEN, min_score=0.5)
         node = model.all_files()[0]
         tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
         assert len(tmdb_candidates) >= 1
@@ -202,9 +202,9 @@ class TestRunAutoPipeline:
         ep_titles = [s.metadata.get("episode_title") for s in tmdb_candidates]
         assert "Pilot" in ep_titles
 
-    def test_custom_confidence_threshold(self, mock_tmdb) -> None:
+    def test_custom_min_score(self, mock_tmdb) -> None:
         model = _make_model("Breaking.Bad.S01E01.mkv")
-        run_auto_pipeline(model, token=TOKEN, confidence_threshold=0.5)
+        run_auto_pipeline(model, token=TOKEN, min_score=0.5)
         node = model.all_files()[0]
         assert node.staged is True
 
@@ -233,7 +233,7 @@ class TestTwoStageFlow:
         """TV show match should fetch episodes."""
         model = _make_model("Breaking.Bad.S01E01.mkv")
         # Episode confidence is 0.8 (ep=0.6 + season=0.2), so use lower threshold
-        run_auto_pipeline(model, token=TOKEN, confidence_threshold=0.7)
+        run_auto_pipeline(model, token=TOKEN, min_score=0.7)
         node = model.all_files()[0]
         assert node.metadata["media_type"] == "episode"
         # Should have episode-level TMDB sources
@@ -247,7 +247,7 @@ class TestTwoStageFlow:
         node.candidates, not just episode sources.
         Invariant #1: sources are always added."""
         model = _make_model("Breaking.Bad.S01E01.mkv")
-        run_auto_pipeline(model, token=TOKEN, confidence_threshold=0.5)
+        run_auto_pipeline(model, token=TOKEN, min_score=0.5)
         node = model.all_files()[0]
         # Should have BOTH show-level and episode-level sources
         tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
@@ -259,8 +259,8 @@ class TestTwoStageFlow:
     def test_tv_show_no_episode_match(self) -> None:
         """TV show match with no matching episode keeps show-level sources.
 
-        Uses low threshold because guessit doesn't extract year from
-        'Breaking.Bad.S01E01.mkv', so show confidence is 0.7 (below 0.85).
+        Uses low min_score because guessit doesn't extract year from
+        'Breaking.Bad.S01E01.mkv', so show score is 0.7.
         """
 
         def mock_empty_episodes(*args, **kwargs):
@@ -272,7 +272,7 @@ class TestTwoStageFlow:
             patch("tapes.tmdb.get_season_episodes", side_effect=mock_empty_episodes),
         ):
             model = _make_model("Breaking.Bad.S01E01.mkv")
-            run_auto_pipeline(model, token=TOKEN, confidence_threshold=0.5)
+            run_auto_pipeline(model, token=TOKEN, min_score=0.5)
             node = model.all_files()[0]
             # Show match should still apply
             assert node.metadata["title"] == "Breaking Bad"
@@ -287,7 +287,7 @@ class TestMultipleSourcesNoAutoAccept:
         doesn't fire and both should appear as TMDB sources on the node."""
         model = _make_model("The.Office.S01E01.mkv")
         # Very high threshold so auto-accept doesn't fire
-        run_auto_pipeline(model, token=TOKEN, confidence_threshold=0.99)
+        run_auto_pipeline(model, token=TOKEN, min_score=0.99)
         node = model.all_files()[0]
         tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
         assert len(tmdb_candidates) == 2, f"Expected 2 sources, got {len(tmdb_candidates)}: {tmdb_candidates}"
@@ -301,7 +301,7 @@ class TestMultipleSourcesNoAutoAccept:
         def _always_reject(node, merged):
             return False
 
-        run_auto_pipeline(model, token=TOKEN, confidence_threshold=0.5, can_stage=_always_reject)
+        run_auto_pipeline(model, token=TOKEN, min_score=0.5, can_stage=_always_reject)
         node = model.all_files()[0]
         tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
         # Should have episode-level sources, not just show-level
@@ -870,41 +870,39 @@ class TestConfigForwarding:
         tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
         assert len(tmdb_candidates) <= 1
 
-    def test_margin_threshold_prevents_auto_accept(self, mock_tmdb) -> None:
-        """High margin_threshold prevents tier 2 auto-accept."""
-        # Breaking Bad without year: tier 2 normally accepts (margin ~0.22).
-        # Set margin_threshold=0.99 so tier 2 won't fire.
+    def test_high_min_prominence_prevents_auto_accept(self, mock_tmdb) -> None:
+        """High min_prominence prevents auto-accept."""
+        # Breaking Bad without year: prominence ~0.22.
+        # Set min_prominence=0.99 so it won't accept.
         model = _make_model("Breaking.Bad.S01E01.mkv")
-        run_auto_pipeline(model, token=TOKEN, margin_threshold=0.99)
-        node = model.all_files()[0]
-        # Should NOT auto-accept because tier 1 needs 0.85 (no year = ~0.7)
-        # and tier 2 is blocked by margin_threshold=0.99
-        assert node.staged is False
-
-    def test_min_margin_prevents_auto_accept(self, mock_tmdb) -> None:
-        """High min_margin prevents tier 2 auto-accept."""
-        # Breaking Bad without year: margin ~0.22. Set min_margin=0.5 to block.
-        model = _make_model("Breaking.Bad.S01E01.mkv")
-        run_auto_pipeline(model, token=TOKEN, min_margin=0.5)
+        run_auto_pipeline(model, token=TOKEN, min_prominence=0.99)
         node = model.all_files()[0]
         assert node.staged is False
 
-    def test_margin_params_allow_auto_accept(self, mock_tmdb) -> None:
-        """Lenient margin params allow tier 2 auto-accept."""
+    def test_moderate_min_prominence_prevents_auto_accept(self, mock_tmdb) -> None:
+        """Moderate min_prominence prevents auto-accept when prominence is small."""
+        # Breaking Bad without year: prominence ~0.22. Set min_prominence=0.5 to block.
         model = _make_model("Breaking.Bad.S01E01.mkv")
-        run_auto_pipeline(model, token=TOKEN, margin_threshold=0.5, min_margin=0.1)
+        run_auto_pipeline(model, token=TOKEN, min_prominence=0.5)
+        node = model.all_files()[0]
+        assert node.staged is False
+
+    def test_lenient_min_prominence_allows_auto_accept(self, mock_tmdb) -> None:
+        """Lenient min_prominence allows auto-accept."""
+        model = _make_model("Breaking.Bad.S01E01.mkv")
+        run_auto_pipeline(model, token=TOKEN, min_prominence=0.1)
         node = model.all_files()[0]
         assert node.staged is True
 
-    def test_refresh_forwards_margin_params(self, mock_tmdb) -> None:
-        """refresh_tmdb_source forwards margin_threshold and min_margin."""
+    def test_refresh_forwards_min_prominence(self, mock_tmdb) -> None:
+        """refresh_tmdb_source forwards min_prominence."""
         node = FileNode(
             path=Path("/media/test.mkv"),
             metadata={"title": "Breaking Bad"},
             candidates=[],
         )
-        # With strict margin params, tier 2 auto-accept should be blocked
-        refresh_tmdb_source(node, token=TOKEN, margin_threshold=0.99, min_margin=0.99)
+        # With strict min_prominence, auto-accept should be blocked
+        refresh_tmdb_source(node, token=TOKEN, min_prominence=0.99)
         assert node.staged is False
 
     def test_tmdb_timeout_forwarded_to_create_client(self, mock_tmdb) -> None:
@@ -934,7 +932,7 @@ class TestConfigForwarding:
         """max_results limits episode sources in stage 2."""
         model = _make_model("Breaking.Bad.S01E01.mkv")
         # Low threshold to trigger episode stage
-        run_auto_pipeline(model, token=TOKEN, confidence_threshold=0.5, max_results=1)
+        run_auto_pipeline(model, token=TOKEN, min_score=0.5, max_results=1)
         node = model.all_files()[0]
         tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
         episode_sources = [s for s in tmdb_candidates if "episode_title" in s.metadata]

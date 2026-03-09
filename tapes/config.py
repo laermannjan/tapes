@@ -19,14 +19,13 @@ class ScanConfig(BaseModel):
     video_extensions: list[str] = [".mkv", ".mp4", ".avi", ".mov", ".m4v", ".ts", ".m2ts", ".wmv", ".flv"]
 
 
-DEFAULT_AUTO_ACCEPT_THRESHOLD: float = 0.85
+DEFAULT_MIN_SCORE: float = 0.6
 
 
 class MetadataConfig(BaseModel):
     tmdb_token: str = ""
-    auto_accept_threshold: float = Field(default=DEFAULT_AUTO_ACCEPT_THRESHOLD, ge=0.0, le=1.0)
-    margin_accept_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
-    min_accept_margin: float = Field(default=0.15, ge=0.0, le=1.0)
+    min_score: float = Field(default=DEFAULT_MIN_SCORE, ge=0.0, le=1.0)
+    min_prominence: float = Field(default=0.15, ge=0.0, le=1.0)
     max_results: int = Field(default=3, ge=1)
     duplicate_resolution: Literal["auto", "warn", "off"] = "auto"
     disambiguation: Literal["auto", "warn", "off"] = "auto"

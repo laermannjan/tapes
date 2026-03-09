@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from tapes.config import DEFAULT_AUTO_ACCEPT_THRESHOLD
+from tapes.config import DEFAULT_MIN_SCORE
 from tapes.similarity import (
     _string_similarity,
     compute_episode_similarity,
@@ -99,13 +99,13 @@ class TestComputeSimilarity:
         )
         assert score == pytest.approx(0.7)
 
-    def test_no_year_below_auto_accept(self) -> None:
-        """Missing year must keep score below auto-accept threshold."""
+    def test_no_year_score(self) -> None:
+        """Missing year gives score of 0.7 (title weight only)."""
         score = compute_similarity(
             {"title": "Dune"},
             {"title": "Dune"},
         )
-        assert score < DEFAULT_AUTO_ACCEPT_THRESHOLD
+        assert score == pytest.approx(0.7)
 
     def test_no_title_in_query(self) -> None:
         assert compute_similarity({"year": 2021}, {"title": "Dune", "year": 2021}) == 0.0
@@ -127,8 +127,8 @@ class TestComputeSimilarity:
             {"title": "Dark Knight", "year": 2008},
             {"title": "The Dark Knight", "year": 2008},
         )
-        # rapidfuzz handles articles well; score should auto-accept
-        assert score > DEFAULT_AUTO_ACCEPT_THRESHOLD
+        # rapidfuzz handles articles well; score should be high enough for auto-accept
+        assert score > DEFAULT_MIN_SCORE
 
     def test_no_overlap_title_same_year(self) -> None:
         score = compute_similarity(
@@ -292,63 +292,66 @@ class TestOriginalTitleScoring:
 
 
 class TestShouldAutoAccept:
-    """Two-tier auto-accept: high similarity OR clear winner."""
+    """Single-gate auto-accept: score >= min_score AND prominence >= min_prominence."""
 
     def test_empty_list(self) -> None:
         assert should_auto_accept([]) is False
 
-    def test_high_similarity_single(self) -> None:
-        """Tier 1: best >= threshold."""
+    def test_high_score_single(self) -> None:
+        """Single candidate above min_score -- infinite prominence."""
         assert should_auto_accept([0.95]) is True
 
-    def test_high_similarity_multiple(self) -> None:
-        assert should_auto_accept([0.90, 0.85]) is True
+    def test_single_at_min_score_boundary(self) -> None:
+        """Single candidate at exactly min_score -- passes."""
+        assert should_auto_accept([0.6]) is True
 
-    def test_at_threshold_boundary(self) -> None:
-        assert should_auto_accept([0.85]) is True
+    def test_single_below_min_score(self) -> None:
+        """Single candidate below min_score -- rejected."""
+        assert should_auto_accept([0.5]) is False
 
-    def test_below_threshold_single_candidate(self) -> None:
-        """Single candidate below threshold -- no tier 2 (needs >= 2)."""
-        assert should_auto_accept([0.7]) is False
-
-    def test_clear_winner_above_margin_threshold(self) -> None:
-        """Tier 2: below threshold but clear separation from second."""
-        assert should_auto_accept([0.7, 0.45]) is True  # margin 0.25 >= 0.15
+    def test_prominent_winner(self) -> None:
+        """Clear separation from second-best -- accepts."""
+        assert should_auto_accept([0.7, 0.45]) is True  # prominence 0.25 >= 0.15
 
     def test_no_winner_equal_scores(self) -> None:
-        """Two equally good candidates -- no clear winner."""
-        assert should_auto_accept([0.7, 0.7]) is False  # margin 0
+        """Two equally good candidates -- no prominence."""
+        assert should_auto_accept([0.7, 0.7]) is False  # prominence 0
 
-    def test_no_winner_small_margin(self) -> None:
-        """Margin too small for tier 2."""
-        assert should_auto_accept([0.7, 0.60]) is False  # margin 0.10 < 0.15
+    def test_no_winner_small_prominence(self) -> None:
+        """Prominence too small."""
+        assert should_auto_accept([0.7, 0.60]) is False  # prominence 0.10 < 0.15
 
-    def test_below_margin_threshold(self) -> None:
-        """Best below margin threshold -- tier 2 does not apply."""
+    def test_below_min_score_even_with_prominence(self) -> None:
+        """Best below min_score -- rejected even with large prominence."""
         assert should_auto_accept([0.5, 0.2]) is False
 
     def test_three_candidates_clear_winner(self) -> None:
-        assert should_auto_accept([0.75, 0.55, 0.30]) is True  # margin 0.20
+        assert should_auto_accept([0.75, 0.55, 0.30]) is True  # prominence 0.20
 
     def test_three_candidates_no_winner(self) -> None:
-        assert should_auto_accept([0.75, 0.70, 0.30]) is False  # margin 0.05
+        assert should_auto_accept([0.75, 0.70, 0.30]) is False  # prominence 0.05
 
     def test_custom_thresholds(self) -> None:
         assert (
             should_auto_accept(
                 [0.6, 0.3],
-                threshold=0.9,
-                margin_threshold=0.5,
-                min_margin=0.2,
+                min_score=0.5,
+                min_prominence=0.2,
             )
             is True
-        )  # margin 0.3 >= 0.2, best 0.6 >= 0.5
+        )  # prominence 0.3 >= 0.2, best 0.6 >= 0.5
 
     def test_must_be_sorted_descending(self) -> None:
         """Caller must sort descending. Function trusts the order."""
         assert should_auto_accept([0.45, 0.7]) is False
 
 
+class TestHighScoresLowProminence:
+    def test_high_scores_low_prominence_no_accept(self) -> None:
+        """Two near-identical scores should NOT auto-accept -- user must decide."""
+        assert should_auto_accept([0.99, 0.98]) is False
+
+
 class TestDefaultThreshold:
-    def test_threshold_value(self) -> None:
-        assert DEFAULT_AUTO_ACCEPT_THRESHOLD == 0.85
+    def test_min_score_value(self) -> None:
+        assert DEFAULT_MIN_SCORE == 0.6

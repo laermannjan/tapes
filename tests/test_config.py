@@ -82,13 +82,13 @@ class TestMetadataConfig:
         config = MetadataConfig()
         assert config.tmdb_token == ""
 
-    def test_auto_accept_threshold_default(self) -> None:
+    def test_min_score_default(self) -> None:
         config = MetadataConfig()
-        assert config.auto_accept_threshold == 0.85
+        assert config.min_score == 0.6
 
-    def test_auto_accept_threshold_custom(self) -> None:
-        config = MetadataConfig(auto_accept_threshold=0.5)
-        assert config.auto_accept_threshold == 0.5
+    def test_min_score_custom(self) -> None:
+        config = MetadataConfig(min_score=0.5)
+        assert config.min_score == 0.5
 
     def test_tmdb_token_explicit(self) -> None:
         config = MetadataConfig(tmdb_token="explicit")  # noqa: S106
@@ -96,16 +96,14 @@ class TestMetadataConfig:
 
 
 class TestNewMetadataFields:
-    def test_margin_defaults(self) -> None:
+    def test_prominence_defaults(self) -> None:
         cfg = MetadataConfig()
-        assert cfg.margin_accept_threshold == 0.6
-        assert cfg.min_accept_margin == 0.15
+        assert cfg.min_prominence == 0.15
         assert cfg.max_results == 3
 
     def test_custom_values(self) -> None:
-        cfg = MetadataConfig(margin_accept_threshold=0.8, min_accept_margin=0.2, max_results=5)
-        assert cfg.margin_accept_threshold == 0.8
-        assert cfg.min_accept_margin == 0.2
+        cfg = MetadataConfig(min_prominence=0.2, max_results=5)
+        assert cfg.min_prominence == 0.2
         assert cfg.max_results == 5
 
 
@@ -197,14 +195,14 @@ class TestYamlConfigSource:
             yaml.dump(
                 {
                     "library": {"movies": "/media/movies", "operation": "move"},
-                    "metadata": {"auto_accept_threshold": 0.7},
+                    "metadata": {"min_score": 0.7},
                 }
             )
         )
         cfg = load_config(config_path=config_file)
         assert cfg.library.movies == "/media/movies"
         assert cfg.library.operation == "move"
-        assert cfg.metadata.auto_accept_threshold == 0.7
+        assert cfg.metadata.min_score == 0.7
 
     def test_env_overrides_yaml(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         config_file = tmp_path / "config.yaml"
@@ -326,25 +324,21 @@ def test_library_config_custom() -> None:
 class TestFieldValidation:
     """Test Field constraints on numeric config values."""
 
-    def test_threshold_below_zero_rejected(self) -> None:
+    def test_min_score_below_zero_rejected(self) -> None:
         with pytest.raises(ValidationError):
-            MetadataConfig(auto_accept_threshold=-0.1)
+            MetadataConfig(min_score=-0.1)
 
-    def test_threshold_above_one_rejected(self) -> None:
+    def test_min_score_above_one_rejected(self) -> None:
         with pytest.raises(ValidationError):
-            MetadataConfig(auto_accept_threshold=1.5)
+            MetadataConfig(min_score=1.5)
 
-    def test_threshold_boundary_values(self) -> None:
-        assert MetadataConfig(auto_accept_threshold=0.0).auto_accept_threshold == 0.0
-        assert MetadataConfig(auto_accept_threshold=1.0).auto_accept_threshold == 1.0
+    def test_min_score_boundary_values(self) -> None:
+        assert MetadataConfig(min_score=0.0).min_score == 0.0
+        assert MetadataConfig(min_score=1.0).min_score == 1.0
 
-    def test_margin_threshold_out_of_range(self) -> None:
+    def test_min_prominence_out_of_range(self) -> None:
         with pytest.raises(ValidationError):
-            MetadataConfig(margin_accept_threshold=2.0)
-
-    def test_min_accept_margin_out_of_range(self) -> None:
-        with pytest.raises(ValidationError):
-            MetadataConfig(min_accept_margin=-0.5)
+            MetadataConfig(min_prominence=-0.5)
 
     def test_max_results_zero_rejected(self) -> None:
         with pytest.raises(ValidationError):

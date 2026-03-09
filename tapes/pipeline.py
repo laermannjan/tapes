@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     import httpx
 
-from tapes.config import DEFAULT_AUTO_ACCEPT_THRESHOLD
+from tapes.config import DEFAULT_MIN_SCORE
 from tapes.fields import (
     EPISODE,
     MEDIA_TYPE,
@@ -93,15 +93,14 @@ def run_guessit_pass(model: TreeModel) -> None:
 def run_tmdb_pass(
     model: TreeModel,
     token: str = "",
-    confidence_threshold: float | None = None,
+    min_score: float | None = None,
     on_progress: Callable[[int, int], None] | None = None,
     max_workers: int = DEFAULT_MAX_WORKERS,
     post_update: Callable[[Callable[[], None]], None] | None = None,
     max_results: int = DEFAULT_MAX_RESULTS,
     tmdb_timeout: float = 10.0,
     tmdb_retries: int = 3,
-    margin_threshold: float | None = None,
-    min_margin: float | None = None,
+    min_prominence: float | None = None,
     language: str = "",
     can_stage: Callable[[FileNode, dict], bool] | None = None,
 ) -> None:
@@ -118,13 +117,12 @@ def run_tmdb_pass(
         max_results: Maximum TMDB results to keep per file.
         tmdb_timeout: Timeout in seconds for TMDB HTTP requests.
         tmdb_retries: Number of retries for failed TMDB requests.
-        margin_threshold: Minimum similarity for tier 2 auto-accept.
-        min_margin: Minimum gap between best and second for tier 2.
+        min_prominence: Minimum gap between best and second for auto-accept.
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    if confidence_threshold is None:
-        confidence_threshold = DEFAULT_AUTO_ACCEPT_THRESHOLD
+    if min_score is None:
+        min_score = DEFAULT_MIN_SCORE
 
     _post = post_update if post_update is not None else lambda fn: fn()
 
@@ -150,14 +148,13 @@ def run_tmdb_pass(
             _query_tmdb_for_node(
                 node,
                 token,
-                confidence_threshold,
+                min_score,
                 cache=cache,
                 client=client,
                 post_update=_post,
                 max_results=max_results,
                 max_retries=tmdb_retries,
-                margin_threshold=margin_threshold,
-                min_margin=min_margin,
+                min_prominence=min_prominence,
                 language=language,
                 can_stage=can_stage,
             )
@@ -175,13 +172,12 @@ def run_tmdb_pass(
 def run_auto_pipeline(
     model: TreeModel,
     token: str = "",
-    confidence_threshold: float | None = None,
+    min_score: float | None = None,
     post_update: Callable[[Callable[[], None]], None] | None = None,
     max_results: int = DEFAULT_MAX_RESULTS,
     tmdb_timeout: float = 10.0,
     tmdb_retries: int = 3,
-    margin_threshold: float | None = None,
-    min_margin: float | None = None,
+    min_prominence: float | None = None,
     language: str = "",
     can_stage: Callable[[FileNode, dict], bool] | None = None,
 ) -> None:
@@ -190,23 +186,22 @@ def run_auto_pipeline(
     For each file node:
     1. Extract metadata from filename via guessit -> metadata + "from filename" candidate
     2. Query TMDB (two-stage: show/movie, then episodes) -> add TMDB candidates
-    3. Auto-accept via should_auto_accept (high similarity OR clear winner)
+    3. Auto-accept via should_auto_accept (score >= min_score AND prominent)
     """
 
-    if confidence_threshold is None:
-        confidence_threshold = DEFAULT_AUTO_ACCEPT_THRESHOLD
+    if min_score is None:
+        min_score = DEFAULT_MIN_SCORE
 
     run_guessit_pass(model)
     run_tmdb_pass(
         model,
         token=token,
-        confidence_threshold=confidence_threshold,
+        min_score=min_score,
         post_update=post_update,
         max_results=max_results,
         tmdb_timeout=tmdb_timeout,
         tmdb_retries=tmdb_retries,
-        margin_threshold=margin_threshold,
-        min_margin=min_margin,
+        min_prominence=min_prominence,
         language=language,
         can_stage=can_stage,
     )
@@ -215,12 +210,11 @@ def run_auto_pipeline(
 def refresh_tmdb_source(
     node: FileNode,
     token: str = "",
-    confidence_threshold: float | None = None,
+    min_score: float | None = None,
     post_update: Callable[[Callable[[], None]], None] | None = None,
     max_results: int = DEFAULT_MAX_RESULTS,
     max_retries: int = 3,
-    margin_threshold: float | None = None,
-    min_margin: float | None = None,
+    min_prominence: float | None = None,
     language: str = "",
     can_stage: Callable[[FileNode, dict], bool] | None = None,
 ) -> None:
@@ -228,11 +222,11 @@ def refresh_tmdb_source(
 
     Uses the node's current metadata title/year for the query.
     Removes existing TMDB candidates, adds new ones if found.
-    Auto-accepts if score >= threshold.
+    Auto-accepts if score >= min_score and prominent.
     """
 
-    if confidence_threshold is None:
-        confidence_threshold = DEFAULT_AUTO_ACCEPT_THRESHOLD
+    if min_score is None:
+        min_score = DEFAULT_MIN_SCORE
 
     _post = post_update if post_update is not None else lambda fn: fn()
 
@@ -245,12 +239,11 @@ def refresh_tmdb_source(
     _query_tmdb_for_node(
         node,
         token,
-        confidence_threshold,
+        min_score,
         post_update=_post,
         max_results=max_results,
         max_retries=max_retries,
-        margin_threshold=margin_threshold,
-        min_margin=min_margin,
+        min_prominence=min_prominence,
         language=language,
         can_stage=can_stage,
     )
@@ -259,15 +252,14 @@ def refresh_tmdb_source(
 def refresh_tmdb_batch(
     nodes: list[FileNode],
     token: str = "",
-    confidence_threshold: float | None = None,
+    min_score: float | None = None,
     on_progress: Callable[[int, int], None] | None = None,
     max_workers: int = DEFAULT_MAX_WORKERS,
     post_update: Callable[[Callable[[], None]], None] | None = None,
     max_results: int = DEFAULT_MAX_RESULTS,
     tmdb_timeout: float = 10.0,
     max_retries: int = 3,
-    margin_threshold: float | None = None,
-    min_margin: float | None = None,
+    min_prominence: float | None = None,
     language: str = "",
     can_stage: Callable[[FileNode, dict], bool] | None = None,
 ) -> None:
@@ -279,8 +271,8 @@ def refresh_tmdb_batch(
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    if confidence_threshold is None:
-        confidence_threshold = DEFAULT_AUTO_ACCEPT_THRESHOLD
+    if min_score is None:
+        min_score = DEFAULT_MIN_SCORE
 
     _post = post_update if post_update is not None else lambda fn: fn()
 
@@ -309,14 +301,13 @@ def refresh_tmdb_batch(
             _query_tmdb_for_node(
                 node,
                 token,
-                confidence_threshold,
+                min_score,
                 cache=cache,
                 client=client,
                 post_update=_post,
                 max_results=max_results,
                 max_retries=max_retries,
-                margin_threshold=margin_threshold,
-                min_margin=min_margin,
+                min_prominence=min_prominence,
                 language=language,
                 can_stage=can_stage,
             )
@@ -383,14 +374,13 @@ def _populate_node_guessit(node: FileNode, extract_metadata_fn: Callable[[str], 
 def _query_tmdb_for_node(
     node: FileNode,
     token: str,
-    threshold: float,
+    min_score: float,
     cache: _TmdbCache | None = None,
     client: httpx.Client | None = None,
     post_update: Callable[[Callable[[], None]], None] | None = None,
     max_results: int = DEFAULT_MAX_RESULTS,
     max_retries: int = 3,
-    margin_threshold: float | None = None,
-    min_margin: float | None = None,
+    min_prominence: float | None = None,
     language: str = "",
     can_stage: Callable[[FileNode, dict], bool] | None = None,
 ) -> None:
@@ -398,7 +388,7 @@ def _query_tmdb_for_node(
 
     Stage 1: Find movie/show
     - search_multi with title (+year if available) -> up to max_results Candidates
-    - Auto-accept via should_auto_accept (high similarity OR clear winner)
+    - Auto-accept via should_auto_accept (score >= min_score AND prominent)
     - If accepted media_type == "movie": done
 
     Stage 2: Find episode (only if stage 1 accepted a TV show)
@@ -436,7 +426,7 @@ def _query_tmdb_for_node(
             _query_episodes(
                 node,
                 token,
-                threshold,
+                min_score,
                 show_fields,
                 cache=cache,
                 client=client,
@@ -450,12 +440,10 @@ def _query_tmdb_for_node(
         # Movie already identified -- nothing more to fetch
         return
 
-    # Build optional kwargs for should_auto_accept margin params
+    # Build optional kwargs for should_auto_accept
     _accept_kwargs: dict[str, float] = {}
-    if margin_threshold is not None:
-        _accept_kwargs["margin_threshold"] = margin_threshold
-    if min_margin is not None:
-        _accept_kwargs["min_margin"] = min_margin
+    if min_prominence is not None:
+        _accept_kwargs["min_prominence"] = min_prominence
 
     # Stage 1: search for movie/show
     if cache is not None:
@@ -510,7 +498,7 @@ def _query_tmdb_for_node(
         [(c.name, c.metadata.get(TITLE), f"{c.score:.2f}") for c in tmdb_candidates],
     )
 
-    if should_auto_accept(similarities, threshold=threshold, **_accept_kwargs):
+    if should_auto_accept(similarities, min_score=min_score, **_accept_kwargs):
         # Auto-accept: apply non-empty fields to metadata
         # Snapshot metadata before dispatching -- the dict may be mutated later
         _best_metadata = dict(best.metadata)
@@ -548,7 +536,7 @@ def _query_tmdb_for_node(
             _query_episodes(
                 node,
                 token,
-                threshold,
+                min_score,
                 best.metadata,
                 cache=cache,
                 client=client,
@@ -573,7 +561,7 @@ def _query_tmdb_for_node(
 def _query_episodes(
     node: FileNode,
     token: str,
-    threshold: float,
+    min_score: float,
     show_fields: dict,
     cache: _TmdbCache | None = None,
     client: httpx.Client | None = None,
@@ -668,7 +656,7 @@ def _query_episodes(
     ep_similarities = [c.score for c in top_candidates]
     _top_copy = list(top_candidates)
 
-    if should_auto_accept(ep_similarities, threshold=threshold):
+    if should_auto_accept(ep_similarities, min_score=min_score):
         _best_metadata = dict(top_candidates[0].metadata)
 
         # Check if merged metadata would fill the template

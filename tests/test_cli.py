@@ -100,14 +100,12 @@ class TestBuildOverrides:
         from tapes.cli import _build_overrides
 
         result = _build_overrides(
-            auto_accept_threshold=0.9,
-            margin_accept_threshold=0.7,
-            min_accept_margin=0.2,
+            min_score=0.9,
+            min_prominence=0.2,
             max_results=5,
         )
-        assert result["metadata"]["auto_accept_threshold"] == 0.9
-        assert result["metadata"]["margin_accept_threshold"] == 0.7
-        assert result["metadata"]["min_accept_margin"] == 0.2
+        assert result["metadata"]["min_score"] == 0.9
+        assert result["metadata"]["min_prominence"] == 0.2
         assert result["metadata"]["max_results"] == 5
 
     def test_advanced_fields(self) -> None:
@@ -145,9 +143,8 @@ class TestImportFlags:
 
     def test_metadata_flags_in_help(self) -> None:
         result = runner.invoke(app, ["import", "--help"])
-        assert "--auto-accept-threshold" in result.output
-        assert "--margin-accept-threshold" in result.output
-        assert "--min-accept-margin" in result.output
+        assert "--min-score" in result.output
+        assert "--min-prominence" in result.output
         assert "--max-results" in result.output
 
     def test_scan_flags_in_help(self) -> None:

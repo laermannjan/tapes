@@ -10,7 +10,7 @@ import logging
 
 from rapidfuzz import fuzz, utils
 
-from tapes.config import DEFAULT_AUTO_ACCEPT_THRESHOLD
+from tapes.config import DEFAULT_MIN_SCORE
 from tapes.fields import EPISODE, EPISODE_TITLE, SEASON, TITLE, TMDB_ID, YEAR
 
 logger = logging.getLogger(__name__)
@@ -36,9 +36,8 @@ EPISODE_TITLE_WEIGHT = 0.10
 # Year tolerance: exact=1.0, off-by-1=0.5, off-by-2+=0.0
 YEAR_TOLERANCE = 2
 
-# Two-tier auto-accept thresholds
-MARGIN_ACCEPT_THRESHOLD = 0.6  # minimum similarity for tier 2
-MIN_ACCEPT_MARGIN = 0.15  # minimum gap between best and second
+# Auto-accept: prominence = gap between best and second-best
+DEFAULT_MIN_PROMINENCE = 0.15
 
 
 def _string_similarity(a: str, b: str) -> float:
@@ -122,7 +121,7 @@ def compute_episode_similarity(query: dict, episode: dict) -> float:
     - episode_title: rapidfuzz similarity (weight EPISODE_TITLE_WEIGHT)
 
     Missing fields score 0.0 (penalized).
-    Season + episode match = 0.9, above the 0.85 auto-accept threshold.
+    Season + episode match = 0.9, above the default min_score threshold.
     Returns 0.0-1.0.
     """
     score = 0.0
@@ -166,50 +165,40 @@ def compute_episode_similarity(query: dict, episode: dict) -> float:
 
 
 def should_auto_accept(
-    similarities: list[float],
-    threshold: float = DEFAULT_AUTO_ACCEPT_THRESHOLD,
-    margin_threshold: float = MARGIN_ACCEPT_THRESHOLD,
-    min_margin: float = MIN_ACCEPT_MARGIN,
+    scores: list[float],
+    min_score: float = DEFAULT_MIN_SCORE,
+    min_prominence: float = DEFAULT_MIN_PROMINENCE,
 ) -> bool:
     """Decide whether to auto-accept the best candidate.
 
-    Two-tier gate:
-    - Tier 1: best similarity >= threshold (strong absolute match)
-    - Tier 2: best >= margin_threshold AND margin to second >= min_margin
-              AND at least 2 candidates (need alternatives to compare against)
-
-    Args:
-        similarities: Scores sorted descending. Caller must sort.
-        threshold: Tier 1 absolute threshold.
-        margin_threshold: Minimum similarity for tier 2 to apply.
-        min_margin: Minimum gap between best and second-best for tier 2.
+    Auto-accepts when the best score is above min_score AND the candidate
+    is prominent (margin to second-best >= min_prominence). A single
+    candidate has infinite prominence.
     """
-    if not similarities:
+    if not scores:
         return False
-    best = similarities[0]
-    if best >= threshold:
-        logger.debug("auto-accept tier 1: best=%.2f >= threshold=%.2f", best, threshold)
-        return True
-    if len(similarities) >= 2 and best >= margin_threshold:
-        margin = best - similarities[1]
-        if margin >= min_margin:
-            logger.debug(
-                "auto-accept tier 2: best=%.2f, margin=%.2f (%.2f - %.2f)",
-                best,
-                margin,
-                best,
-                similarities[1],
-            )
-            return True
+    best = scores[0]
+    if best < min_score:
+        logger.debug("auto-accept rejected: best=%.2f < min_score=%.2f", best, min_score)
+        return False
+    if len(scores) == 1:
+        logger.debug("auto-accept: single candidate best=%.2f >= min_score=%.2f", best, min_score)
+        return True  # single candidate, infinite prominence
+    prominence = best - scores[1]
+    if prominence >= min_prominence:
         logger.debug(
-            "auto-accept rejected: margin=%.2f < %.2f (best=%.2f, second=%.2f)",
-            margin,
-            min_margin,
+            "auto-accept: best=%.2f, prominence=%.2f (%.2f - %.2f)",
             best,
-            similarities[1],
+            prominence,
+            best,
+            scores[1],
         )
-    elif len(similarities) == 1:
-        logger.debug("auto-accept rejected: single candidate best=%.2f < threshold=%.2f", best, threshold)
-    else:
-        logger.debug("auto-accept rejected: best=%.2f < margin_threshold=%.2f", best, margin_threshold)
+        return True
+    logger.debug(
+        "auto-accept rejected: prominence=%.2f < %.2f (best=%.2f, second=%.2f)",
+        prominence,
+        min_prominence,
+        best,
+        scores[1],
+    )
     return False
