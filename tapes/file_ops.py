@@ -160,6 +160,9 @@ def process_staged(
             results.append(msg)
         except OperationCancelledError:
             break
+        except FileExistsError:
+            logger.warning("Destination already exists for %s -> %s", src, dest)
+            results.append(f"Error: {dest} already exists")
         except Exception:
             logger.exception("Error processing %s", src)
             results.append(f"Error processing {src}")

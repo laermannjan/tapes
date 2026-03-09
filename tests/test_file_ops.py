@@ -165,6 +165,19 @@ class TestProgressCallback:
         assert "Copied" in result
 
 
+class TestErrorMessages:
+    def test_file_exists_error_message(self, tmp_path: Path) -> None:
+        src = tmp_path / "a.mkv"
+        src.write_text("data")
+        dest = tmp_path / "out" / "a.mkv"
+        dest.parent.mkdir()
+        dest.write_text("existing")
+
+        results = process_staged([(src, dest)], "copy")
+        assert len(results) == 1
+        assert "already exists" in results[0].lower()
+
+
 class TestProcessStaged:
     def test_processes_multiple_files(self, tmp_path: Path) -> None:
         src1 = tmp_path / "a.mkv"
