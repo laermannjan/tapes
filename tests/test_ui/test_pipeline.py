@@ -1089,11 +1089,11 @@ class TestEpisodeQueryAllSeasons:
 
 
 class TestAcceptCurrentCandidate:
-    """Tests for DetailView.accept_current_candidate preserving per-file fields."""
+    """Tests for MetadataView.accept_current_candidate preserving per-file fields."""
 
     def test_preserves_fields_not_in_source(self) -> None:
         """Accepting a show-level source should not wipe season/episode."""
-        from tapes.ui.metadata_view import DetailView
+        from tapes.ui.metadata_view import MetadataView
 
         node = FileNode(
             path=Path("/media/Breaking.Bad.S01E01.mkv"),
@@ -1111,7 +1111,7 @@ class TestAcceptCurrentCandidate:
                 ),
             ],
         )
-        dv = DetailView(node, movie_template="{title}.{ext}", tv_template="{title}.{ext}")
+        dv = MetadataView(node, movie_template="{title}.{ext}", tv_template="{title}.{ext}")
         dv._size = (120, 40)  # fake size for field computation
         dv.fields = ["title", "year", "season", "episode", "media_type", "tmdb_id"]
         dv.candidate_index = 0
@@ -1126,7 +1126,7 @@ class TestAcceptCurrentCandidate:
 
     def test_preserves_per_file_fields_multi_node(self) -> None:
         """Multi-node: each node keeps its own season/episode."""
-        from tapes.ui.metadata_view import DetailView
+        from tapes.ui.metadata_view import MetadataView
 
         node1 = FileNode(
             path=Path("/media/show.s01e01.mkv"),
@@ -1144,7 +1144,7 @@ class TestAcceptCurrentCandidate:
             metadata={"title": "show", "season": 2, "episode": 5, "media_type": "episode"},
             candidates=[],
         )
-        dv = DetailView(node1, movie_template="{title}.{ext}", tv_template="{title}.{ext}")
+        dv = MetadataView(node1, movie_template="{title}.{ext}", tv_template="{title}.{ext}")
         dv._size = (120, 40)
         dv.file_nodes = [node1, node2]
         dv.fields = ["title", "year", "season", "episode", "media_type", "tmdb_id"]
@@ -1161,7 +1161,7 @@ class TestAcceptCurrentCandidate:
 
     def test_sets_fields_present_in_source(self) -> None:
         """Fields present in the source should be set on all nodes."""
-        from tapes.ui.metadata_view import DetailView
+        from tapes.ui.metadata_view import MetadataView
 
         node = FileNode(
             path=Path("/media/test.mkv"),
@@ -1174,7 +1174,7 @@ class TestAcceptCurrentCandidate:
                 ),
             ],
         )
-        dv = DetailView(node, movie_template="{title}.{ext}", tv_template="{title}.{ext}")
+        dv = MetadataView(node, movie_template="{title}.{ext}", tv_template="{title}.{ext}")
         dv._size = (120, 40)
         dv.fields = ["title", "year"]
         dv.candidate_index = 0

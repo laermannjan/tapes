@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 COL_GAP = "   "
 
 
-class DetailView(Widget):
+class MetadataView(Widget):
     """Detail view showing a file's metadata grid with cursor navigation.
 
     Supports single-node and multi-node modes. In multi-node mode,

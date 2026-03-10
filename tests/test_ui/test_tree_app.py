@@ -965,9 +965,9 @@ class TestVisualIntegration:
 
     @pytest.mark.asyncio()
     async def test_launch_tree_view_visible_with_border(self) -> None:
-        """Launch the app and verify TreeView, DetailView, and BottomBar are composed."""
+        """Launch the app and verify TreeView, MetadataView, and BottomBar are composed."""
         from tapes.ui.bottom_bar import BottomBar
-        from tapes.ui.metadata_view import DetailView
+        from tapes.ui.metadata_view import MetadataView
         from tapes.ui.tree_app import TreeApp
 
         model = _expanded_model()
@@ -975,7 +975,7 @@ class TestVisualIntegration:
 
         async with app.run_test():
             tv = app.query_one(TreeView)
-            dv = app.query_one(DetailView)
+            dv = app.query_one(MetadataView)
             bar = app.query_one(BottomBar)
             # All three panels exist
             assert tv is not None
@@ -1083,7 +1083,7 @@ class TestDetailConfirmDiscard:
     @pytest.mark.asyncio()
     async def test_esc_during_edit_cancels_edit_not_detail(self) -> None:
         """Esc while editing cancels edit, doesn't discard detail changes."""
-        from tapes.ui.metadata_view import DetailView
+        from tapes.ui.metadata_view import MetadataView
         from tapes.ui.tree_app import TreeApp
 
         node = FileNode(
@@ -1098,7 +1098,7 @@ class TestDetailConfirmDiscard:
         async with app.run_test() as pilot:
             # Enter detail via folder
             await pilot.press("enter")
-            dv = app.query_one(DetailView)
+            dv = app.query_one(MetadataView)
             assert app.state == AppState.METADATA
             await pilot.press("e")  # start edit via e key
             assert dv.editing

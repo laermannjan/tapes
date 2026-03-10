@@ -6,7 +6,7 @@ from pathlib import Path
 
 from tapes.tree_model import Candidate, FileNode, FolderNode, TreeModel
 from tapes.ui.metadata_render import get_display_fields
-from tapes.ui.metadata_view import DetailView
+from tapes.ui.metadata_view import MetadataView
 from tapes.ui.tree_view import TreeView
 from tests.test_ui.conftest import render_plain
 
@@ -24,7 +24,7 @@ def _make_tree_view() -> TreeView:
     return TreeView(model=model, movie_template=MOVIE_TEMPLATE, tv_template=TV_TEMPLATE)
 
 
-def _make_detail_view() -> DetailView:
+def _make_detail_view() -> MetadataView:
     node = FileNode(
         path=Path("/media/Breaking.Bad.S01E01.mkv"),
         metadata={"title": "Breaking Bad", "year": 2008, "season": 1, "episode": 1},
@@ -36,7 +36,7 @@ def _make_detail_view() -> DetailView:
             ),
         ],
     )
-    view = DetailView(node, MOVIE_TEMPLATE, TV_TEMPLATE)
+    view = MetadataView(node, MOVIE_TEMPLATE, TV_TEMPLATE)
     view.fields = get_display_fields(view._active_template())
     return view
 
@@ -54,7 +54,7 @@ class TestTreeViewRendering:
             assert char not in plain
 
 
-class TestDetailViewRendering:
+class TestMetadataViewRendering:
     def test_detail_render_has_separator(self) -> None:
         view = _make_detail_view()
         plain = render_plain(view, height=30)

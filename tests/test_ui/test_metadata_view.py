@@ -12,7 +12,7 @@ from tapes.ui.metadata_render import (
     get_display_fields,
     is_multi_value,
 )
-from tapes.ui.metadata_view import DetailView
+from tapes.ui.metadata_view import MetadataView
 from tapes.ui.tree_app import AppState
 
 TEMPLATE = "{title} ({year})/S{season:02d}E{episode:02d}.{ext}"
@@ -99,13 +99,13 @@ class TestDisplayVal:
         assert display_val("") == ""
 
 
-# --- DetailView cursor ---
+# --- MetadataView cursor ---
 
 
-class TestDetailViewCursor:
-    def _make_view(self) -> DetailView:
+class TestMetadataViewCursor:
+    def _make_view(self) -> MetadataView:
         node = _make_node()
-        view = DetailView(node, TEMPLATE, TEMPLATE)
+        view = MetadataView(node, TEMPLATE, TEMPLATE)
         # Simulate on_mount
         view.fields = get_display_fields(TEMPLATE)
         return view
@@ -155,7 +155,7 @@ class TestDetailViewCursor:
 
     def test_cycle_candidate_noop_no_sources(self) -> None:
         node = FileNode(path=Path("/test.mkv"), metadata={}, candidates=[])
-        view = DetailView(node, TEMPLATE, TEMPLATE)
+        view = MetadataView(node, TEMPLATE, TEMPLATE)
         view.fields = get_display_fields(TEMPLATE)
         view.cycle_candidate(1)
         assert view.candidate_index == 0
@@ -173,13 +173,13 @@ class TestDetailViewCursor:
         assert view.candidate_index == 0
 
 
-# --- DetailView editing ---
+# --- MetadataView editing ---
 
 
-class TestDetailViewEditing:
-    def _make_view(self) -> DetailView:
+class TestMetadataViewEditing:
+    def _make_view(self) -> MetadataView:
         node = _make_node()
-        view = DetailView(node, TEMPLATE, TEMPLATE)
+        view = MetadataView(node, TEMPLATE, TEMPLATE)
         view.fields = get_display_fields(TEMPLATE)
         return view
 
@@ -251,13 +251,13 @@ class TestDetailViewEditing:
         assert view.node.metadata["title"] == "Breaking Bad"
 
 
-# --- DetailView.set_node ---
+# --- MetadataView.set_node ---
 
 
-class TestDetailViewSetNode:
+class TestMetadataViewSetNode:
     def test_set_node_resets_cursor(self) -> None:
         node = _make_node()
-        view = DetailView(node, TEMPLATE, TEMPLATE)
+        view = MetadataView(node, TEMPLATE, TEMPLATE)
         view.fields = get_display_fields(TEMPLATE)
         view.cursor_row = 2
         view.candidate_index = 1
@@ -275,19 +275,19 @@ class TestDetailViewSetNode:
 
     def test_set_node_updates_fields(self) -> None:
         node = _make_node()
-        view = DetailView(node, TEMPLATE, TEMPLATE)
+        view = MetadataView(node, TEMPLATE, TEMPLATE)
         view.fields = []
         view.set_node(node)
         assert len(view.fields) == 5  # tmdb_id, title, year, season, episode
 
 
-# --- DetailView.accept_current_candidate ---
+# --- MetadataView.accept_current_candidate ---
 
 
 class TestAcceptCurrentCandidate:
-    def _make_view(self) -> DetailView:
+    def _make_view(self) -> MetadataView:
         node = _make_node()
-        view = DetailView(node, TEMPLATE, TEMPLATE)
+        view = MetadataView(node, TEMPLATE, TEMPLATE)
         view.fields = get_display_fields(TEMPLATE)
         return view
 
@@ -310,7 +310,7 @@ class TestAcceptCurrentCandidate:
 
     def test_noop_without_sources(self) -> None:
         node = FileNode(path=Path("/test.mkv"), metadata={"title": "Test"}, candidates=[])
-        view = DetailView(node, TEMPLATE, TEMPLATE)
+        view = MetadataView(node, TEMPLATE, TEMPLATE)
         view.fields = get_display_fields(TEMPLATE)
         original = dict(view.node.metadata)
         view.accept_current_candidate()
@@ -321,7 +321,7 @@ class TestAcceptCurrentCandidate:
 
 
 class TestMultiFileDetail:
-    def _make_multi_view(self) -> tuple[DetailView, FileNode, FileNode]:
+    def _make_multi_view(self) -> tuple[MetadataView, FileNode, FileNode]:
         node1 = FileNode(
             path=Path("/media/file1.mkv"),
             metadata={"title": "Breaking Bad", "year": 2008, "season": 1, "episode": 1},
@@ -344,7 +344,7 @@ class TestMultiFileDetail:
                 ),
             ],
         )
-        view = DetailView(node1, TEMPLATE, TEMPLATE)
+        view = MetadataView(node1, TEMPLATE, TEMPLATE)
         view.fields = get_display_fields(TEMPLATE)
         view.set_nodes([node1, node2])
         return view, node1, node2
@@ -354,7 +354,7 @@ class TestMultiFileDetail:
         assert view.is_multi is True
 
     def test_single_node_not_multi(self) -> None:
-        view = DetailView(_make_node(), TEMPLATE, TEMPLATE)
+        view = MetadataView(_make_node(), TEMPLATE, TEMPLATE)
         view.fields = get_display_fields(TEMPLATE)
         assert view.is_multi is False
 
@@ -451,7 +451,7 @@ class TestMultiFileDetail:
             path=Path("/c.mkv"),
             metadata={"title": "C", "year": 2020},
         )
-        view = DetailView(node1, TEMPLATE, TEMPLATE)
+        view = MetadataView(node1, TEMPLATE, TEMPLATE)
         view.fields = get_display_fields(TEMPLATE)
         view.set_nodes([node1, node2, node3])
         shared = view._shared_result()
@@ -490,7 +490,7 @@ class TestClearField:
             path=Path("/media/Inception.2010.mkv"),
             metadata={"title": "Inception", "year": 2010, "media_type": "movie"},
         )
-        dv = DetailView(node, MOVIE_TPL, TV_TPL)
+        dv = MetadataView(node, MOVIE_TPL, TV_TPL)
         dv.fields = get_display_fields(dv._active_template())
         dv.cursor_row = dv.fields.index("title")
         dv.clear_field()
@@ -501,7 +501,7 @@ class TestClearField:
             path=Path("/media/Inception.2010.mkv"),
             metadata={"title": "Inception", "year": 2010, "media_type": "movie"},
         )
-        dv = DetailView(node, MOVIE_TPL, TV_TPL)
+        dv = MetadataView(node, MOVIE_TPL, TV_TPL)
         dv.fields = get_display_fields(dv._active_template())
         dv.cursor_row = dv.fields.index("title")
         dv.editing = True
@@ -518,7 +518,7 @@ class TestResetFieldToGuessit:
             path=Path("/media/Inception.2010.mkv"),
             metadata={"title": "Wrong Title", "year": 2010, "media_type": "movie"},
         )
-        dv = DetailView(node, MOVIE_TPL, TV_TPL)
+        dv = MetadataView(node, MOVIE_TPL, TV_TPL)
         dv.fields = get_display_fields(dv._active_template())
         dv.cursor_row = dv.fields.index("title")
         dv.reset_field_to_guessit()
@@ -529,7 +529,7 @@ class TestResetFieldToGuessit:
             path=Path("/media/Inception.2010.mkv"),
             metadata={"title": "Inception", "year": 2010, "tmdb_id": 12345, "media_type": "movie"},
         )
-        dv = DetailView(node, MOVIE_TPL, TV_TPL)
+        dv = MetadataView(node, MOVIE_TPL, TV_TPL)
         dv.fields = get_display_fields(dv._active_template())
         dv.cursor_row = dv.fields.index("tmdb_id")
         dv.reset_field_to_guessit()
@@ -543,15 +543,15 @@ MOVIE_TEMPLATE = "{title} ({year})/{title} ({year}).{ext}"
 TV_TEMPLATE = "{title} ({year})/Season {season:02d}/{title} - S{season:02d}E{episode:02d} - {episode_title}.{ext}"
 
 
-class TestDetailViewTemplateSelection:
-    """Tests for media_type-based template selection in DetailView."""
+class TestMetadataViewTemplateSelection:
+    """Tests for media_type-based template selection in MetadataView."""
 
     def test_movie_node_uses_movie_template_fields(self) -> None:
         node = FileNode(
             path=Path("/movies/Inception.mkv"),
             metadata={"title": "Inception", "year": 2010, "media_type": "movie"},
         )
-        view = DetailView(
+        view = MetadataView(
             node,
             MOVIE_TEMPLATE,
             TV_TEMPLATE,
@@ -575,7 +575,7 @@ class TestDetailViewTemplateSelection:
                 "media_type": "episode",
             },
         )
-        view = DetailView(
+        view = MetadataView(
             node,
             MOVIE_TEMPLATE,
             TV_TEMPLATE,
@@ -601,7 +601,7 @@ class TestDetailViewTemplateSelection:
                 "media_type": "episode",
             },
         )
-        view = DetailView(
+        view = MetadataView(
             movie_node,
             MOVIE_TEMPLATE,
             TV_TEMPLATE,
@@ -618,7 +618,7 @@ class TestDetailViewTemplateSelection:
             path=Path("/tv/show.mkv"),
             metadata={"title": "Show", "media_type": "episode"},
         )
-        view = DetailView(node, MOVIE_TEMPLATE, TV_TEMPLATE)
+        view = MetadataView(node, MOVIE_TEMPLATE, TV_TEMPLATE)
         assert view._active_template() == TV_TEMPLATE
 
 
@@ -626,9 +626,9 @@ class TestDetailViewTemplateSelection:
 
 
 class TestColumnFocus:
-    def _make_view(self) -> DetailView:
+    def _make_view(self) -> MetadataView:
         node = _make_node()
-        view = DetailView(node, TEMPLATE, TEMPLATE)
+        view = MetadataView(node, TEMPLATE, TEMPLATE)
         view.fields = get_display_fields(TEMPLATE)
         return view
 
@@ -689,7 +689,7 @@ class TestColumnFocus:
 class TestTabBarMultipleSources:
     """Verify tab bar renders all TMDB source tabs."""
 
-    def _make_view_with_sources(self, num_sources: int) -> DetailView:
+    def _make_view_with_sources(self, num_sources: int) -> MetadataView:
         sources = [
             Candidate(
                 name=f"TMDB #{i + 1}",
@@ -703,7 +703,7 @@ class TestTabBarMultipleSources:
             metadata={"title": "Show", "year": 2020, "media_type": "episode"},
             candidates=sources,
         )
-        view = DetailView(node, TEMPLATE, TEMPLATE)
+        view = MetadataView(node, TEMPLATE, TEMPLATE)
         view.fields = get_display_fields(TEMPLATE)
         return view
 
@@ -757,7 +757,7 @@ class TestTreeDetailIntegration:
 
         async with app.run_test() as pilot:
             app.query_one(TreeView)
-            dv = app.query_one(DetailView)
+            dv = app.query_one(MetadataView)
 
             # Initially detail is not shown
             assert app.state == AppState.TREE
@@ -804,7 +804,7 @@ class TestMultiFileDetailIntegration:
 
         async with app.run_test() as pilot:
             app.query_one(TreeView)
-            dv = app.query_one(DetailView)
+            dv = app.query_one(MetadataView)
 
             # Start range and select both files
             await pilot.press("v")

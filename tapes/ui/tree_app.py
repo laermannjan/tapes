@@ -30,7 +30,7 @@ from tapes.tree_model import (
 from tapes.ui.bottom_bar import BottomBar
 from tapes.ui.commit_view import CommitView
 from tapes.ui.help_view import HELP_HEIGHT, HelpView
-from tapes.ui.metadata_view import DetailView
+from tapes.ui.metadata_view import MetadataView
 from tapes.ui.tree_view import TreeView
 
 logger = logging.getLogger(__name__)
@@ -99,7 +99,7 @@ class TreeApp(App):
     TreeView.dimmed {
         opacity: 1.0;
     }
-    DetailView {
+    MetadataView {
         display: none;
     }
     CommitView {
@@ -152,7 +152,7 @@ class TreeApp(App):
             self.tv_template,
             root_path=self.root_path,
         )
-        yield DetailView(
+        yield MetadataView(
             FileNode(path=Path("placeholder")),
             self.movie_template,
             self.tv_template,
@@ -232,7 +232,7 @@ class TreeApp(App):
         self._metadata_snapshot = [
             _NodeSnapshot(node, copy.deepcopy(node.metadata), copy.deepcopy(node.candidates), node.staged),
         ]
-        detail = self.query_one(DetailView)
+        detail = self.query_one(MetadataView)
         detail.set_node(node)
         detail.styles.height = len(detail.fields) + DETAIL_CHROME_LINES
         detail.styles.display = "block"
@@ -246,7 +246,7 @@ class TreeApp(App):
         self._metadata_snapshot = [
             _NodeSnapshot(n, copy.deepcopy(n.metadata), copy.deepcopy(n.candidates), n.staged) for n in nodes
         ]
-        detail = self.query_one(DetailView)
+        detail = self.query_one(MetadataView)
         detail.set_nodes(nodes)
         detail.styles.height = len(detail.fields) + DETAIL_CHROME_LINES
         detail.styles.display = "block"
@@ -257,7 +257,7 @@ class TreeApp(App):
     def _show_tree(self) -> None:
         """Switch from metadata view back to tree view."""
         self._mode = AppState.TREE
-        detail = self.query_one(DetailView)
+        detail = self.query_one(MetadataView)
         detail.styles.display = "none"  # ty: ignore[invalid-assignment]  # Textual RenderStyles setter
         tv = self.query_one(TreeView)
         tv.remove_class("dimmed")
@@ -343,7 +343,7 @@ class TreeApp(App):
         hv = self.query_one(HelpView)
         hv.styles.display = "none"  # ty: ignore[invalid-assignment]  # Textual RenderStyles setter
         if prev == AppState.METADATA:
-            self.query_one(DetailView).focus()
+            self.query_one(MetadataView).focus()
         elif prev == AppState.COMMIT:
             self.query_one(CommitView).focus()
         else:
@@ -358,7 +358,7 @@ class TreeApp(App):
         if self._mode in _MODAL_STATES:
             return
         if self._mode == AppState.METADATA:
-            self.query_one(DetailView).move_cursor(row_delta=1)
+            self.query_one(MetadataView).move_cursor(row_delta=1)
         else:
             self.query_one(TreeView).move_cursor(1)
 
@@ -366,7 +366,7 @@ class TreeApp(App):
         if self._mode in _MODAL_STATES:
             return
         if self._mode == AppState.METADATA:
-            self.query_one(DetailView).move_cursor(row_delta=-1)
+            self.query_one(MetadataView).move_cursor(row_delta=-1)
         else:
             self.query_one(TreeView).move_cursor(-1)
 
@@ -426,7 +426,7 @@ class TreeApp(App):
             self._do_commit(cv.operation)
             return
         if self._mode == AppState.METADATA:
-            dv = self.query_one(DetailView)
+            dv = self.query_one(MetadataView)
             if dv.editing:
                 dv.apply_edit()
             else:
@@ -468,7 +468,7 @@ class TreeApp(App):
 
     def _accept_metadata_and_return(self) -> None:
         """Accept metadata view changes, auto-stage if possible, return to tree."""
-        dv = self.query_one(DetailView)
+        dv = self.query_one(MetadataView)
         # Capture nodes and whether fields will change BEFORE switching modes.
         # After _show_tree(), the MetadataChanged message would trigger
         # action_refresh_query in TREE mode, which only collects the cursor
@@ -518,7 +518,7 @@ class TreeApp(App):
                 self._hide_commit()
             return
         if self._mode == AppState.METADATA:
-            dv = self.query_one(DetailView)
+            dv = self.query_one(MetadataView)
             if dv.editing:
                 dv.cancel_edit()
             else:
@@ -538,7 +538,7 @@ class TreeApp(App):
     def action_tab_forward(self) -> None:
         """Tab key: open commit preview from tree, cycle sources in detail."""
         if self._mode == AppState.METADATA:
-            dv = self.query_one(DetailView)
+            dv = self.query_one(MetadataView)
             dv.cycle_candidate(1)
             dv.refresh()
             return
@@ -554,7 +554,7 @@ class TreeApp(App):
         """e key: start inline edit in detail view."""
         if self._mode != AppState.METADATA:
             return
-        self.query_one(DetailView).start_edit()
+        self.query_one(MetadataView).start_edit()
 
     def _do_commit(self, operation: str) -> None:
         """Execute the commit: process staged files in a worker thread."""
@@ -690,7 +690,7 @@ class TreeApp(App):
             return
 
         if self._mode == AppState.METADATA:
-            nodes = list(self.query_one(DetailView).file_nodes)
+            nodes = list(self.query_one(MetadataView).file_nodes)
         else:
             tv = self.query_one(TreeView)
             if tv.in_range_mode:
@@ -735,12 +735,12 @@ class TreeApp(App):
     def action_clear_field(self) -> None:
         if self._mode != AppState.METADATA:
             return
-        self.query_one(DetailView).clear_field()
+        self.query_one(MetadataView).clear_field()
 
     def action_reset_guessit(self) -> None:
         if self._mode != AppState.METADATA:
             return
-        self.query_one(DetailView).reset_field_to_guessit()
+        self.query_one(MetadataView).reset_field_to_guessit()
 
     def action_start_search(self) -> None:
         if self._mode != AppState.TREE:
@@ -804,7 +804,7 @@ class TreeApp(App):
                 self._last_ctrl_c = now
                 msg = "press ctrl+c again to exit"
                 if self._mode == AppState.METADATA:
-                    dv = self.query_one(DetailView)
+                    dv = self.query_one(MetadataView)
                     dv.quit_hint = msg
                     self.set_timer(1.0, self._clear_quit_hint)
                 elif self._mode == AppState.COMMIT:
@@ -820,7 +820,7 @@ class TreeApp(App):
 
         if event.key == "shift+tab" and self._mode != AppState.TREE_SEARCH:
             if self._mode == AppState.METADATA:
-                self.query_one(DetailView).toggle_column_focus()
+                self.query_one(MetadataView).toggle_column_focus()
             elif self._mode == AppState.COMMIT:
                 self.query_one(CommitView).cycle_operation()
             else:
@@ -877,7 +877,7 @@ class TreeApp(App):
         """Called from worker thread via call_from_thread after each file."""
         self._tmdb_progress = (done, total)
         if self._mode == AppState.METADATA:
-            self.query_one(DetailView).refresh()
+            self.query_one(MetadataView).refresh()
         else:
             self.query_one(TreeView).refresh()
         self._update_footer()
@@ -886,12 +886,12 @@ class TreeApp(App):
         """Called when all TMDB queries are complete."""
         self._tmdb_querying = False
         if self._mode == AppState.METADATA:
-            self.query_one(DetailView).refresh()
+            self.query_one(MetadataView).refresh()
         else:
             self.query_one(TreeView).refresh()
         self._update_footer()
 
-    def on_detail_view_metadata_changed(self, _event: DetailView.MetadataChanged) -> None:
+    def on_metadata_view_metadata_changed(self, _event: MetadataView.MetadataChanged) -> None:
         """Auto-refresh TMDB when detail view metadata is edited."""
         if self._tmdb_querying:
             return
@@ -902,7 +902,7 @@ class TreeApp(App):
 
     def _clear_quit_hint(self) -> None:
         """Clear the quit hint from detail/commit view."""
-        self.query_one(DetailView).quit_hint = ""
+        self.query_one(MetadataView).quit_hint = ""
         self.query_one(CommitView).quit_hint = ""
 
     def _update_footer(self) -> None:
