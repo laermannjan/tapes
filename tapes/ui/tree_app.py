@@ -176,7 +176,7 @@ class TreeApp(App):
         if self._auto_pipeline:
             from tapes.pipeline import run_guessit_pass
 
-            run_guessit_pass(self.model)
+            run_guessit_pass(self.model, root_path=self.root_path)
             self.query_one(TreeView).refresh_tree()
             self._update_footer()
 

@@ -6,6 +6,7 @@ import logging
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -185,8 +186,14 @@ class _TmdbCache:
             event.set()
 
 
-def run_guessit_pass(model: TreeModel) -> None:
+def run_guessit_pass(model: TreeModel, root_path: Path | None = None) -> None:
     """Extract metadata from filenames via guessit for all files.
+
+    When *root_path* is provided, guessit receives the full relative
+    path (e.g. ``GOT/s1/ep01.mkv``) so it can extract show titles
+    from parent folders and season numbers from intermediate
+    directories.  Without it, only ``filename`` + immediate parent
+    are used.
 
     This is fast (local-only) and should be called synchronously before
     rendering the UI.
@@ -194,7 +201,7 @@ def run_guessit_pass(model: TreeModel) -> None:
     from tapes.extract import extract_metadata
 
     for node in model.all_files():
-        _populate_node_guessit(node, extract_metadata)
+        _populate_node_guessit(node, extract_metadata, root_path=root_path)
 
 
 def run_tmdb_pass(
@@ -285,6 +292,7 @@ def run_auto_pipeline(
     params: PipelineParams | None = None,
     post_update: Callable[[Callable[[], None]], None] | None = None,
     can_stage: Callable[[FileNode, dict], bool] | None = None,
+    root_path: Path | None = None,
     *,
     token: str = "",
     min_score: float | None = None,
@@ -312,7 +320,7 @@ def run_auto_pipeline(
         language=language,
     )
 
-    run_guessit_pass(model)
+    run_guessit_pass(model, root_path=root_path)
     run_tmdb_pass(
         model,
         p,
@@ -466,13 +474,28 @@ def extract_guessit_fields(filename: str) -> dict[str, Any]:
     return fields
 
 
-def _populate_node_guessit(node: FileNode, extract_metadata_fn: Callable[..., Any]) -> None:
+def _populate_node_guessit(
+    node: FileNode,
+    extract_metadata_fn: Callable[..., Any],
+    root_path: Path | None = None,
+) -> None:
     """Extract metadata from filename via guessit and set as metadata (base layer).
 
     The filename extraction is the base layer, not a candidate. It populates
     ``node.metadata`` directly. Candidates are reserved for TMDB matches only.
+
+    When *root_path* is provided, the full relative path is passed to
+    guessit so it can extract show titles and season numbers from the
+    directory structure.
     """
-    meta = extract_metadata_fn(node.path.name, folder_name=node.path.parent.name)
+    if root_path is not None:
+        try:
+            rel = node.path.relative_to(root_path)
+            meta = extract_metadata_fn(str(rel))
+        except ValueError:
+            meta = extract_metadata_fn(node.path.name, folder_name=node.path.parent.name)
+    else:
+        meta = extract_metadata_fn(node.path.name, folder_name=node.path.parent.name)
     filename_fields: dict = {}
     if meta.title:
         filename_fields[TITLE] = meta.title
