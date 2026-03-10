@@ -89,7 +89,7 @@ Core
   tapes/templates.py        -- pure template/path utilities (no UI dependency)
   tapes/tmdb.py             -- TMDB API client (search_multi, get_movie, get_show, get_season_episodes)
   tapes/similarity.py       -- scoring (title similarity, episode matching)
-  tapes/file_ops.py         -- file processing (copy, move/copy-verify-delete, symlink, hardlink)
+  tapes/file_ops.py         -- file processing (copy, move, symlink, hardlink)
   tapes/config.py           -- Pydantic v2 config (scan, metadata, library, dry_run)
 ```
 
@@ -139,8 +139,12 @@ Core
   Config field: `tmdb_token`, env var: `TMDB_TOKEN`.
 - **Two templates.** `movie_template` and `tv_template`, selected by
   `media_type` field. User can edit `media_type` to switch templates.
-- **Move = copy-verify-delete.** SHA-256 checksum. Operation configurable
-  (copy/move/link).
+- **Move = copy-then-delete.** Same-device move uses atomic `rename()`;
+  cross-device falls back to `shutil.copy2` + `unlink`. No application-level
+  checksumming -- `shutil.copy2` uses kernel-optimised copying
+  (`copy_file_range`, `sendfile`) which is reliable and fast. SHA-256
+  verification was evaluated and dropped due to unacceptable latency on
+  large files. Operation configurable (copy/move/link/hardlink).
 - **`--dry-run`** is a global safeguard: no files are ever copied, moved,
   or modified.
 
