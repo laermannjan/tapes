@@ -352,6 +352,58 @@ class TestHighScoresLowProminence:
         assert should_auto_accept([0.99, 0.98]) is False
 
 
+class TestMediaTypePenalty:
+    """A1: media-type mismatch between query and result penalizes the score."""
+
+    def test_matching_media_type_no_penalty(self) -> None:
+        score = compute_similarity(
+            {"title": "Breaking Bad", "media_type": "episode"},
+            {"title": "Breaking Bad", "media_type": "episode"},
+        )
+        assert score == pytest.approx(0.7)
+
+    def test_mismatching_media_type_penalized(self) -> None:
+        score = compute_similarity(
+            {"title": "Breaking Bad", "media_type": "movie"},
+            {"title": "Breaking Bad", "media_type": "episode"},
+        )
+        assert score == pytest.approx(0.7 * 0.7)
+
+    def test_no_media_type_in_query_no_penalty(self) -> None:
+        score = compute_similarity(
+            {"title": "Breaking Bad"},
+            {"title": "Breaking Bad", "media_type": "episode"},
+        )
+        assert score == pytest.approx(0.7)
+
+    def test_no_media_type_in_result_no_penalty(self) -> None:
+        score = compute_similarity(
+            {"title": "Breaking Bad", "media_type": "movie"},
+            {"title": "Breaking Bad"},
+        )
+        assert score == pytest.approx(0.7)
+
+    def test_penalty_with_year_match(self) -> None:
+        score = compute_similarity(
+            {"title": "Breaking Bad", "year": 2008, "media_type": "movie"},
+            {"title": "Breaking Bad", "year": 2008, "media_type": "episode"},
+        )
+        assert score == pytest.approx(0.7)
+
+    def test_breaking_bad_scenario(self) -> None:
+        query = {"title": "Breaking Bad", "media_type": "movie"}
+        show_score = compute_similarity(
+            query,
+            {"title": "Breaking Bad", "media_type": "episode"},
+        )
+        movie_score = compute_similarity(
+            query,
+            {"title": "El Camino A Breaking Bad Movie", "year": 2019, "media_type": "movie"},
+        )
+        assert show_score < 0.7
+        assert movie_score > 0.3
+
+
 class TestDefaultThreshold:
     def test_min_score_value(self) -> None:
         assert DEFAULT_MIN_SCORE == 0.6

@@ -11,7 +11,7 @@ import logging
 from rapidfuzz import fuzz, utils
 
 from tapes.config import DEFAULT_MIN_SCORE
-from tapes.fields import EPISODE, EPISODE_TITLE, SEASON, TITLE, TMDB_ID, YEAR
+from tapes.fields import EPISODE, EPISODE_TITLE, MEDIA_TYPE, SEASON, TITLE, TMDB_ID, YEAR
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +38,9 @@ YEAR_TOLERANCE = 2
 
 # Auto-accept: prominence = gap between best and second-best
 DEFAULT_MIN_PROMINENCE = 0.15
+
+# Media-type conflict: penalize when guessit and TMDB disagree on media_type
+MEDIA_TYPE_PENALTY = 0.7
 
 
 def _string_similarity(a: str, b: str) -> float:
@@ -97,6 +100,12 @@ def compute_similarity(query: dict, result: dict) -> float:
             pass
 
     total = SHOW_TITLE_WEIGHT * title_score + SHOW_YEAR_WEIGHT * year_score
+
+    q_type = query.get(MEDIA_TYPE)
+    r_type = result.get(MEDIA_TYPE)
+    if q_type and r_type and q_type != r_type:
+        total *= MEDIA_TYPE_PENALTY
+
     logger.debug(
         "similarity %r vs %r: title=%.2f year=%.2f -> %.2f",
         q_title,
