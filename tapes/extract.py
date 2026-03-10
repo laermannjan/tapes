@@ -41,8 +41,9 @@ def extract_metadata(filename: str, folder_name: str | None = None) -> FileMetad
     """Extract metadata from a filename (and optionally a folder name).
 
     Runs guessit on the filename, normalizes field names, and returns
-    a FileMetadata dataclass. Falls back to folder_name for title/year
-    if guessit can't determine them from the filename alone.
+    a FileMetadata dataclass. Falls back to folder_name for title,
+    year, and season if guessit can't determine them from the filename
+    alone.
     """
     guess = dict(guessit.guessit(filename))
 
@@ -56,12 +57,14 @@ def extract_metadata(filename: str, folder_name: str | None = None) -> FileMetad
     guess.pop("container", None)
     guess.pop("mimetype", None)
 
-    if folder_name is not None and (title is None or year is None):
+    if folder_name is not None and (title is None or year is None or season is None):
         folder_guess = dict(guessit.guessit(folder_name))
         if title is None:
             title = folder_guess.get("title")
         if year is None:
             year = folder_guess.get("year")
+        if season is None:
+            season = folder_guess.get("season")
 
     raw = _normalize_raw(guess)
 

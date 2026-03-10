@@ -279,8 +279,8 @@ class TestComputeSharedFields:
         ]
         shared = compute_shared_fields(nodes)
         assert shared["title"] == "Foo"
-        # season only in one node, single value, so it's shared
-        assert shared["season"] == 1
+        # season only in one node -- not truly shared
+        assert shared["season"] == "(1 values)"
 
     def test_field_in_some_with_different_values(self) -> None:
         nodes = [

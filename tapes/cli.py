@@ -188,14 +188,15 @@ def import_cmd(
         console.print("No files found.")
         return
 
-    model = build_tree(files, resolved)
+    root_path = resolved if resolved.is_dir() else resolved.parent
+    model = build_tree(files, root_path)
     movie_tmpl = cfg.library.movie_template
     tv_tmpl = cfg.library.tv_template
     tui = TreeApp(
         model=model,
         movie_template=movie_tmpl,
         tv_template=tv_tmpl,
-        root_path=resolved,
+        root_path=root_path,
         auto_pipeline=True,
         config=cfg,
     )

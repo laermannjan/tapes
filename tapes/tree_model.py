@@ -253,7 +253,7 @@ def compute_shared_fields(nodes: list[FileNode]) -> dict[str, Any]:
             continue
 
         first = values[0]
-        if all(v == first for v in values):
+        if len(values) == len(nodes) and all(v == first for v in values):
             shared[key] = first
         else:
             n_unique = len({str(v) for v in values})
