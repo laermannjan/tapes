@@ -76,6 +76,18 @@ class MetadataView(Widget):
         """Whether multiple nodes are being displayed."""
         return len(self.file_nodes) > 1
 
+    @property
+    def show_level_hint(self) -> bool:
+        """True when in multi-node mode with an accepted show.
+
+        In this state the candidate column and tabs are hidden, replaced
+        by the B2 hint telling the user to select individual files.
+        """
+        if not self.is_multi:
+            return False
+        shared = self._shared_result()
+        return shared.get(TMDB_ID) is not None and shared.get(MEDIA_TYPE) == MEDIA_TYPE_EPISODE
+
     def on_mount(self) -> None:
         self.fields = get_display_fields(self._active_template())
 
@@ -142,7 +154,7 @@ class MetadataView(Widget):
             val_w = max(val_w, len(v))
 
         cand_w = 0
-        if candidates and self.candidate_index < len(candidates):
+        if not self.show_level_hint and candidates and self.candidate_index < len(candidates):
             cand = candidates[self.candidate_index]
             for f in self.fields:
                 v = display_val(cand.metadata.get(f))
@@ -197,16 +209,14 @@ class MetadataView(Widget):
 
         # B2: In multi-node mode with an accepted show (tmdb_id set),
         # show a hint instead of episode candidate tabs.
-        if self.is_multi:
-            shared = self._shared_result()
-            if shared.get(TMDB_ID) is not None and shared.get(MEDIA_TYPE) == MEDIA_TYPE_EPISODE:
-                line.append("Select individual files to match episodes", style=COLOR_MUTED)
-                if any(n.metadata.get(SEASON) is None for n in self.file_nodes):
-                    line.append("  \u00b7  ", style=COLOR_MUTED)
-                    line.append("Set season to improve matching", style=COLOR_MUTED)
+        if self.show_level_hint:
+            line.append("Select individual files to match episodes", style=COLOR_MUTED)
+            if any(n.metadata.get(SEASON) is None for n in self.file_nodes):
                 line.append("  \u00b7  ", style=COLOR_MUTED)
-                line.append("Clear tmdb_id to select a different show", style=COLOR_MUTED)
-                return line
+                line.append("Set season to improve matching", style=COLOR_MUTED)
+            line.append("  \u00b7  ", style=COLOR_MUTED)
+            line.append("Clear tmdb_id to select a different show", style=COLOR_MUTED)
+            return line
 
         candidates = self.node.candidates
 
@@ -450,7 +460,7 @@ class MetadataView(Widget):
         candidate to the metadata (preserving fields the candidate doesn't have).
         If metadata is focused, no changes needed -- metadata is kept as-is.
         """
-        if self.focus_column == "candidate":
+        if self.focus_column == "candidate" and not self.show_level_hint:
             self.accept_current_candidate()
 
     def on_key(self, event: events.Key) -> None:
