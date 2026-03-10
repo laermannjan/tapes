@@ -6,7 +6,7 @@ from pathlib import Path
 
 import respx
 
-from tapes.pipeline import _query_tmdb_for_node
+from tapes.pipeline import PipelineParams, _query_tmdb_for_node
 from tapes.tree_model import FileNode
 
 
@@ -15,7 +15,7 @@ class TestLanguageThreading:
     def test_language_passed_to_search(self) -> None:
         route = respx.get("https://api.themoviedb.org/3/search/multi").respond(json={"results": []})
         node = FileNode(path=Path("/a.mkv"), metadata={"title": "Test"})
-        _query_tmdb_for_node(node, "tok", 0.85, language="de")
+        _query_tmdb_for_node(node, PipelineParams(token="tok", min_score=0.85, language="de"))  # noqa: S106
         assert route.called
         assert route.calls[0].request.url.params["language"] == "de"
 
@@ -23,7 +23,7 @@ class TestLanguageThreading:
     def test_empty_language_not_in_params(self) -> None:
         route = respx.get("https://api.themoviedb.org/3/search/multi").respond(json={"results": []})
         node = FileNode(path=Path("/a.mkv"), metadata={"title": "Test"})
-        _query_tmdb_for_node(node, "tok", 0.85, language="")
+        _query_tmdb_for_node(node, PipelineParams(token="tok", min_score=0.85, language=""))  # noqa: S106
         assert route.called
         assert "language" not in route.calls[0].request.url.params
 
@@ -47,6 +47,6 @@ class TestLanguageThreading:
         )
         respx.get("https://api.themoviedb.org/3/tv/1/season/1").respond(json={"episodes": []})
         node = FileNode(path=Path("/a.mkv"), metadata={"title": "Test", "season": 1, "episode": 1})
-        _query_tmdb_for_node(node, "tok", 0.1, language="fr")
+        _query_tmdb_for_node(node, PipelineParams(token="tok", min_score=0.1, language="fr"))  # noqa: S106
         assert show_route.called
         assert show_route.calls[0].request.url.params["language"] == "fr"

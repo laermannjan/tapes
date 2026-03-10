@@ -6,9 +6,13 @@ import copy
 import logging
 import threading
 import time
+from collections.abc import Callable
 from enum import Enum
 from pathlib import Path
-from typing import ClassVar, NamedTuple
+from typing import TYPE_CHECKING, ClassVar, NamedTuple
+
+if TYPE_CHECKING:
+    from tapes.pipeline import PipelineParams
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -176,32 +180,36 @@ class TreeApp(App):
             self.query_one(TreeView).refresh_tree()
             self._update_footer()
 
-            token = self.config.metadata.tmdb_token
-            if token:
+            if self.config.metadata.tmdb_token:
                 self._tmdb_querying = True
                 self._update_footer()
                 self.run_worker(
-                    self._run_tmdb_worker(token),  # ty: ignore[invalid-argument-type]  # Textual WorkType stubs
+                    self._run_tmdb_worker(),  # ty: ignore[invalid-argument-type]  # Textual WorkType stubs
                     thread=True,
                 )
         else:
             self._update_footer()
 
-    def _run_tmdb_worker(self, token: str) -> object:
-        """Return a callable that runs TMDB queries in a background thread."""
-        from tapes.pipeline import run_tmdb_pass
+    def _make_pipeline_params(self) -> PipelineParams:
+        """Build PipelineParams from current config."""
+        from tapes.pipeline import PipelineParams
 
-        min_score = self.config.metadata.min_score
-        max_workers = self.config.advanced.max_workers
-        max_results = self.config.metadata.max_results
-        tmdb_timeout = self.config.advanced.tmdb_timeout
-        tmdb_retries = self.config.advanced.tmdb_retries
-        min_prominence = self.config.metadata.min_prominence
-        language = self.config.metadata.language
+        return PipelineParams.from_config(self.config)
+
+    def _make_can_stage(self) -> Callable[[FileNode, dict], bool]:
+        """Build a can_stage callback from templates."""
         mt, tt = self.movie_template, self.tv_template
 
         def _can_stage(node: FileNode, merged: dict) -> bool:
             return can_fill_template(node, merged, mt, tt)
+
+        return _can_stage
+
+    def _run_tmdb_worker(self) -> object:
+        """Return a callable that runs TMDB queries in a background thread."""
+        from tapes.pipeline import run_tmdb_pass
+
+        params = self._make_pipeline_params()
 
         def worker() -> None:
             def on_progress(done: int, total: int) -> None:
@@ -209,17 +217,10 @@ class TreeApp(App):
 
             run_tmdb_pass(
                 self.model,
-                token=token,
-                min_score=min_score,
+                params,
                 on_progress=on_progress,
-                max_workers=max_workers,
                 post_update=self.call_from_thread,
-                max_results=max_results,
-                tmdb_timeout=tmdb_timeout,
-                tmdb_retries=tmdb_retries,
-                min_prominence=min_prominence,
-                language=language,
-                can_stage=_can_stage,
+                can_stage=self._make_can_stage(),
             )
             self.call_from_thread(self._on_tmdb_done)
 
@@ -491,12 +492,11 @@ class TreeApp(App):
         # Trigger TMDB refresh for all detail nodes when fields changed.
         # This replaces the stale MetadataChanged -> action_refresh_query path
         # which would only refresh the cursor node after the mode switch.
-        token = self.config.metadata.tmdb_token
-        if needs_refresh and token and detail_nodes and not self._tmdb_querying:
+        if needs_refresh and self.config.metadata.tmdb_token and detail_nodes and not self._tmdb_querying:
             self._tmdb_querying = True
             self._update_footer()
             self.run_worker(
-                self._run_refresh_worker(detail_nodes, token),  # ty: ignore[invalid-argument-type]  # Textual WorkType stubs
+                self._run_refresh_worker(detail_nodes),  # ty: ignore[invalid-argument-type]  # Textual WorkType stubs
                 thread=True,
             )
 
@@ -692,8 +692,7 @@ class TreeApp(App):
         if self._tmdb_querying:
             return  # Already querying
 
-        token = self.config.metadata.tmdb_token
-        if not token:
+        if not self.config.metadata.tmdb_token:
             return
 
         # Collect target nodes
@@ -715,25 +714,15 @@ class TreeApp(App):
         self._tmdb_querying = True
         self._update_footer()
         self.run_worker(
-            self._run_refresh_worker(nodes, token),  # ty: ignore[invalid-argument-type]  # Textual WorkType stubs
+            self._run_refresh_worker(nodes),  # ty: ignore[invalid-argument-type]  # Textual WorkType stubs
             thread=True,
         )
 
-    def _run_refresh_worker(self, nodes: list[FileNode], token: str) -> object:
+    def _run_refresh_worker(self, nodes: list[FileNode]) -> object:
         """Return a callable that refreshes TMDB data in a background thread."""
         from tapes.pipeline import refresh_tmdb_batch
 
-        min_score = self.config.metadata.min_score
-        max_workers = self.config.advanced.max_workers
-        max_results = self.config.metadata.max_results
-        tmdb_timeout = self.config.advanced.tmdb_timeout
-        tmdb_retries = self.config.advanced.tmdb_retries
-        min_prominence = self.config.metadata.min_prominence
-        language = self.config.metadata.language
-        mt, tt = self.movie_template, self.tv_template
-
-        def _can_stage(node: FileNode, merged: dict) -> bool:
-            return can_fill_template(node, merged, mt, tt)
+        params = self._make_pipeline_params()
 
         def worker() -> None:
             def on_progress(done: int, total: int) -> None:
@@ -741,17 +730,10 @@ class TreeApp(App):
 
             refresh_tmdb_batch(
                 nodes,
-                token=token,
-                min_score=min_score,
+                params,
                 on_progress=on_progress,
-                max_workers=max_workers,
                 post_update=self.call_from_thread,
-                max_results=max_results,
-                tmdb_timeout=tmdb_timeout,
-                max_retries=tmdb_retries,
-                min_prominence=min_prominence,
-                language=language,
-                can_stage=_can_stage,
+                can_stage=self._make_can_stage(),
             )
             self.call_from_thread(self._on_tmdb_done)
 
