@@ -30,7 +30,13 @@ class TestEpisodeDetection:
     def test_multi_episode(self):
         m = extract_metadata("Breaking.Bad.S02E03E04.1080p.mkv")
         assert m.media_type == "episode"
-        assert m.episode == [3, 4]
+        assert m.episode == 3  # normalized to first episode
+
+    def test_single_episode_is_int(self):
+        """A single episode should remain an int (not wrapped in a list)."""
+        m = extract_metadata("Show.S01E05.mkv")
+        assert isinstance(m.episode, int)
+        assert m.episode == 5
 
     def test_episode_no_season(self):
         m = extract_metadata("Show.E05.mkv")
@@ -82,7 +88,7 @@ class TestRawPreserved:
         m = extract_metadata("Movie.2020.1080p.BluRay.x264.DTS.mkv")
         assert "codec" in m.raw
         assert "media_source" in m.raw
-        assert "screen_size" in m.raw
+        assert "resolution" in m.raw
 
     def test_old_keys_not_in_raw(self):
         m = extract_metadata("Movie.2020.1080p.BluRay.x264.DTS.mkv")
@@ -106,6 +112,68 @@ class TestFieldNormalization:
         m = extract_metadata("Movie.2020.DTS.mkv")
         assert "audio" in m.raw
         assert "audio_codec" not in m.raw
+
+
+class TestOtherSplitting:
+    def test_hdr_extracted(self):
+        m = extract_metadata("Movie.2020.HDR.2160p.mkv")
+        assert m.raw.get("hdr") == "HDR10"
+
+    def test_dolby_vision_extracted(self):
+        m = extract_metadata("Movie.2020.Dolby.Vision.2160p.mkv")
+        assert m.raw.get("hdr") == "Dolby Vision"
+
+    def test_hdr_and_dv_combined(self):
+        m = extract_metadata("Movie.2020.HDR.DV.2160p.mkv")
+        assert "HDR10" in m.raw.get("hdr", "")
+        assert "Dolby Vision" in m.raw.get("hdr", "")
+
+    def test_3d_extracted(self):
+        m = extract_metadata("Avatar.2009.3D.SBS.1080p.BluRay.mkv")
+        assert m.raw.get("three_d") == "3D"
+
+    def test_remux_extracted(self):
+        m = extract_metadata("Movie.2020.REMUX.2160p.mkv")
+        assert m.raw.get("remux") == "Remux"
+
+    def test_proper_stays_in_other(self):
+        m = extract_metadata("Movie.2020.Proper.720p.mkv")
+        assert m.raw.get("other") == "Proper"
+        assert "hdr" not in m.raw
+
+    def test_mixed_other_split(self):
+        m = extract_metadata("Movie.2020.PROPER.REMUX.HDR10.DV.3D.2160p.mkv")
+        assert "HDR10" in m.raw.get("hdr", "")
+        assert m.raw.get("three_d") == "3D"
+        assert m.raw.get("remux") == "Remux"
+        assert m.raw.get("other") == "Proper"
+
+    def test_edition_extracted(self):
+        m = extract_metadata("The.Matrix.1999.Directors.Cut.1080p.BluRay.mkv")
+        assert m.raw.get("edition") == "Director's Cut"
+
+    def test_imax_edition(self):
+        m = extract_metadata("Movie.2020.IMAX.2160p.mkv")
+        assert m.raw.get("edition") == "IMAX"
+
+
+class TestPartInRaw:
+    def test_part_flows_to_raw(self):
+        m = extract_metadata("Movie.2020.Part.2.mkv")
+        assert m.part == 2
+        assert m.raw.get("part") == 2
+
+    def test_cd_flows_to_raw(self):
+        m = extract_metadata("Movie.2020.CD1.mkv")
+        assert m.part == 1
+        assert m.raw.get("part") == 1
+
+
+class TestScreenSizeRenamed:
+    def test_screen_size_renamed_to_resolution(self):
+        m = extract_metadata("Movie.2020.1080p.mkv")
+        assert "resolution" in m.raw
+        assert "screen_size" not in m.raw
 
 
 class TestNoTitle:
