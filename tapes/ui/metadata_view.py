@@ -12,7 +12,7 @@ from textual.message import Message
 from textual.reactive import reactive
 from textual.widget import Widget
 
-from tapes.fields import INT_FIELDS, TMDB_ID
+from tapes.fields import INT_FIELDS, MEDIA_TYPE, MEDIA_TYPE_EPISODE, SEASON, TMDB_ID
 from tapes.templates import compute_dest, select_template
 from tapes.tree_model import FileNode, compute_shared_fields
 from tapes.ui.colors import COLOR_ACCENT, COLOR_COLUMN_FOCUS_BG, COLOR_CURSOR_BG, COLOR_MUTED
@@ -191,11 +191,23 @@ class MetadataView(Widget):
         return content
 
     def _render_tab_bar(self, inner_width: int) -> Text:  # noqa: ARG002
-        """Render the tab bar with candidate tabs."""
-        candidates = self.node.candidates
-
+        """Render the tab bar with candidate tabs or multi-node hint."""
         line = Text()
         line.append("    ")
+
+        # B2: In multi-node mode with an accepted show (tmdb_id set),
+        # show a hint instead of episode candidate tabs.
+        if self.is_multi:
+            shared = self._shared_result()
+            if shared.get(TMDB_ID) is not None and shared.get(MEDIA_TYPE) == MEDIA_TYPE_EPISODE:
+                line.append("Select individual files to match episodes", style=COLOR_MUTED)
+                if any(n.metadata.get(SEASON) is None for n in self.file_nodes):
+                    line.append("  \u00b7  ", style=COLOR_MUTED)
+                    line.append("Set season to improve matching", style=COLOR_MUTED)
+                return line
+
+        candidates = self.node.candidates
+
         if candidates:
             for idx, cand in enumerate(candidates):
                 if idx > 0:
