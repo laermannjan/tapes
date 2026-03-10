@@ -417,10 +417,17 @@ class TestSanitizeField:
 
         assert _sanitize_field('a*b?c"d<e>f|g') == "a_b_c_d_e_f_g"
 
-    def test_dot_replaced(self) -> None:
+    def test_single_dot_preserved(self) -> None:
         from tapes.templates import _sanitize_field
 
-        assert _sanitize_field("H.265") == "H_265"
+        assert _sanitize_field("H.265") == "H.265"
+        assert _sanitize_field("Dr. Strangelove") == "Dr. Strangelove"
+
+    def test_consecutive_dots_collapsed(self) -> None:
+        from tapes.templates import _sanitize_field
+
+        assert _sanitize_field("foo..bar") == "foo.bar"
+        assert _sanitize_field("a...b") == "a.b"
 
     def test_control_chars_replaced(self) -> None:
         from tapes.templates import _sanitize_field
@@ -474,14 +481,14 @@ class TestComputeDestSanitization:
         assert "/" not in result.split("/")[0]  # title part has no literal /
         assert "AC_DC_ Live" in result
 
-    def test_dot_in_codec_sanitized(self) -> None:
+    def test_dot_in_codec_preserved(self) -> None:
         tmpl = "{title} [{codec}].{ext}"
         node = FileNode(
             path=Path("/movies/movie.mkv"),
             metadata={"title": "Movie", "codec": "H.265"},
         )
         result = compute_dest(node, tmpl)
-        assert result == "Movie [H_265].mkv"
+        assert result == "Movie [H.265].mkv"
 
     def test_integer_fields_unaffected(self) -> None:
         node = FileNode(
