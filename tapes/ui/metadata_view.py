@@ -12,7 +12,7 @@ from textual.message import Message
 from textual.reactive import reactive
 from textual.widget import Widget
 
-from tapes.fields import INT_FIELDS, MEDIA_TYPE, MEDIA_TYPE_EPISODE, SEASON, TMDB_ID
+from tapes.fields import EPISODE, INT_FIELDS, MEDIA_TYPE, MEDIA_TYPE_EPISODE, SEASON, TMDB_ID
 from tapes.templates import compute_dest, select_template
 from tapes.tree_model import FileNode, compute_shared_fields
 from tapes.ui.colors import COLOR_ACCENT, COLOR_COLUMN_FOCUS_BG, COLOR_CURSOR_BG, COLOR_MUTED
@@ -398,8 +398,8 @@ class MetadataView(Widget):
                 val = int(val)
         for n in self.file_nodes:
             n.metadata[field_name] = val
-            if field_name != "tmdb_id":
-                n.metadata.pop("tmdb_id", None)
+            if field_name not in (TMDB_ID, SEASON, EPISODE):
+                n.metadata.pop(TMDB_ID, None)
         self.editing = False
         self.refresh()
         self.post_message(self.MetadataChanged())
