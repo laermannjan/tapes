@@ -116,11 +116,10 @@ def process_file(
         _copy(src, dest, progress_callback, cancelled=cancelled)
         return f"Copied {src} -> {dest}"
     if operation == "move":
-        # Try atomic rename first (instant on same filesystem).
         try:
             src.rename(dest)
         except OSError:
-            pass  # cross-device; fall back to copy + delete
+            pass  # cross-device -- fall back to copy + delete
         else:
             return f"Moved {src} -> {dest}"
         _copy(src, dest, progress_callback, cancelled=cancelled)

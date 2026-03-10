@@ -343,7 +343,6 @@ def refresh_tmdb_source(
 
     _post = post_update if post_update is not None else lambda fn: fn()
 
-    # Remove existing TMDB candidates
     def _clear_tmdb(node: FileNode = node) -> None:
         node.candidates = [c for c in node.candidates if not c.name.startswith("TMDB")]
 
@@ -410,13 +409,11 @@ def refresh_tmdb_batch(
         def _refresh_one(node: FileNode) -> None:
             nonlocal done_count
 
-            # Clear existing TMDB candidates
             def _clear_tmdb(n: FileNode = node) -> None:
                 n.candidates = [c for c in n.candidates if not c.name.startswith("TMDB")]
 
             _post(_clear_tmdb)
 
-            # Query TMDB (cache deduplicates identical queries)
             _query_tmdb_for_node(
                 node,
                 p,
@@ -478,7 +475,6 @@ def _populate_node_guessit(node: FileNode, extract_metadata_fn: Callable[..., An
         filename_fields[EPISODE] = meta.episode
     if meta.media_type:
         filename_fields[MEDIA_TYPE] = meta.media_type
-    # Add raw fields (codec, media_source, etc.)
     filename_fields.update({k: v for k, v in meta.raw.items() if v is not None})
 
     node.metadata = dict(filename_fields)
@@ -520,12 +516,10 @@ def _query_tmdb_for_node(
 
     year = node.metadata.get(YEAR)
 
-    # --- tmdb_id shortcut: skip show search when already identified ---
     existing_tmdb_id = node.metadata.get(TMDB_ID)
     if existing_tmdb_id is not None:
         media_type = node.metadata.get(MEDIA_TYPE)
         if media_type == MEDIA_TYPE_EPISODE:
-            # Show identified -- go directly to episode queries
             show_fields = {
                 TMDB_ID: existing_tmdb_id,
                 TITLE: title,
@@ -542,10 +536,8 @@ def _query_tmdb_for_node(
                 can_stage=can_stage,
             )
             return
-        # Movie already identified -- nothing more to fetch
         return
 
-    # Stage 1: search for movie/show
     if cache is not None:
         search_key = ("search", title.lower(), year)
         search_results = cache.get_or_fetch(
@@ -574,7 +566,6 @@ def _query_tmdb_for_node(
     if not search_results:
         return
 
-    # Create candidates for each search result
     tmdb_candidates: list[Candidate] = []
     for i, sr in enumerate(search_results[: params.max_results]):
         sim = compute_similarity(node.metadata, sr)
@@ -585,7 +576,6 @@ def _query_tmdb_for_node(
         )
         tmdb_candidates.append(cand)
 
-    # Sort by similarity for should_auto_accept (expects descending order)
     tmdb_candidates.sort(key=lambda c: c.score, reverse=True)
     for i, cand in enumerate(tmdb_candidates):
         cand.name = f"TMDB #{i + 1}"
@@ -599,11 +589,9 @@ def _query_tmdb_for_node(
     )
 
     if should_auto_accept(similarities, min_score=params.min_score, min_prominence=params.min_prominence):
-        # Auto-accept: apply non-empty fields to metadata
-        # Snapshot metadata before dispatching -- the dict may be mutated later
+        # Snapshot before dispatching -- the dict may be mutated later
         _best_metadata = dict(best.metadata)
 
-        # Check if merged metadata would fill the template
         _stageable = True
         if can_stage is not None:
             merged = {**node.metadata, **{k: v for k, v in _best_metadata.items() if v is not None}}
@@ -611,13 +599,9 @@ def _query_tmdb_for_node(
                 logger.debug("%s: auto-accept skipped, template fields incomplete", node.path.name)
                 _stageable = False
 
-        # Apply best metadata (always), stage only if template is complete
         _post(_make_metadata_updater(node, _best_metadata, stage=_stageable))
-
-        # Always add show/movie-level candidates (invariant #1)
         _post(_make_candidates_updater(node, list(tmdb_candidates)))
 
-        # Stage 2: if TV show, fetch episodes (which add their own candidates)
         if best.metadata.get(MEDIA_TYPE) == MEDIA_TYPE_EPISODE:
             _query_episodes(
                 node,
@@ -631,7 +615,6 @@ def _query_tmdb_for_node(
 
         return
 
-    # Add show-level TMDB candidates (not episode candidates yet)
     _post(_make_candidates_updater(node, list(tmdb_candidates)))
 
 
@@ -656,7 +639,6 @@ def _query_episodes(
     if show_id is None:
         return
 
-    # Get show info to know available seasons
     if cache is not None:
         show_info = cache.get_or_fetch(
             ("show", show_id),
@@ -682,11 +664,9 @@ def _query_episodes(
     available_seasons = show_info.get("seasons", [])
     query_season = node.metadata.get(SEASON)
 
-    # Try the query season first, then others
     seasons_to_try: list[int] = []
     if query_season is not None and query_season in available_seasons:
         seasons_to_try.append(query_season)
-    # Add remaining seasons
     for s in available_seasons:
         if s not in seasons_to_try:
             seasons_to_try.append(s)
@@ -729,22 +709,18 @@ def _query_episodes(
             )
             all_episode_candidates.append(cand)
 
-    # Keep top max_results episode candidates by score
     all_episode_candidates.sort(key=lambda c: c.score, reverse=True)
     top_candidates = all_episode_candidates[: params.max_results]
 
-    # Re-number them
     for i, cand in enumerate(top_candidates):
         cand.name = f"TMDB #{i + 1}"
 
-    # Auto-apply episode only if confident; otherwise just add candidates for curation
     ep_similarities = [c.score for c in top_candidates]
     _top_copy = list(top_candidates)
 
     if should_auto_accept(ep_similarities, min_score=params.min_score):
         _best_metadata = dict(top_candidates[0].metadata)
 
-        # Check if merged metadata would fill the template
         stage = True
         if can_stage is not None:
             merged = {**node.metadata, **{k: v for k, v in _best_metadata.items() if v is not None}}

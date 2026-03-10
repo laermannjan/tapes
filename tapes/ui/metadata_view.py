@@ -135,25 +135,21 @@ class DetailView(Widget):
         gap = len(COL_GAP)
         inner = self.size.width
 
-        # Measure label column
-        label_w = max((len(f) for f in self.fields), default=6) + 4  # 4 left pad
-
-        # Measure value column by content
-        val_w = 6  # minimum
+        label_w = max((len(f) for f in self.fields), default=6) + 4
+        val_w = 6
         for f in self.fields:
             v = display_val(shared.get(f))
             val_w = max(val_w, len(v))
 
-        # Measure candidate column
         cand_w = 0
         if candidates and self.candidate_index < len(candidates):
             cand = candidates[self.candidate_index]
             for f in self.fields:
                 v = display_val(cand.metadata.get(f))
                 cand_w = max(cand_w, len(v))
-            cand_w = max(cand_w, 6)  # minimum
+            cand_w = max(cand_w, 6)
 
-        # Cap label+gap+value at 50% of width when candidate column exists
+        # Cap label+gap+value at 50% so the candidate column stays visible.
         if cand_w > 0:
             max_left = inner // 2
             left_used = label_w + gap + val_w
@@ -172,32 +168,23 @@ class DetailView(Widget):
         """Render the full detail view with separator and footer hints."""
         content: list[Text] = []
 
-        # Blank + separator + blank
         content.append(Text())
         content.append(render_separator(inner_width, title="Metadata", color=COLOR_ACCENT))
         content.append(Text())
 
-        # File path -> destination
         if self.is_multi:
             content.append(self._render_multi_path_line())
         else:
             content.append(self._render_path_line())
 
-        # Blank line
         content.append(Text())
-
-        # Tab bar
         content.append(self._render_tab_bar(inner_width))
-
-        # Blank line
         content.append(Text())
 
-        # Field rows
         label_w, val_w, cand_w = self._compute_col_widths()
         for row_idx, field_name in enumerate(self.fields):
             content.append(self._render_field_row(row_idx, field_name, label_w, val_w, cand_w, inner_width))
 
-        # Blank line + footer hints
         content.append(Text())
         content.append(self._render_footer_hints())
 
@@ -208,8 +195,7 @@ class DetailView(Widget):
         candidates = self.node.candidates
 
         line = Text()
-        line.append("    ")  # 4-space indent matching content
-        # Tabs for candidates
+        line.append("    ")
         if candidates:
             for idx, cand in enumerate(candidates):
                 if idx > 0:
@@ -221,7 +207,6 @@ class DetailView(Widget):
                 else:
                     line.append(tab_text)
 
-            # Navigation hint
             line.append("   ")
             line.append(
                 "(tab to cycle)",
@@ -293,14 +278,10 @@ class DetailView(Widget):
 
         line = Text()
 
-        # Label
         label = f"    {field_name:<{label_w - 4}}"
         line.append(label, style=COLOR_MUTED)
-
-        # Gap
         line.append(COL_GAP)
 
-        # Value (editable)
         result_raw = shared.get(field_name)
         if self.editing and is_cursor:
             edit_display = self.edit_value + "\u2588"
@@ -312,7 +293,6 @@ class DetailView(Widget):
                 val_style += f" {COLOR_COLUMN_FOCUS_BG}"
             line.append(self._col(result_val, val_w), style=val_style)
 
-        # Candidate value (from active tab, if any)
         if candidates and cand_w > 0 and self.candidate_index < len(candidates):
             cand = candidates[self.candidate_index]
             cand_raw = cand.metadata.get(field_name)
@@ -325,7 +305,6 @@ class DetailView(Widget):
                 base_style += f" {COLOR_COLUMN_FOCUS_BG}"
             line.append(self._col(cand_val, cand_w), style=base_style)
 
-        # Pad to full width and apply background highlight to cursor row
         if is_cursor and inner_width > 0:
             plain_len = len(line.plain)
             if plain_len < inner_width:

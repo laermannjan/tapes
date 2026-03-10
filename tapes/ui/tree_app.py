@@ -234,7 +234,6 @@ class TreeApp(App):
         ]
         detail = self.query_one(DetailView)
         detail.set_node(node)
-        # separator + tab_bar + blank + path + blank + fields + blank + hints
         detail.styles.height = len(detail.fields) + DETAIL_CHROME_LINES
         detail.styles.display = "block"
         self.query_one(TreeView).add_class("dimmed")
@@ -284,7 +283,6 @@ class TreeApp(App):
         bar = self.query_one(BottomBar)
         cv = self.query_one(CommitView)
 
-        # Recollect staged (conflict detection may have unstaged some)
         remaining_staged = [n for n, _ in report.valid_pairs]
         cv._files = remaining_staged  # noqa: SLF001
         cv._categories = categorize_staged(remaining_staged)  # noqa: SLF001
@@ -514,7 +512,6 @@ class TreeApp(App):
             return
         if self._mode == AppState.COMMIT:
             if self._commit_cancelled is not None:
-                # Processing in progress -- signal cancellation.
                 self._commit_cancelled.set()
                 self.query_one(CommitView).progress_text = "cancelling ..."
             else:
@@ -566,7 +563,6 @@ class TreeApp(App):
         if report is None:
             return
 
-        # Convert valid_pairs to (Path, Path) for file_ops
         pairs = [(n.path, d) for n, d in report.valid_pairs]
         staged = [n for n, _ in report.valid_pairs]
 
@@ -574,7 +570,6 @@ class TreeApp(App):
             self.notify("No files to process")
             return
 
-        # Validate: reject files with no library path (relative destinations).
         bad = [src for src, dest in pairs if not dest.is_absolute()]
         if bad:
             self.notify(
@@ -661,7 +656,6 @@ class TreeApp(App):
         """Handle successful commit -- remove processed files and return to tree."""
         self._commit_cancelled = None
 
-        # Identify successfully processed source paths.
         ok_srcs = {src for (src, _dest), msg in zip(pairs, results, strict=False) if not msg.startswith("Error")}
         processed = [n for n in staged if n.path in ok_srcs]
         errors = len(results) - len(ok_srcs)
@@ -695,7 +689,6 @@ class TreeApp(App):
         if not self.config.metadata.tmdb_token:
             return
 
-        # Collect target nodes
         if self._mode == AppState.METADATA:
             nodes = list(self.query_one(DetailView).file_nodes)
         else:
@@ -776,7 +769,6 @@ class TreeApp(App):
 
     def on_key(self, event: Key) -> None:
         """Intercept key events for h/l navigation, ctrl+c quit, shift+tab, and search mode."""
-        # h/left = collapse, l/right = expand in tree mode
         if self._mode == AppState.TREE and event.key in ("h", "left"):
             tv = self.query_one(TreeView)
             node = tv.cursor_node()
@@ -804,7 +796,6 @@ class TreeApp(App):
             event.stop()
             return
 
-        # Double ctrl+c to quit
         if event.key == "ctrl+c":
             now = time.monotonic()
             if now - self._last_ctrl_c < 1.0:
@@ -827,7 +818,6 @@ class TreeApp(App):
             event.stop()
             return
 
-        # Intercept shift+tab for op cycling / detail column toggle
         if event.key == "shift+tab" and self._mode != AppState.TREE_SEARCH:
             if self._mode == AppState.METADATA:
                 self.query_one(DetailView).toggle_column_focus()
@@ -863,7 +853,6 @@ class TreeApp(App):
             self.query_one(TreeView).set_filter(self._search_query)
             self._update_search_status()
         else:
-            # For non-printable keys (like arrows), prevent normal bindings
             event.prevent_default()
             event.stop()
 
@@ -920,7 +909,6 @@ class TreeApp(App):
         bar = self.query_one(BottomBar)
         tv = self.query_one(TreeView)
 
-        # Stats
         if tv.filter_text:
             bar.stats_text = f"{tv.item_count} matched \u00b7 {tv.total_count} total"
         else:
@@ -934,7 +922,6 @@ class TreeApp(App):
                 parts.append(f"TMDB {done}/{total}")
             bar.stats_text = " \u00b7 ".join(parts)
 
-        # Hints
         if self._mode == AppState.TREE_SEARCH:
             bar.hint_text = "enter to confirm \u00b7 esc to cancel"
         else:

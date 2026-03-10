@@ -83,9 +83,10 @@ class AdvancedConfig(BaseModel):
     tmdb_retries: int = Field(default=3, ge=1)
 
 
-# Module-level store for YAML data injected by load_config before TapesConfig
-# construction. settings_customise_sources reads this to build the source chain.
-# Not thread-safe, but config loading is single-threaded.
+# Module-level global is necessary because pydantic-settings calls
+# settings_customise_sources as a classmethod with a fixed signature --
+# there is no way to pass the YAML path or data through constructor args.
+# load_config sets this before TapesConfig construction and clears it after.
 _pending_yaml_data: dict[str, Any] = {}
 
 
@@ -216,8 +217,6 @@ def load_config(
     if resolved_path is not None:
         yaml_data = _load_yaml_data(resolved_path)
 
-    # Temporarily set module-level YAML data so settings_customise_sources can
-    # pick it up during TapesConfig construction.
     _pending_yaml_data = yaml_data
     try:
         cfg = TapesConfig(**(cli_overrides or {}))

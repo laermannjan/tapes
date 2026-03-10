@@ -116,11 +116,10 @@ class TreeView(Widget):
     def _refresh_items(self) -> None:
         """Rebuild the flattened item list from the model."""
         if self.flat_mode:
-            # In flat mode, show only files (no folders), all at depth 0
             self._all_items = [(f, 0) for f in self.model.all_files()]
         elif self._filter_text:
-            # When filtering, flatten all items regardless of collapsed state
-            # so files inside collapsed folders can be found
+            # Flatten all items regardless of collapsed state so filtered
+            # files inside collapsed folders can be found.
             self._all_items = flatten_all_with_depth(self.model)
         else:
             self._all_items = flatten_with_depth(self.model)
@@ -191,7 +190,6 @@ class TreeView(Widget):
                 arrow_col=arrow_col,
             )
 
-            # Pad or truncate to fit inner width
             plain_len = len(row_text.plain)
             if plain_len > inner_width:
                 row_text.truncate(inner_width)
@@ -207,7 +205,6 @@ class TreeView(Widget):
 
             content_lines.append(row_text)
 
-        # Scroll indicators
         if has_more_above and content_lines:
             indicator = Text()
             indicator.append("    \u2191 more above", style=f"italic {COLOR_MUTED}")
@@ -245,7 +242,6 @@ class TreeView(Widget):
         if isinstance(node, FolderNode):
             self.model.toggle_collapsed(node)
             self._refresh_items()
-            # Clamp cursor if items shrank
             if self._items and self.cursor_index >= len(self._items):
                 self.cursor_index = len(self._items) - 1
             elif not self._items:
@@ -323,14 +319,12 @@ class TreeView(Widget):
         current_node = self.cursor_node()
         self.flat_mode = not self.flat_mode
         self._refresh_items()
-        # Try to find the same node in the new item list
         if current_node is not None:
             for i, (node, _depth) in enumerate(self._items):
                 if node is current_node:
                     self.cursor_index = i
                     break
             else:
-                # Node not found (e.g. folder hidden in flat mode)
                 if self._items:
                     self.cursor_index = min(self.cursor_index, len(self._items) - 1)
                 else:
@@ -349,7 +343,6 @@ class TreeView(Widget):
         """
         self._filter_text = text
         self._refresh_items()
-        # Clamp cursor
         if self._items:
             if self.cursor_index >= len(self._items):
                 self.cursor_index = 0
@@ -368,21 +361,17 @@ class TreeView(Widget):
     def _apply_filter(self) -> None:
         """Apply the current filter text to narrow _items."""
         query = self._filter_text.lower()
-        # Find matching file nodes
         matching_files: set[int] = set()
         for i, (node, _depth) in enumerate(self._all_items):
             if isinstance(node, FileNode) and query in node.path.name.lower():
                 matching_files.add(i)
 
         if self.flat_mode:
-            # In flat mode, just show matching files
             self._items = [(node, depth) for i, (node, depth) in enumerate(self._all_items) if i in matching_files]
         else:
-            # In tree mode, show matching files and their parent folders
-            # A folder is shown if any descendant file matches
+            # Include parent folders of matching files so the tree structure is preserved.
             keep: set[int] = set(matching_files)
             for file_idx in matching_files:
-                # Walk backwards to find parent folders
                 file_depth = self._all_items[file_idx][1]
                 for j in range(file_idx - 1, -1, -1):
                     node_j, depth_j = self._all_items[j]

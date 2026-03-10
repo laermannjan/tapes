@@ -31,7 +31,6 @@ def render_dest(dest: str | None) -> Text:
 
     result = Text()
 
-    # Split into directory and basename
     last_slash = dest.rfind("/")
     if last_slash >= 0:
         dir_part = dest[: last_slash + 1]  # includes trailing /
@@ -40,11 +39,9 @@ def render_dest(dest: str | None) -> Text:
         dir_part = ""
         basename = dest
 
-    # Render directory part: dim, but ? chars yellow
     if dir_part:
         _append_with_yellow_placeholders(result, dir_part, COLOR_MUTED)
 
-    # Split basename into stem and full extension (e.g. ".en.srt")
     ext_str = full_extension(Path(basename))
     if ext_str:
         dot_ext = "." + ext_str
@@ -58,10 +55,8 @@ def render_dest(dest: str | None) -> Text:
         stem = basename
         ext = ""
 
-    # Render stem: normal, but ? chars yellow
     _append_with_yellow_placeholders(result, stem, "")
 
-    # Render extension: dim, but ? chars yellow
     if ext:
         _append_with_yellow_placeholders(result, ext, COLOR_MUTED)
 
@@ -74,12 +69,10 @@ def _append_with_yellow_placeholders(text: Text, s: str, base_style: str) -> Non
     while i < len(s):
         j = i
         if s[i] == "?":
-            # Collect consecutive ?
             while j < len(s) and s[j] == "?":
                 j += 1
             text.append(s[i:j], style=COLOR_DIFF)
         else:
-            # Collect non-? characters
             while j < len(s) and s[j] != "?":
                 j += 1
             text.append(s[i:j], style=base_style)
@@ -127,7 +120,6 @@ def render_file_row(
     else:
         row.append(filename)
 
-        # Pad to arrow column if specified
         if arrow_col is not None:
             current_len = len(row.plain)
             if current_len < arrow_col:
@@ -136,7 +128,6 @@ def render_file_row(
         else:
             row.append("  \u2192  ", style=COLOR_MUTED)
 
-        # Staging indicator: checkmark staged, hollow square ready to stage, blank if incomplete
         if node.staged:
             row.append("\u2713 ", style=COLOR_STAGED)
         elif can_fill_template(node, node.metadata, movie_template, tv_template):

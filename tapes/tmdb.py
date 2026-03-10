@@ -150,8 +150,6 @@ def search_multi(
                     MEDIA_TYPE: MEDIA_TYPE_EPISODE,
                 }
             )
-        # Skip "person" and other types
-
         if len(results) >= max_results:
             break
 

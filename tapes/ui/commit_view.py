@@ -84,7 +84,6 @@ class CommitView(Widget):
         content: list[Text] = []
         cats = self._categories
 
-        # Blank + separator + blank
         content.append(Text())
         content.append(render_separator(width, title="Commit", color=COLOR_ACCENT))
         content.append(Text())
@@ -92,10 +91,8 @@ class CommitView(Widget):
         if self.progress_text:
             return self._build_progress(content, width)
 
-        # Blank
         content.append(Text())
 
-        # Stats line 1: movies, subtitles, sidecars, other
         line1_parts: list[str] = []
         if cats["movies"]:
             n = cats["movies"]
@@ -113,7 +110,6 @@ class CommitView(Widget):
             joined = " \u00b7 ".join(line1_parts)
             content.append(Text(f"  {joined}"))
 
-        # Stats line 2: shows, seasons, episodes
         line2_parts: list[str] = []
         if cats["shows"]:
             n = cats["shows"]
@@ -128,12 +124,10 @@ class CommitView(Widget):
             joined = " \u00b7 ".join(line2_parts)
             content.append(Text(f"  {joined}"))
 
-        # Blank + total
         content.append(Text())
         total = cats["total"]
         content.append(Text(f"  {total} {'file' if total == 1 else 'files'} total"))
 
-        # Conflict report (if any)
         if self.conflict_report:
             resolved = self.conflict_report.resolved
             problems = self.conflict_report.problems
@@ -166,10 +160,8 @@ class CommitView(Widget):
                             skip_line.append(f"       {len(p.skipped_nodes)} file(s) skipped", style=COLOR_MUTED)
                             content.append(skip_line)
 
-        # Blank
         content.append(Text())
 
-        # Library paths
         lib_line = Text()
         lib_line.append("  ")
         lib_line.append("movies", style=COLOR_MUTED)
@@ -181,10 +173,8 @@ class CommitView(Widget):
         lib_line.append(self.tv_path or "(not set)", style=COLOR_MUTED)
         content.append(lib_line)
 
-        # Blank
         content.append(Text())
 
-        # Operation + hints line (mirrors BottomBar layout)
         bottom = Text()
         bottom.append("  ")
         op_color = OP_COLORS.get(self.operation, "")

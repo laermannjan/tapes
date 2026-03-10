@@ -59,7 +59,6 @@ def scan(
 
     results: list[Path] = []
     for dirpath, dirnames, filenames in os.walk(root):
-        # Prune hidden directories in-place
         dirnames[:] = [d for d in dirnames if not d.startswith(".")]
         dirnames.sort()
 

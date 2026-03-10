@@ -165,7 +165,6 @@ def build_tree(files: list[Path], root_path: Path) -> TreeModel:
     become FolderNodes. Sorting: folders first (alphabetical),
     then files (alphabetical).
     """
-    # Build a nested dict structure first
     tree_dict: dict[str, Any] = {}
     for file_path in files:
         rel = file_path.relative_to(root_path)
@@ -173,7 +172,6 @@ def build_tree(files: list[Path], root_path: Path) -> TreeModel:
         current = tree_dict
         for part in parts[:-1]:
             current = current.setdefault(part, {})
-        # Mark leaf files with None
         current[parts[-1]] = None
 
     root = FolderNode(name=root_path.name)
@@ -197,7 +195,6 @@ def _build_folder(
         else:
             folders.append((name, subtree))
 
-    # Sort folders alphabetically, then files alphabetically
     folders.sort(key=lambda x: x[0])
     file_names.sort()
 
@@ -244,7 +241,6 @@ def compute_shared_fields(nodes: list[FileNode]) -> dict[str, Any]:
     if not nodes:
         return {}
 
-    # Collect all field names
     all_keys: set[str] = set()
     for node in nodes:
         all_keys.update(node.metadata.keys())

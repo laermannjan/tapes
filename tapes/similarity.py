@@ -69,13 +69,11 @@ def compute_similarity(query: dict, result: dict) -> float:
     Missing fields score 0.0 (penalized, not redistributed).
     Returns 0.0-1.0.
     """
-    # tmdb_id override: definitive identification
     q_id = query.get(TMDB_ID)
     r_id = result.get(TMDB_ID)
     if q_id is not None and r_id is not None and q_id == r_id:
         return 1.0
 
-    # Title is required -- without it, no basis for comparison
     q_title = query.get(TITLE)
     r_title = result.get(TITLE)
     if not q_title or not r_title:
@@ -83,13 +81,11 @@ def compute_similarity(query: dict, result: dict) -> float:
 
     title_score = _string_similarity(str(q_title), str(r_title))
 
-    # Also score against original_title if present, take the max
     r_original = result.get("original_title")
     if r_original and r_original != r_title:
         original_score = _string_similarity(str(q_title), str(r_original))
         title_score = max(title_score, original_score)
 
-    # Year scoring -- missing year scores 0.0 (penalized)
     year_score = 0.0
     q_year = query.get(YEAR)
     r_year = result.get(YEAR)
@@ -126,7 +122,6 @@ def compute_episode_similarity(query: dict, episode: dict) -> float:
     """
     score = 0.0
 
-    # Season number (exact match)
     q_season = query.get(SEASON)
     e_season = episode.get(SEASON)
     if q_season is not None and e_season is not None:
@@ -136,7 +131,6 @@ def compute_episode_similarity(query: dict, episode: dict) -> float:
         except (ValueError, TypeError):
             pass
 
-    # Episode number (exact match, most important)
     q_ep = query.get(EPISODE)
     e_ep = episode.get(EPISODE)
     if q_ep is not None and e_ep is not None:
@@ -146,7 +140,6 @@ def compute_episode_similarity(query: dict, episode: dict) -> float:
         except (ValueError, TypeError):
             pass
 
-    # Episode title (fuzzy match)
     q_title = query.get(EPISODE_TITLE, "")
     e_title = episode.get(EPISODE_TITLE, "")
     if q_title and e_title:

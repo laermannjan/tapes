@@ -80,13 +80,11 @@ def _writability_check(
     Unwritable destinations become a Problem and nodes are unstaged.
     """
     remaining: list[tuple[FileNode, Path]] = []
-    # Cache writability per directory to avoid repeated checks.
     dir_writable: dict[Path, bool] = {}
 
     for node, dest in pairs:
         dest_dir = dest.parent
         if dest_dir not in dir_writable:
-            # Walk up to find existing ancestor.
             ancestor = dest_dir
             while not ancestor.exists():
                 parent = ancestor.parent
@@ -122,7 +120,6 @@ def _duplicate_detection(
     if mode == "off":
         return pairs
 
-    # Group by destination.
     by_dest: dict[Path, list[tuple[FileNode, Path]]] = defaultdict(list)
     for node, dest in pairs:
         by_dest[dest].append((node, dest))
@@ -134,7 +131,6 @@ def _duplicate_detection(
             remaining.append(group[0])
             continue
 
-        # Sub-group by file size.
         by_size: dict[int, list[tuple[FileNode, Path]]] = defaultdict(list)
         for node, d in group:
             try:
@@ -150,7 +146,6 @@ def _duplicate_detection(
                 kept_for_dest.append(size_group[0])
                 continue
 
-            # Same size = presumed duplicates.
             if mode == "warn":
                 skipped = [n for n, _ in size_group]
                 for n in skipped:
@@ -163,7 +158,6 @@ def _duplicate_detection(
                 )
                 continue
 
-            # Auto: keep the one with most metadata fields, tie-break alphabetical.
             sorted_group = sorted(
                 size_group,
                 key=lambda pair: (-len(pair[0].metadata), str(pair[0].path)),
@@ -198,7 +192,6 @@ def _disambiguation(
     if mode == "off":
         return pairs
 
-    # Group by destination.
     by_dest: dict[Path, list[tuple[FileNode, Path]]] = defaultdict(list)
     for node, dest in pairs:
         by_dest[dest].append((node, dest))
@@ -206,7 +199,6 @@ def _disambiguation(
     remaining: list[tuple[FileNode, Path]] = []
 
     for dest, group in by_dest.items():
-        # Check if destination already exists on disk.
         dest_exists = dest.exists()
 
         if len(group) == 1 and not dest_exists:
@@ -226,15 +218,12 @@ def _disambiguation(
             )
             continue
 
-        # Auto: sort alphabetically by source path.
         sorted_group = sorted(group, key=lambda pair: str(pair[0].path))
 
-        # If dest exists on disk, all files need renaming starting at -2.
         if dest_exists:
             suffix_start = 2
             files_to_rename = sorted_group
         else:
-            # First file keeps original name, rest get suffixes.
             remaining.append(sorted_group[0])
             suffix_start = 2
             files_to_rename = sorted_group[1:]

@@ -46,7 +46,6 @@ def extract_metadata(filename: str, folder_name: str | None = None) -> FileMetad
     """
     guess = dict(guessit.guessit(filename))
 
-    # Extract primary fields from filename guess
     media_type = guess.pop("type", None)
     title = guess.pop("title", None)
     year = guess.pop("year", None)
@@ -54,11 +53,9 @@ def extract_metadata(filename: str, folder_name: str | None = None) -> FileMetad
     episode = guess.pop("episode", None)
     part = guess.pop("part", None) or guess.pop("cd", None)
 
-    # Remove non-useful internal fields
     guess.pop("container", None)
     guess.pop("mimetype", None)
 
-    # Folder fallback for title and year
     if folder_name is not None and (title is None or year is None):
         folder_guess = dict(guessit.guessit(folder_name))
         if title is None:
@@ -66,7 +63,6 @@ def extract_metadata(filename: str, folder_name: str | None = None) -> FileMetad
         if year is None:
             year = folder_guess.get("year")
 
-    # Build normalized raw dict from remaining fields
     raw = _normalize_raw(guess)
 
     return FileMetadata(
