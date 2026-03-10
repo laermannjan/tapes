@@ -61,6 +61,8 @@ Audit code against that model, not the other way around.
 
 ## Architecture
 
+See `docs/vocabulary.md` for canonical terminology.
+
 ```
 User flow:  scan -> identify -> curate (TUI) -> process
 
@@ -68,23 +70,25 @@ CLI
   tapes/cli.py              -- typer app, `tapes import` is the main command
 
 TUI (textual, Claude Code-inspired layout)
-  tapes/ui/tree_app.py      -- main Textual App, keybindings, inline view management
+  tapes/ui/tree_app.py      -- main Textual App (AppState enum), keybindings, inline view management
   tapes/ui/tree_view.py     -- file tree widget with cursor, staging, filtering, scroll indicators
   tapes/ui/tree_render.py   -- pure rendering (compute_dest, flatten, render_row, render_separator, full_extension)
-  tapes/ui/detail_view.py   -- inline detail view for metadata curation (confirm/discard model)
-  tapes/ui/detail_render.py -- detail view rendering (header, grid, field display)
+  tapes/ui/metadata_view.py -- inline metadata curation view (confirm/discard model)
+  tapes/ui/metadata_render.py -- metadata view rendering (header, grid, field display)
   tapes/ui/commit_view.py   -- inline commit confirmation view with file categorization
-  tapes/ui/help_overlay.py  -- inline help view with workflow guide
+  tapes/ui/help_view.py     -- inline help view with workflow guide
   tapes/ui/bottom_bar.py    -- persistent bottom bar (stats, search, operation mode, hints)
+  tapes/ui/colors.py        -- color palette + semantic tokens
 
 Core
-  tapes/tree_model.py       -- FileNode, FolderNode, TreeModel, Source
-  tapes/pipeline.py         -- auto-pipeline (guessit + two-stage TMDB per file)
+  tapes/tree_model.py       -- FileNode, FolderNode, TreeModel, Candidate
+  tapes/pipeline.py         -- auto-pipeline (guessit + two-stage TMDB per file), PipelineParams dataclass
   tapes/categorize.py       -- categorize staged files for commit view
   tapes/scanner.py          -- find all files (with ignore_patterns filtering)
-  tapes/metadata.py         -- guessit wrapper, FileMetadata, field normalization
+  tapes/extract.py          -- guessit wrapper, metadata extraction, field normalization
+  tapes/templates.py        -- pure template/path utilities (no UI dependency)
   tapes/tmdb.py             -- TMDB API client (search_multi, get_movie, get_show, get_season_episodes)
-  tapes/similarity.py       -- confidence scoring (title similarity, episode matching)
+  tapes/similarity.py       -- scoring (title similarity, episode matching)
   tapes/file_ops.py         -- file processing (copy, move/copy-verify-delete, symlink, hardlink)
   tapes/config.py           -- Pydantic v2 config (scan, metadata, library, dry_run)
 ```
@@ -127,9 +131,9 @@ Core
   Each `tapes import` run is independent.
 - **Every file is first-class.** No special "companion" concept in the TUI.
   Subtitles, artwork, etc. are just files with their own metadata.
-- **Source-based metadata curation.** Each file has a `result` dict (used for
-  destination) and a list of `Source` objects (guessit, TMDB matches). Users
-  cherry-pick values from sources into the result.
+- **Candidate-based metadata curation.** Each file has a `metadata` dict (used
+  for destination) and a list of `Candidate` objects (guessit, TMDB matches).
+  Users cherry-pick values from candidates into the metadata.
 - **guessit-driven.** Metadata extraction relies on guessit.
 - **TMDB bearer token.** v4 read access token (`Authorization: Bearer`).
   Config field: `tmdb_token`, env var: `TMDB_TOKEN`.
@@ -161,17 +165,16 @@ Core
 
 ## Current status
 
-**Pre-alpha. TUI + core pipeline complete (452 tests passing).**
+**Pre-alpha. TUI + core pipeline complete.**
 
 Implemented: TUI (M1-M16), real TMDB integration (two-stage search),
-similarity/confidence scoring, template selection, broadened scanner,
+similarity scoring, template selection, broadened scanner,
 file processing on commit, config wiring. Visual design overhaul
 complete: Claude Code-inspired layout with horizontal separators,
-inline views (detail, commit, help), persistent bottom bar, scroll
+inline views (metadata, commit, help), persistent bottom bar, scroll
 indicators, confirm/discard editing model, double ctrl+c quit.
 
 No modals remain. All views are inline widgets toggled via display CSS.
-UndoManager removed; detail edits use snapshot/restore on discard.
+MetadataView edits use snapshot/restore on discard.
 
-Next up: revisit similarity scoring, end-to-end manual testing,
-error handling.
+Next up: end-to-end manual testing, error handling.
