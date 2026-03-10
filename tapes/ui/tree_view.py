@@ -95,24 +95,6 @@ class TreeView(Widget):
             setattr(f, attr, not all_set)
         self.refresh()
 
-    def toggle_staged_range(self) -> None:
-        """Toggle staged on all FileNodes in the selection range."""
-        self._toggle_flag_range("staged")
-
-    def toggle_staged_at_cursor(self) -> None:
-        """Toggle staged on cursor or range."""
-        if self.in_range_mode:
-            self.toggle_staged_range()
-            self.clear_range_select()
-        else:
-            node = self.cursor_node()
-            if isinstance(node, FileNode):
-                self.model.toggle_staged(node)
-                self.refresh()
-            elif isinstance(node, FolderNode):
-                self.model.toggle_staged_recursive(node)
-                self.refresh()
-
     def toggle_ignored_range(self) -> None:
         """Toggle ignored on all FileNodes in the selection range."""
         self._toggle_flag_range("ignored")

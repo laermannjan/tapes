@@ -460,13 +460,13 @@ def extract_guessit_fields(filename: str) -> dict[str, Any]:
     return fields
 
 
-def _populate_node_guessit(node: FileNode, extract_metadata_fn: Callable[[str], Any]) -> None:
+def _populate_node_guessit(node: FileNode, extract_metadata_fn: Callable[..., Any]) -> None:
     """Extract metadata from filename via guessit and set as metadata (base layer).
 
     The filename extraction is the base layer, not a candidate. It populates
     ``node.metadata`` directly. Candidates are reserved for TMDB matches only.
     """
-    meta = extract_metadata_fn(node.path.name)
+    meta = extract_metadata_fn(node.path.name, folder_name=node.path.parent.name)
     filename_fields: dict = {}
     if meta.title:
         filename_fields[TITLE] = meta.title

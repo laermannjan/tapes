@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from tapes.templates import template_field_names
-from tapes.ui.colors import COLOR_ADDITION, COLOR_DIFF, COLOR_MUTED, COLOR_WARNING
+from tapes.ui.colors import COLOR_ADDITION, COLOR_DIFF, COLOR_MUTED
 
 
 def get_display_fields(template: str) -> list[str]:
@@ -50,18 +50,3 @@ def diff_style(result_val: Any, source_val: Any) -> str:
     if str(result_val) == str(source_val):
         return COLOR_MUTED
     return COLOR_DIFF
-
-
-def confidence_style(confidence: float) -> str:
-    """Return a Rich style for a confidence percentage.
-
-    - Muted for >= 80% (normal, nothing to worry about).
-    - Ember for 50-79%.
-    - Soft red for < 50%.
-    """
-
-    if confidence >= 0.8:
-        return COLOR_MUTED
-    if confidence >= 0.5:
-        return COLOR_DIFF
-    return COLOR_WARNING

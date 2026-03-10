@@ -171,45 +171,6 @@ class TestTreeViewCursor:
         assert view.item_count == 4
 
 
-class TestTreeViewStaging:
-    def test_toggle_staged_on_file(self) -> None:
-        view = _make_view()
-        view.move_cursor(2)  # top.mkv (FileNode)
-        node = view.cursor_node()
-        assert isinstance(node, FileNode)
-        assert not node.staged
-        view.toggle_staged_at_cursor()
-        assert node.staged
-        view.toggle_staged_at_cursor()
-        assert not node.staged
-
-    def test_toggle_staged_on_folder(self) -> None:
-        model = _simple_model()
-        view = _make_view(model)
-        # Cursor on folderA (FolderNode)
-        node = view.cursor_node()
-        assert isinstance(node, FolderNode)
-        # Stage all children
-        view.toggle_staged_at_cursor()
-        file_a = model.root.children[0]
-        assert isinstance(file_a, FolderNode)
-        assert file_a.children[0].staged  # type: ignore[union-attr]
-        # Unstage all children
-        view.toggle_staged_at_cursor()
-        assert not file_a.children[0].staged  # type: ignore[union-attr]
-
-    def test_staged_count(self) -> None:
-        model = _simple_model()
-        view = _make_view(model)
-        assert view.staged_count == 0
-        assert view.total_count == 3  # file_a.mkv, file_b.mkv, top.mkv
-        # Stage top.mkv
-        view.move_cursor(2)
-        view.toggle_staged_at_cursor()
-        assert view.staged_count == 1
-        assert view.total_count == 3
-
-
 class TestTreeViewRender:
     def test_render_returns_renderable(self) -> None:
         view = _make_view()
@@ -328,47 +289,6 @@ class TestRangeSelection:
         assert isinstance(nodes[2], FolderNode)
         assert nodes[2].name == "folderB"
 
-    def test_toggle_staged_range_all_unstaged_become_staged(self) -> None:
-        model = _expanded_model()
-        view = _make_view(model)
-        # Select range covering file_a.mkv (idx 1) and file_b.mkv (idx 3)
-        view.move_cursor(1)
-        view.start_range_select()
-        view.move_cursor(2)  # cursor at 3
-        view.toggle_staged_range()
-        nodes = view.selected_nodes()
-        file_nodes = [n for n in nodes if isinstance(n, FileNode)]
-        assert all(f.staged for f in file_nodes)
-
-    def test_toggle_staged_range_all_staged_become_unstaged(self) -> None:
-        model = _expanded_model()
-        view = _make_view(model)
-        # Stage files first
-        for f in model.all_files():
-            f.staged = True
-        view.move_cursor(1)
-        view.start_range_select()
-        view.move_cursor(2)  # cursor at 3
-        view.toggle_staged_range()
-        nodes = view.selected_nodes()
-        file_nodes = [n for n in nodes if isinstance(n, FileNode)]
-        assert all(not f.staged for f in file_nodes)
-
-    def test_toggle_staged_range_mixed_becomes_all_staged(self) -> None:
-        model = _expanded_model()
-        view = _make_view(model)
-        # Stage only file_a
-        files = model.all_files()
-        files[0].staged = True  # file_a staged
-        files[1].staged = False  # file_b unstaged
-        view.move_cursor(1)
-        view.start_range_select()
-        view.move_cursor(2)  # cursor at 3, range covers file_a and file_b
-        view.toggle_staged_range()
-        nodes = view.selected_nodes()
-        file_nodes = [n for n in nodes if isinstance(n, FileNode)]
-        assert all(f.staged for f in file_nodes)
-
     def test_clear_range_select(self) -> None:
         view = _make_view()
         view.start_range_select()
@@ -398,20 +318,6 @@ class TestRangeSelection:
         # The cursor row (idx 2) has "on #36345a", range rows (idx 0, 1) have "on #2a2844"
         # We verify that the Text object has spans applied
         assert len(result._spans) > 0  # ty: ignore[unresolved-attribute]  # Rich render return type
-
-    def test_space_in_range_mode_stages_and_exits(self) -> None:
-        model = _expanded_model()
-        view = _make_view(model)
-        view.move_cursor(1)  # file_a.mkv
-        view.start_range_select()
-        view.move_cursor(2)  # cursor at 3, range 1-3
-        view.toggle_staged_at_cursor()
-        # Should have staged and exited range mode
-        assert not view.in_range_mode
-        file_a = model.all_files()[0]
-        file_b = model.all_files()[1]
-        assert file_a.staged
-        assert file_b.staged
 
     def test_selected_range_none_when_not_in_range_mode(self) -> None:
         view = _make_view()
