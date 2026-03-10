@@ -54,7 +54,8 @@ class TestMediaTypeMatchGate:
 
         # Auto-accept should fire: tmdb_id written to metadata
         assert node.metadata.get(TMDB_ID) == 438631
-        assert len(node.candidates) >= 1
+        # A3: candidates cleared after auto-accept
+        assert len(node.candidates) == 0
 
     @respx.mock
     def test_mismatching_media_type_blocks_auto_accept(self) -> None:
@@ -125,7 +126,8 @@ class TestMediaTypeMatchGate:
 
         # Auto-accept should fire since gate is skipped
         assert node.metadata.get(TMDB_ID) == 1396
-        assert len(node.candidates) >= 1
+        # A3: candidates cleared after auto-accept (no episodes since seasons=[])
+        assert len(node.candidates) == 0
 
     @respx.mock
     def test_episode_node_vs_movie_result_blocks(self) -> None:

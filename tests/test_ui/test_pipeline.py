@@ -140,9 +140,8 @@ class TestRunAutoPipeline:
         run_auto_pipeline(model, token=TOKEN)
         node = model.all_files()[0]
         assert node.staged is True
-        tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
-        assert len(tmdb_candidates) == 1
-        assert tmdb_candidates[0].score == 1.0
+        # A3: candidates cleared after auto-accept (movie identified, no stale candidates)
+        assert len(node.candidates) == 0
         assert node.metadata["year"] == 2021
 
     def test_clear_winner_no_year_auto_staged(self, mock_tmdb) -> None:
@@ -225,9 +224,8 @@ class TestTwoStageFlow:
         node = model.all_files()[0]
         assert node.metadata["media_type"] == "movie"
         assert node.staged is True
-        # Should have exactly 1 TMDB source (movie, no episodes)
-        tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
-        assert len(tmdb_candidates) == 1
+        # A3: candidates cleared after auto-accept (movie identified)
+        assert len(node.candidates) == 0
 
     def test_tv_show_triggers_episode_stage(self, mock_tmdb) -> None:
         """TV show match should fetch episodes."""
@@ -242,18 +240,18 @@ class TestTwoStageFlow:
         # Best match should have episode data
         assert node.metadata.get("episode_title") == "Pilot"
 
-    def test_auto_accepted_tv_show_has_show_level_sources(self, mock_tmdb) -> None:
-        """Auto-accepted TV show should have show-level TMDB sources on
-        node.candidates, not just episode sources.
-        Invariant #1: sources are always added."""
+    def test_auto_accepted_tv_show_has_episode_sources_only(self, mock_tmdb) -> None:
+        """Auto-accepted TV show should have only episode-level TMDB sources.
+        A3: show-level candidates are cleared after auto-accept; episode query
+        adds fresh episode-specific candidates afterward."""
         model = _make_model("Breaking.Bad.S01E01.mkv")
         run_auto_pipeline(model, token=TOKEN, min_score=0.5)
         node = model.all_files()[0]
-        # Should have BOTH show-level and episode-level sources
         tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
         show_candidates = [s for s in tmdb_candidates if "episode_title" not in s.metadata]
         episode_sources = [s for s in tmdb_candidates if "episode_title" in s.metadata]
-        assert len(show_candidates) >= 1, f"Expected show-level sources, got: {tmdb_candidates}"
+        # A3: show-level candidates cleared, only episode candidates remain
+        assert len(show_candidates) == 0, f"Expected no show-level sources, got: {show_candidates}"
         assert len(episode_sources) >= 1, f"Expected episode sources, got: {tmdb_candidates}"
 
     def test_tv_show_no_episode_match(self) -> None:
@@ -352,7 +350,7 @@ class TestRefreshTmdbBatch:
     """Tests for batch refresh with cache and dedup."""
 
     def test_batch_refreshes_multiple_nodes(self, mock_tmdb) -> None:
-        """All nodes in the batch get refreshed."""
+        """All nodes in the batch get refreshed and auto-accepted."""
         from tapes.pipeline import refresh_tmdb_batch
 
         node1 = FileNode(
@@ -366,9 +364,11 @@ class TestRefreshTmdbBatch:
             candidates=[],
         )
         refresh_tmdb_batch([node1, node2], token=TOKEN)
+        # A3: auto-accept fires for both movies, clearing candidates
         for n in [node1, node2]:
-            tmdb = [s for s in n.candidates if s.name.startswith("TMDB")]
-            assert len(tmdb) >= 1
+            assert len(n.candidates) == 0
+            assert n.metadata.get("tmdb_id") is not None
+            assert n.staged is True
 
     def test_batch_deduplicates_queries(self, mock_tmdb) -> None:
         """Nodes with same title/year share a single search_multi call."""
@@ -428,21 +428,23 @@ class TestRefreshTmdbSource:
             candidates=[],
         )
         refresh_tmdb_source(node, token=TOKEN)
-        tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
-        assert len(tmdb_candidates) == 1
-        assert tmdb_candidates[0].score == 1.0
+        # A3: auto-accept fires (score 1.0) and clears candidates
+        assert len(node.candidates) == 0
+        assert node.metadata.get("tmdb_id") == 438631
+        assert node.staged is True
 
     def test_updates_tmdb_source_no_year(self, mock_tmdb) -> None:
-        """Without year, confidence is penalized (0.7, not 1.0)."""
+        """Without year, confidence is penalized (0.7, not 1.0) but still auto-accepts."""
         node = FileNode(
             path=Path("/media/Dune.mkv"),
             metadata={"title": "Dune"},
             candidates=[],
         )
         refresh_tmdb_source(node, token=TOKEN)
-        tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
-        assert len(tmdb_candidates) == 1
-        assert tmdb_candidates[0].score == pytest.approx(0.7)
+        # A3: auto-accept fires (single candidate, score 0.7 >= 0.6) and clears candidates
+        assert len(node.candidates) == 0
+        assert node.metadata.get("tmdb_id") == 438631
+        assert node.staged is True
 
     def test_replaces_existing_tmdb_source(self, mock_tmdb) -> None:
         node = FileNode(
@@ -453,10 +455,9 @@ class TestRefreshTmdbSource:
             ],
         )
         refresh_tmdb_source(node, token=TOKEN)
-        tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
-        assert len(tmdb_candidates) == 1
-        assert tmdb_candidates[0].metadata["title"] == "Dune"
-        assert tmdb_candidates[0].score == 1.0
+        # A3: auto-accept fires and clears candidates
+        assert len(node.candidates) == 0
+        assert node.metadata.get("tmdb_id") == 438631
 
     def test_no_match_removes_tmdb_source(self, mock_tmdb) -> None:
         node = FileNode(
@@ -530,7 +531,9 @@ class TestAutoPipelineIntegration:
         async with app.run_test() as _pilot:
             await app.workers.wait_for_complete()
             node = model.all_files()[0]
-            assert len(node.candidates) >= 1
+            # A3: auto-accept fires for Dune (movie), clearing candidates
+            assert len(node.candidates) == 0
+            assert node.metadata.get("tmdb_id") == 438631
             assert node.staged is True
 
 
@@ -554,9 +557,10 @@ class TestRefreshQueryIntegration:
         async with app.run_test() as pilot:
             await pilot.press("r")
             await app.workers.wait_for_complete()
-            tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
-            assert len(tmdb_candidates) == 1
-            assert tmdb_candidates[0].score == 1.0
+            # A3: auto-accept fires for Dune (movie), clearing candidates
+            assert len(node.candidates) == 0
+            assert node.metadata.get("tmdb_id") == 438631
+            assert node.staged is True
 
     @pytest.mark.asyncio()
     async def test_r_in_detail_refreshes_current_node(self, mock_tmdb) -> None:
@@ -580,8 +584,9 @@ class TestRefreshQueryIntegration:
             assert app.state == AppState.METADATA
             await pilot.press("r")
             await app.workers.wait_for_complete()
-            tmdb_candidates = [s for s in node.candidates if s.name.startswith("TMDB")]
-            assert len(tmdb_candidates) == 1
+            # A3: auto-accept fires for Arrival (movie), clearing candidates
+            assert len(node.candidates) == 0
+            assert node.metadata.get("tmdb_id") == 329865
             assert node.metadata.get("year") == 2016
 
     @pytest.mark.asyncio()
@@ -609,9 +614,11 @@ class TestRefreshQueryIntegration:
             await pilot.press("j")
             await pilot.press("r")
             await app.workers.wait_for_complete()
+            # A3: auto-accept fires for both movies, clearing candidates
             for n in [node1, node2]:
-                tmdb = [s for s in n.candidates if s.name.startswith("TMDB")]
-                assert len(tmdb) == 1
+                assert len(n.candidates) == 0
+                assert n.metadata.get("tmdb_id") is not None
+                assert n.staged is True
 
     @pytest.mark.asyncio()
     async def test_r_in_multi_detail_refreshes_all_nodes(self, mock_tmdb) -> None:
@@ -640,9 +647,11 @@ class TestRefreshQueryIntegration:
             assert app.state == AppState.METADATA
             await pilot.press("r")
             await app.workers.wait_for_complete()
+            # A3: auto-accept fires for both movies, clearing candidates
             for n in [node1, node2]:
-                tmdb = [s for s in n.candidates if s.name.startswith("TMDB")]
-                assert len(tmdb) == 1
+                assert len(n.candidates) == 0
+                assert n.metadata.get("tmdb_id") is not None
+                assert n.staged is True
 
     @pytest.mark.asyncio()
     async def test_r_in_metadata_runs_async_with_progress(self, mock_tmdb) -> None:
@@ -674,9 +683,11 @@ class TestRefreshQueryIntegration:
             # Press 'r' -- should not block
             await pilot.press("r")
             await app.workers.wait_for_complete()
+            # A3: auto-accept fires for both movies, clearing candidates
             for n in [node1, node2]:
-                tmdb = [s for s in n.candidates if s.name.startswith("TMDB")]
-                assert len(tmdb) >= 1
+                assert len(n.candidates) == 0
+                assert n.metadata.get("tmdb_id") is not None
+                assert n.staged is True
 
 
 @pytest.mark.skipif(not HAS_PILOT, reason="textual pilot not available")
@@ -939,8 +950,8 @@ class TestConfigForwarding:
         show_candidates = [s for s in tmdb_candidates if "episode_title" not in s.metadata]
         # Even though 3 episodes are available, only max_results=1 kept
         assert len(episode_sources) == 1
-        # Show-level sources also limited to max_results=1
-        assert len(show_candidates) == 1
+        # A3: show-level candidates cleared after auto-accept
+        assert len(show_candidates) == 0
 
 
 class TestTmdbIdShortcut:

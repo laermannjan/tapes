@@ -12,7 +12,7 @@ from textual.message import Message
 from textual.reactive import reactive
 from textual.widget import Widget
 
-from tapes.fields import INT_FIELDS
+from tapes.fields import INT_FIELDS, TMDB_ID
 from tapes.templates import compute_dest, select_template
 from tapes.tree_model import FileNode, compute_shared_fields
 from tapes.ui.colors import COLOR_ACCENT, COLOR_COLUMN_FOCUS_BG, COLOR_CURSOR_BG, COLOR_MUTED
@@ -354,6 +354,10 @@ class MetadataView(Widget):
             if val is not None:
                 for n in self.file_nodes:
                     n.metadata[field_name] = val
+        # A3: clear candidates after acceptance sets tmdb_id.
+        if any(n.metadata.get(TMDB_ID) is not None for n in self.file_nodes):
+            for n in self.file_nodes:
+                n.candidates.clear()
         self.refresh()
         self.post_message(self.MetadataChanged())
 

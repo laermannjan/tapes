@@ -34,18 +34,27 @@ def _make_metadata_updater(
     node: FileNode,
     fields: dict[str, Any],
     stage: bool,
+    *,
+    clear_candidates: bool = False,
 ) -> Callable[[], None]:
     """Create a closure that updates node metadata on the main thread.
 
     Uses explicit parameters instead of closing over loop variables to avoid
     late-binding bugs -- each closure captures the values at creation time,
     not at call time.
+
+    When *clear_candidates* is True, the node's candidate list is cleared
+    after applying the metadata fields. This is used after auto-accept so
+    that stale show-level candidates are removed before the episode query
+    adds fresh episode-specific candidates.
     """
 
     def _apply() -> None:
         for field_name, val in fields.items():
             if val is not None:
                 node.metadata[field_name] = val
+        if clear_candidates:
+            node.candidates.clear()
         if stage:
             node.staged = True
 
@@ -609,8 +618,7 @@ def _query_tmdb_for_node(
                 logger.debug("%s: auto-accept skipped, template fields incomplete", node.path.name)
                 _stageable = False
 
-        _post(_make_metadata_updater(node, _best_metadata, stage=_stageable))
-        _post(_make_candidates_updater(node, list(tmdb_candidates)))
+        _post(_make_metadata_updater(node, _best_metadata, stage=_stageable, clear_candidates=True))
 
         if best.metadata.get(MEDIA_TYPE) == MEDIA_TYPE_EPISODE:
             _query_episodes(
