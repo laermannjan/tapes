@@ -588,7 +588,17 @@ def _query_tmdb_for_node(
         [(c.name, c.metadata.get(TITLE), f"{c.score:.2f}") for c in tmdb_candidates],
     )
 
-    if should_auto_accept(similarities, min_score=params.min_score, min_prominence=params.min_prominence):
+    # A2: media-type match gate -- skip auto-accept if best candidate's
+    # media_type disagrees with the node's guessit media_type.
+    node_media_type = node.metadata.get(MEDIA_TYPE)
+    best_media_type = best.metadata.get(MEDIA_TYPE)
+    media_type_compatible = (
+        node_media_type is None
+        or best_media_type is None
+        or node_media_type == best_media_type
+    )
+
+    if media_type_compatible and should_auto_accept(similarities, min_score=params.min_score, min_prominence=params.min_prominence):
         # Snapshot before dispatching -- the dict may be mutated later
         _best_metadata = dict(best.metadata)
 
