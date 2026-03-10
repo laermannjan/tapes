@@ -16,3 +16,5 @@ tapes.toml
 test_media/
 downloads/
 docs/mockups/screenshots/
+videos/
+.env

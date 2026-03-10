@@ -116,7 +116,7 @@ def compute_dest(node: FileNode, template: str) -> str | None:
 
     Format specs (e.g. ``{season:02d}``) are applied when all fields are
     present. If a field with a format spec is missing, the spec is dropped
-    and ``?`` is shown instead so the user can see partial progress.
+    and ``{field_name?}`` is shown instead so the user can see partial progress.
 
     String field values are sanitized to remove characters that are illegal
     in filenames (``/ \\ : * ? " < > |`` and control characters).

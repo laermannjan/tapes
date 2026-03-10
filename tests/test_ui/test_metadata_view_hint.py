@@ -31,6 +31,7 @@ class TestMultiNodeHint:
         tab_bar = mv._render_tab_bar(80)
         text = tab_bar.plain
         assert "individual files" in text.lower()
+        assert "clear tmdb_id" in text.lower()
 
     def test_shows_season_hint_when_season_missing(self) -> None:
         nodes = [
@@ -53,7 +54,8 @@ class TestMultiNodeHint:
         tab_bar = mv._render_tab_bar(80)
         text = tab_bar.plain
         assert "individual files" in text.lower()
-        assert "season" not in text.lower()
+        assert "set season" not in text.lower()
+        assert "clear tmdb_id" in text.lower()
 
     def test_no_hint_for_unaccepted_show(self) -> None:
         nodes = [

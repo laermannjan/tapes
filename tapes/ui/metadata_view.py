@@ -204,6 +204,8 @@ class MetadataView(Widget):
                 if any(n.metadata.get(SEASON) is None for n in self.file_nodes):
                     line.append("  \u00b7  ", style=COLOR_MUTED)
                     line.append("Set season to improve matching", style=COLOR_MUTED)
+                line.append("  \u00b7  ", style=COLOR_MUTED)
+                line.append("Clear tmdb_id to select a different show", style=COLOR_MUTED)
                 return line
 
         candidates = self.node.candidates
