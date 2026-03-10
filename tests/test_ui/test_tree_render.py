@@ -41,7 +41,7 @@ class TestComputeDest:
         result = compute_dest(node, MOVIE_TEMPLATE)
         assert result is not None
         assert "Inception" in result
-        assert "?" in result
+        assert "{year?}" in result
 
     def test_tv_template_with_season_episode(self) -> None:
         node = FileNode(
@@ -92,20 +92,19 @@ class TestRenderDest:
         assert isinstance(result, Text)
         assert result.plain == "README"
 
-    def test_question_mark_placeholders_yellow(self) -> None:
-        result = render_dest("? (?)/? (?).mkv")
+    def test_missing_field_placeholders_colored(self) -> None:
+        result = render_dest("{title?} ({year?})/{title?} ({year?}).mkv")
         assert isinstance(result, Text)
-        assert result.plain == "? (?)/? (?).mkv"
-        # Verify ? chars have yellow style
-        has_yellow = any("#E07A47" in str(span.style) or "#e07a47" in str(span.style) for span in result._spans)
-        assert has_yellow
+        assert result.plain == "{title?} ({year?})/{title?} ({year?}).mkv"
+        has_red = any("#FF7A7A" in str(span.style) or "#ff7a7a" in str(span.style) for span in result._spans)
+        assert has_red
 
-    def test_partial_with_question_marks(self) -> None:
-        result = render_dest("Inception (?)/Inception (?).mkv")
+    def test_partial_with_named_placeholders(self) -> None:
+        result = render_dest("Inception ({year?})/Inception ({year?}).mkv")
         assert isinstance(result, Text)
-        assert "?" in result.plain
-        has_yellow = any("#E07A47" in str(span.style) or "#e07a47" in str(span.style) for span in result._spans)
-        assert has_yellow
+        assert "{year?}" in result.plain
+        has_red = any("#FF7A7A" in str(span.style) or "#ff7a7a" in str(span.style) for span in result._spans)
+        assert has_red
 
     def test_no_directory(self) -> None:
         result = render_dest("movie.mkv")
@@ -166,7 +165,7 @@ class TestRenderFileRow:
             metadata={},
         )
         row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
-        assert "?" in row.plain
+        assert "{title?}" in row.plain
 
     def test_with_indentation_depth_2(self) -> None:
         node = FileNode(

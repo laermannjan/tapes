@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re as _re
 from pathlib import Path
 
 from rich.text import Text
@@ -9,11 +10,13 @@ from rich.text import Text
 from tapes.templates import can_fill_template, compute_dest, full_extension, select_template
 from tapes.tree_model import FileNode, FolderNode, TreeModel
 from tapes.ui.colors import (
-    COLOR_DIFF,
+    COLOR_MISSING,
     COLOR_MUTED,
     COLOR_MUTED_LIGHT,
     COLOR_STAGED,
 )
+
+_MISSING_FIELD_RE = _re.compile(r"\{(\w+)\?\}")
 
 
 def render_dest(dest: str | None) -> Text:
@@ -24,7 +27,7 @@ def render_dest(dest: str | None) -> Text:
     - Directory portion (everything before the last ``/``) is dim.
     - Filename stem (after last ``/``, before last ``.``) is normal foreground.
     - Extension (last ``.`` onward) is dim.
-    - Any ``?`` placeholder characters are highlighted ember.
+    - Any ``{field?}`` placeholder patterns are highlighted red.
     """
     if dest is None:
         return Text("???", style=COLOR_MUTED)
@@ -40,7 +43,7 @@ def render_dest(dest: str | None) -> Text:
         basename = dest
 
     if dir_part:
-        _append_with_yellow_placeholders(result, dir_part, COLOR_MUTED)
+        _append_with_placeholders(result, dir_part, COLOR_MUTED)
 
     ext_str = full_extension(Path(basename))
     if ext_str:
@@ -55,28 +58,24 @@ def render_dest(dest: str | None) -> Text:
         stem = basename
         ext = ""
 
-    _append_with_yellow_placeholders(result, stem, "")
+    _append_with_placeholders(result, stem, "")
 
     if ext:
-        _append_with_yellow_placeholders(result, ext, COLOR_MUTED)
+        _append_with_placeholders(result, ext, COLOR_MUTED)
 
     return result
 
 
-def _append_with_yellow_placeholders(text: Text, s: str, base_style: str) -> None:
-    """Append *s* to *text*, coloring ``?`` characters yellow."""
-    i = 0
-    while i < len(s):
-        j = i
-        if s[i] == "?":
-            while j < len(s) and s[j] == "?":
-                j += 1
-            text.append(s[i:j], style=COLOR_DIFF)
-        else:
-            while j < len(s) and s[j] != "?":
-                j += 1
-            text.append(s[i:j], style=base_style)
-        i = j
+def _append_with_placeholders(text: Text, s: str, base_style: str) -> None:
+    """Append *s* to *text*, coloring ``{field?}`` placeholders red."""
+    pos = 0
+    for m in _MISSING_FIELD_RE.finditer(s):
+        if m.start() > pos:
+            text.append(s[pos : m.start()], style=base_style)
+        text.append(m.group(0), style=COLOR_MISSING)
+        pos = m.end()
+    if pos < len(s):
+        text.append(s[pos:], style=base_style)
 
 
 def render_file_row(

@@ -134,10 +134,10 @@ def compute_dest(node: FileNode, template: str) -> str | None:
     if len(missing) == len(needed):
         return None
 
-    # Partial: fill missing fields with "?" and strip format specs
+    # Partial: fill missing fields with "{field?}" and strip format specs
     patched = dict(fields)
     for f in missing:
-        patched[f] = "?"
+        patched[f] = "{" + f + "?}"
     # Remove format specs so "?" doesn't fail on e.g. :02d
     safe_template = re.sub(r"\{(\w+):[^}]+\}", r"{\1}", template)
     return safe_template.format_map(patched)
