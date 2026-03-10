@@ -906,7 +906,7 @@ class TreeApp(App):
         for snap in self._metadata_snapshot:
             old_tmdb_id = snap.metadata.get(TMDB_ID)
             new_tmdb_id = snap.node.metadata.get(TMDB_ID)
-            if old_tmdb_id is None and new_tmdb_id is not None:
+            if new_tmdb_id is not None and old_tmdb_id != new_tmdb_id:
                 return True
         return False
 
