@@ -379,10 +379,10 @@ class TestTreeAppKeys:
             assert tv.cursor_index == 0
 
     @pytest.mark.asyncio()
-    async def test_enter_on_folder_opens_detail(self, model: TreeModel, template: str) -> None:
+    async def test_enter_on_folder_opens_metadata(self, model: TreeModel, template: str) -> None:
         from tapes.ui.tree_app import TreeApp
 
-        # Enter on a folder opens detail view for all files in it
+        # Enter on a folder opens metadata view for all files in it
         app = TreeApp(model=model, movie_template=template, tv_template=template)
         async with app.run_test() as pilot:
             await pilot.press("enter")
@@ -879,7 +879,7 @@ class TestSearchModeAsync:
             assert app._search_query == "to"
 
     @pytest.mark.asyncio()
-    async def test_search_noop_in_detail(self) -> None:
+    async def test_search_noop_in_metadata(self) -> None:
         from tapes.ui.tree_app import TreeApp
 
         node = FileNode(
@@ -892,7 +892,7 @@ class TestSearchModeAsync:
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
-            # Enter detail view via folder (enter on folder opens detail)
+            # Enter metadata view via folder
             await pilot.press("enter")
             assert app.state == AppState.METADATA
             await pilot.press("slash")
@@ -920,7 +920,7 @@ class TestBottomBar:
             assert bar is not None
 
     @pytest.mark.asyncio()
-    async def test_bottom_bar_hidden_in_detail(self) -> None:
+    async def test_bottom_bar_hidden_in_metadata(self) -> None:
         from tapes.ui.bottom_bar import BottomBar
         from tapes.ui.tree_app import TreeApp
 
@@ -932,7 +932,7 @@ class TestBottomBar:
 
         async with app.run_test() as pilot:
             bar = app.query_one(BottomBar)
-            # Enter detail via folder
+            # Enter metadata view via folder
             await pilot.press("enter")
             assert str(bar.styles.display) == "none"
 
@@ -1002,8 +1002,8 @@ class TestVisualIntegration:
             assert app.state == AppState.TREE
 
     @pytest.mark.asyncio()
-    async def test_help_from_detail_returns_to_detail(self) -> None:
-        """Pressing ? in detail opens help, closing returns to detail."""
+    async def test_help_from_metadata_returns_to_metadata(self) -> None:
+        """Pressing ? in metadata view opens help, closing returns to metadata view."""
         from tapes.ui.tree_app import TreeApp
 
         node = FileNode(path=Path("/media/test.mkv"), metadata={"title": "Test"})
@@ -1013,7 +1013,7 @@ class TestVisualIntegration:
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
-            # Enter detail via folder
+            # Enter metadata view via folder
             await pilot.press("enter")
             assert app.state == AppState.METADATA
             await pilot.press("question_mark")
@@ -1023,13 +1023,13 @@ class TestVisualIntegration:
 
 
 # ---------------------------------------------------------------------------
-# Detail confirm/discard tests
+# Metadata confirm/discard tests
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.skipif(not HAS_PILOT, reason="textual pilot not available")
-class TestDetailConfirmDiscard:
-    """Tests for the confirm/discard model in detail view."""
+class TestMetadataConfirmDiscard:
+    """Tests for the confirm/discard model in metadata view."""
 
     @pytest.mark.asyncio()
     async def test_esc_discards_changes(self) -> None:
@@ -1046,10 +1046,10 @@ class TestDetailConfirmDiscard:
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
-            # Enter detail via folder
+            # Enter metadata view via folder
             await pilot.press("enter")
             assert app.state == AppState.METADATA
-            # Manually edit result to simulate a change
+            # Manually edit metadata to simulate a change
             node.metadata["title"] = "Changed"
             await pilot.press("escape")
             assert app.state == AppState.TREE
@@ -1070,10 +1070,10 @@ class TestDetailConfirmDiscard:
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
-            # Enter detail via folder
+            # Enter metadata view via folder
             await pilot.press("enter")
             assert app.state == AppState.METADATA
-            # Manually edit result
+            # Manually edit metadata
             node.metadata["title"] = "Changed"
             # Enter accepts changes and returns to tree
             await pilot.press("enter")
@@ -1081,8 +1081,8 @@ class TestDetailConfirmDiscard:
             assert node.metadata["title"] == "Changed"
 
     @pytest.mark.asyncio()
-    async def test_esc_during_edit_cancels_edit_not_detail(self) -> None:
-        """Esc while editing cancels edit, doesn't discard detail changes."""
+    async def test_esc_during_edit_cancels_edit_not_metadata(self) -> None:
+        """Esc while editing cancels edit, doesn't discard metadata view changes."""
         from tapes.ui.metadata_view import MetadataView
         from tapes.ui.tree_app import TreeApp
 
@@ -1096,7 +1096,7 @@ class TestDetailConfirmDiscard:
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
-            # Enter detail via folder
+            # Enter metadata view via folder
             await pilot.press("enter")
             dv = app.query_one(MetadataView)
             assert app.state == AppState.METADATA
@@ -1104,7 +1104,7 @@ class TestDetailConfirmDiscard:
             assert dv.editing
             await pilot.press("escape")  # cancel edit
             assert not dv.editing
-            assert app.state == AppState.METADATA  # still in detail
+            assert app.state == AppState.METADATA  # still in metadata view
 
 
 # ---------------------------------------------------------------------------
@@ -1124,7 +1124,7 @@ class TestAppStateTransitions:
             assert app.state == AppState.TREE
 
     @pytest.mark.asyncio()
-    async def test_enter_detail_and_back(self) -> None:
+    async def test_enter_metadata_and_back(self) -> None:
         from tapes.ui.tree_app import TreeApp
 
         node = FileNode(path=Path("/media/test.mkv"), metadata={"title": "Test"})
@@ -1134,7 +1134,7 @@ class TestAppStateTransitions:
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
         async with app.run_test() as pilot:
             assert app.state == AppState.TREE
-            # Enter detail via folder
+            # Enter metadata view via folder
             await pilot.press("enter")
             assert app.state == AppState.METADATA
             await pilot.press("escape")
@@ -1189,8 +1189,8 @@ class TestAppStateTransitions:
 @pytest.mark.skipif(not HAS_PILOT, reason="textual pilot not available")
 class TestTreeKeyRedesign:
     @pytest.mark.asyncio()
-    async def test_enter_opens_detail_for_file(self) -> None:
-        """enter on a file opens the detail/info view."""
+    async def test_enter_opens_metadata_for_file(self) -> None:
+        """enter on a file opens the metadata view."""
         from tapes.ui.tree_app import TreeApp
 
         node = FileNode(path=Path("/media/test.mkv"))
@@ -1243,8 +1243,8 @@ class TestTreeKeyRedesign:
             assert tv.item_count == 4
 
     @pytest.mark.asyncio()
-    async def test_enter_on_folder_opens_detail_for_files(self) -> None:
-        """enter on a folder opens detail view for all files in that folder."""
+    async def test_enter_on_folder_opens_metadata_for_files(self) -> None:
+        """enter on a folder opens metadata view for all files in that folder."""
         from tapes.ui.tree_app import TreeApp
 
         model = _expanded_model()

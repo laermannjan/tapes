@@ -1,4 +1,4 @@
-"""Pure rendering functions for the detail view grid."""
+"""Pure rendering functions for the metadata view grid."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from tapes.ui.colors import COLOR_ADDITION, COLOR_DIFF, COLOR_MUTED
 
 
 def get_display_fields(template: str) -> list[str]:
-    """Fields to show in the detail grid, derived from template.
+    """Fields to show in the metadata grid, derived from template.
 
     Always includes ``tmdb_id`` as the first field. Extracts remaining
     field names from ``{field}`` placeholders and excludes ``ext``
@@ -35,18 +35,18 @@ def is_multi_value(val: Any) -> bool:
     return val.startswith("(") and val.endswith(" values)")
 
 
-def diff_style(result_val: Any, source_val: Any) -> str:
-    """Return a Rich style for a source value relative to the result.
+def diff_style(metadata_val: Any, candidate_val: Any) -> str:
+    """Return a Rich style for a candidate value relative to the metadata.
 
-    - Muted gray if source is None (missing) or matches the result.
-    - Soft green if source fills an empty result slot.
-    - Ember if source differs from a non-empty result.
+    - Muted gray if candidate is None (missing) or matches the metadata.
+    - Soft green if candidate fills an empty metadata slot.
+    - Ember if candidate differs from a non-empty metadata value.
     """
 
-    if source_val is None:
+    if candidate_val is None:
         return COLOR_MUTED
-    if result_val is None or result_val == "":
+    if metadata_val is None or metadata_val == "":
         return COLOR_ADDITION
-    if str(result_val) == str(source_val):
+    if str(metadata_val) == str(candidate_val):
         return COLOR_MUTED
     return COLOR_DIFF

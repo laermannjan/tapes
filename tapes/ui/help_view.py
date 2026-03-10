@@ -50,7 +50,7 @@ def _build_help_content(width: int) -> list[Text]:
     # File browser keys
     lines.append(heading("File browser"))
     lines.append(key_row("j / k", "move cursor"))
-    lines.append(key_row("enter", "open detail view"))
+    lines.append(key_row("enter", "open metadata view"))
     lines.append(key_row("space", "stage / unstage for commit"))
     lines.append(key_row("h / l", "collapse / expand folder"))
     lines.append(key_row("x", "ignore file (skip entirely)"))
@@ -62,21 +62,21 @@ def _build_help_content(width: int) -> list[Text]:
     lines.append(key_row("ctrl+c ctrl+c", "quit"))
     lines.append(Text())
 
-    # Detail view keys
-    lines.append(heading("Detail view"))
+    # Metadata view keys
+    lines.append(heading("Metadata view"))
     lines.append(key_row("enter", "accept focused column and return"))
     lines.append(key_row("esc", "discard changes and return"))
     lines.append(key_row("e", "edit field value inline"))
     lines.append(key_row("backspace", "clear field"))
-    lines.append(key_row("tab", "cycle TMDB matches"))
-    lines.append(key_row("shift+tab", "toggle focus: result / match"))
-    lines.append(key_row("r", "refresh TMDB matches"))
+    lines.append(key_row("tab", "cycle TMDB candidates"))
+    lines.append(key_row("shift+tab", "toggle focus: metadata / candidate"))
+    lines.append(key_row("r", "refresh TMDB candidates"))
     lines.append(key_row("ctrl+r", "reset field from filename"))
     lines.append(Text())
 
     # Tips
     lines.append(heading("Tips"))
-    lines.append(body("High-confidence TMDB matches are auto-accepted and staged."))
+    lines.append(body("High-score TMDB candidates are auto-accepted and staged."))
     lines.append(body("Files need complete metadata before they can be staged."))
     lines.append(body("\u2610 means ready to stage, \u2713 means staged."))
     lines.append(body("Use v to select a range, then enter to bulk-edit metadata."))

@@ -24,7 +24,7 @@ def _make_tree_view() -> TreeView:
     return TreeView(model=model, movie_template=MOVIE_TEMPLATE, tv_template=TV_TEMPLATE)
 
 
-def _make_detail_view() -> MetadataView:
+def _make_metadata_view() -> MetadataView:
     node = FileNode(
         path=Path("/media/Breaking.Bad.S01E01.mkv"),
         metadata={"title": "Breaking Bad", "year": 2008, "season": 1, "episode": 1},
@@ -55,19 +55,19 @@ class TestTreeViewRendering:
 
 
 class TestMetadataViewRendering:
-    def test_detail_render_has_separator(self) -> None:
-        view = _make_detail_view()
+    def test_metadata_render_has_separator(self) -> None:
+        view = _make_metadata_view()
         plain = render_plain(view, height=30)
         assert "\u2500\u2500\u2500 Metadata" in plain
 
-    def test_detail_render_has_footer_hints(self) -> None:
-        view = _make_detail_view()
+    def test_metadata_render_has_footer_hints(self) -> None:
+        view = _make_metadata_view()
         plain = render_plain(view, height=30)
         assert "enter to accept" in plain
         assert "esc to discard" in plain
 
-    def test_detail_render_no_manual_borders(self) -> None:
-        view = _make_detail_view()
+    def test_metadata_render_no_manual_borders(self) -> None:
+        view = _make_metadata_view()
         plain = render_plain(view, height=30)
         for char in "\u250c\u2510\u2514\u2518\u251c\u2524":
             assert char not in plain

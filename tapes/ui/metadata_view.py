@@ -1,4 +1,4 @@
-"""Interactive Textual widget for the detail view with cursor and editing."""
+"""Interactive Textual widget for the metadata view with cursor and editing."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ COL_GAP = "   "
 
 
 class MetadataView(Widget):
-    """Detail view showing a file's metadata grid with cursor navigation.
+    """Metadata view showing a file's metadata grid with cursor navigation.
 
     Supports single-node and multi-node modes. In multi-node mode,
     shared values are shown and edits apply to all nodes.
@@ -63,7 +63,7 @@ class MetadataView(Widget):
         self.root_path = root_path
         self.fields: list[str] = []
         self.edit_value: str = ""
-        self.focus_column: str = "match"  # "result" or "match"
+        self.focus_column: str = "candidate"  # "metadata" or "candidate"
 
     def _active_template(self, node: FileNode | None = None) -> str:
         """Return the template for the given (or primary) node."""
@@ -85,20 +85,20 @@ class MetadataView(Widget):
         self.file_nodes = [node]
         self.cursor_row = 0
         self.candidate_index = 0
-        self.focus_column = "match"
+        self.focus_column = "candidate"
         self.fields = get_display_fields(self._active_template(node))
         self.editing = False
         self.refresh()
 
     def set_nodes(self, nodes: list[FileNode]) -> None:
-        """Switch to multiple file nodes for multi-file detail view."""
+        """Switch to multiple file nodes for multi-file metadata view."""
         if not nodes:
             return
         self.file_nodes = list(nodes)
         self.node = nodes[0]
         self.cursor_row = 0
         self.candidate_index = 0
-        self.focus_column = "match"
+        self.focus_column = "candidate"
         self.fields = get_display_fields(self._active_template(self.node))
         self.editing = False
         self.refresh()
@@ -165,7 +165,7 @@ class MetadataView(Widget):
         return text.ljust(width)
 
     def _build_content(self, inner_width: int) -> list[Text]:
-        """Render the full detail view with separator and footer hints."""
+        """Render the full metadata view with separator and footer hints."""
         content: list[Text] = []
 
         content.append(Text())
@@ -213,7 +213,7 @@ class MetadataView(Widget):
                 style=COLOR_MUTED,
             )
         else:
-            line.append("(no TMDB matches)", style=COLOR_MUTED)
+            line.append("(no TMDB candidates)", style=COLOR_MUTED)
 
         return line
 
@@ -257,7 +257,7 @@ class MetadataView(Widget):
             )
         hints = (
             "    enter to accept \u00b7 esc to discard"
-            " \u00b7 e to edit \u00b7 tab/shift+tab to cycle matches"
+            " \u00b7 e to edit \u00b7 tab/shift+tab to cycle candidates"
             " \u00b7 r to refresh \u00b7 ctrl+r to reset from filename"
         )
         return Text(hints, style=f"italic {COLOR_MUTED}")
@@ -282,16 +282,16 @@ class MetadataView(Widget):
         line.append(label, style=COLOR_MUTED)
         line.append(COL_GAP)
 
-        result_raw = shared.get(field_name)
+        meta_raw = shared.get(field_name)
         if self.editing and is_cursor:
             edit_display = self.edit_value + "\u2588"
             line.append(self._col(edit_display, val_w), style="underline")
         else:
-            result_val = display_val(result_raw)
+            meta_val = display_val(meta_raw)
             val_style = "bold" if is_cursor else ""
-            if self.focus_column == "result":
+            if self.focus_column == "metadata":
                 val_style += f" {COLOR_COLUMN_FOCUS_BG}"
-            line.append(self._col(result_val, val_w), style=val_style)
+            line.append(self._col(meta_val, val_w), style=val_style)
 
         if candidates and cand_w > 0 and self.candidate_index < len(candidates):
             cand = candidates[self.candidate_index]
@@ -300,8 +300,8 @@ class MetadataView(Widget):
 
             line.append(COL_GAP)
 
-            base_style = "dim" if is_multi_value(result_raw) else diff_style(result_raw, cand_raw)
-            if self.focus_column == "match":
+            base_style = "dim" if is_multi_value(meta_raw) else diff_style(meta_raw, cand_raw)
+            if self.focus_column == "candidate":
                 base_style += f" {COLOR_COLUMN_FOCUS_BG}"
             line.append(self._col(cand_val, cand_w), style=base_style)
 
@@ -333,7 +333,7 @@ class MetadataView(Widget):
         if not candidates:
             return
         self.candidate_index = (self.candidate_index + delta) % len(candidates)
-        self.focus_column = "match"
+        self.focus_column = "candidate"
 
     def accept_current_candidate(self) -> None:
         """Accept all fields from the current candidate.
@@ -418,21 +418,21 @@ class MetadataView(Widget):
         self.refresh()
 
     def toggle_column_focus(self) -> None:
-        """Toggle focus between result and match columns."""
-        if self.focus_column == "result":
-            self.focus_column = "match"
+        """Toggle focus between metadata and candidate columns."""
+        if self.focus_column == "metadata":
+            self.focus_column = "candidate"
         else:
-            self.focus_column = "result"
+            self.focus_column = "metadata"
         self.refresh()
 
     def accept_focused_column(self) -> None:
         """Accept the focused column's values.
 
-        If match is focused, copies non-None fields from the current
+        If candidate is focused, copies non-None fields from the current
         candidate to the metadata (preserving fields the candidate doesn't have).
-        If result is focused, no changes needed -- metadata is kept as-is.
+        If metadata is focused, no changes needed -- metadata is kept as-is.
         """
-        if self.focus_column == "match":
+        if self.focus_column == "candidate":
             self.accept_current_candidate()
 
     def on_key(self, event: events.Key) -> None:

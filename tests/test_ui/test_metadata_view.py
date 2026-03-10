@@ -317,10 +317,10 @@ class TestAcceptCurrentCandidate:
         assert view.node.metadata == original
 
 
-# --- Multi-file detail view (M15) ---
+# --- Multi-file metadata view (M15) ---
 
 
-class TestMultiFileDetail:
+class TestMultiFileMetadataView:
     def _make_multi_view(self) -> tuple[MetadataView, FileNode, FileNode]:
         node1 = FileNode(
             path=Path("/media/file1.mkv"),
@@ -536,7 +536,7 @@ class TestResetFieldToGuessit:
         assert "tmdb_id" not in node.metadata
 
 
-# --- Async integration: tree -> detail -> back ---
+# --- Async integration: tree -> metadata -> back ---
 
 
 MOVIE_TEMPLATE = "{title} ({year})/{title} ({year}).{ext}"
@@ -632,52 +632,52 @@ class TestColumnFocus:
         view.fields = get_display_fields(TEMPLATE)
         return view
 
-    def test_default_focus_is_match(self) -> None:
+    def test_default_focus_is_candidate(self) -> None:
         view = self._make_view()
-        assert view.focus_column == "match"
+        assert view.focus_column == "candidate"
 
-    def test_toggle_switches_to_result(self) -> None:
+    def test_toggle_switches_to_metadata(self) -> None:
         view = self._make_view()
         view.toggle_column_focus()
-        assert view.focus_column == "result"
+        assert view.focus_column == "metadata"
 
-    def test_toggle_back_to_match(self) -> None:
+    def test_toggle_back_to_candidate(self) -> None:
         view = self._make_view()
         view.toggle_column_focus()
         view.toggle_column_focus()
-        assert view.focus_column == "match"
+        assert view.focus_column == "candidate"
 
-    def test_cycle_candidate_sets_focus_to_match(self) -> None:
+    def test_cycle_candidate_sets_focus_to_candidate(self) -> None:
         view = self._make_view()
-        view.focus_column = "result"
+        view.focus_column = "metadata"
         view.cycle_candidate(1)
-        assert view.focus_column == "match"
+        assert view.focus_column == "candidate"
 
     def test_set_node_resets_focus(self) -> None:
         view = self._make_view()
-        view.focus_column = "result"
+        view.focus_column = "metadata"
         new_node = FileNode(path=Path("/other.mkv"), metadata={"title": "X"})
         view.set_node(new_node)
-        assert view.focus_column == "match"
+        assert view.focus_column == "candidate"
 
     def test_set_nodes_resets_focus(self) -> None:
         view = self._make_view()
-        view.focus_column = "result"
+        view.focus_column = "metadata"
         new_node = FileNode(path=Path("/other.mkv"), metadata={"title": "X"})
         view.set_nodes([new_node])
-        assert view.focus_column == "match"
+        assert view.focus_column == "candidate"
 
-    def test_accept_focused_match_applies_source(self) -> None:
+    def test_accept_focused_candidate_applies_source(self) -> None:
         view = self._make_view()
-        view.focus_column = "match"
+        view.focus_column = "candidate"
         view.candidate_index = 1  # TMDB source with title, year, etc.
         view.node.metadata["title"] = "Old Title"
         view.accept_focused_column()
         assert view.node.metadata["title"] == "Breaking Bad"  # from TMDB source
 
-    def test_accept_focused_result_no_change(self) -> None:
+    def test_accept_focused_metadata_no_change(self) -> None:
         view = self._make_view()
-        view.focus_column = "result"
+        view.focus_column = "metadata"
         view.node.metadata["title"] = "My Title"
         view.accept_focused_column()
         assert view.node.metadata["title"] == "My Title"  # unchanged
@@ -742,9 +742,9 @@ except ImportError:
 
 
 @pytest.mark.skipif(not HAS_PILOT, reason="textual pilot not available")
-class TestTreeDetailIntegration:
+class TestTreeMetadataIntegration:
     @pytest.mark.asyncio()
-    async def test_enter_on_folder_shows_detail_esc_returns(self) -> None:
+    async def test_enter_on_folder_shows_metadata_esc_returns(self) -> None:
         from tapes.tree_model import FolderNode, TreeModel
         from tapes.ui.tree_app import TreeApp
         from tapes.ui.tree_view import TreeView
@@ -759,15 +759,15 @@ class TestTreeDetailIntegration:
             app.query_one(TreeView)
             dv = app.query_one(MetadataView)
 
-            # Initially detail is not shown
+            # Initially metadata view is not shown
             assert app.state == AppState.TREE
 
-            # Enter on folder opens detail for all files in it
+            # Enter on folder opens metadata view for all files in it
             await pilot.press("enter")
             assert app.state == AppState.METADATA
             assert dv.node is node
 
-            # Navigate in detail view
+            # Navigate in metadata view
             await pilot.press("j")
             assert dv.cursor_row == 1
 
@@ -777,9 +777,9 @@ class TestTreeDetailIntegration:
 
 
 @pytest.mark.skipif(not HAS_PILOT, reason="textual pilot not available")
-class TestMultiFileDetailIntegration:
+class TestMultiFileMetadataIntegration:
     @pytest.mark.asyncio()
-    async def test_enter_in_range_opens_multi_detail(self) -> None:
+    async def test_enter_in_range_opens_multi_metadata(self) -> None:
         from tapes.tree_model import FolderNode, TreeModel
         from tapes.ui.tree_app import TreeApp
         from tapes.ui.tree_view import TreeView
@@ -809,7 +809,7 @@ class TestMultiFileDetailIntegration:
             # Start range and select both files
             await pilot.press("v")
             await pilot.press("j")
-            # Enter opens multi-file detail
+            # Enter opens multi-file metadata view
             await pilot.press("enter")
             assert app.state == AppState.METADATA
             assert dv.is_multi is True

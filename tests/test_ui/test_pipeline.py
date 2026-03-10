@@ -575,7 +575,7 @@ class TestRefreshQueryIntegration:
         app = TreeApp(model=model, movie_template=_tmpl, tv_template=_tmpl, config=config_obj)
 
         async with app.run_test() as pilot:
-            # Enter detail via folder
+            # Enter metadata view via folder
             await pilot.press("enter")
             assert app.state == AppState.METADATA
             await pilot.press("r")
@@ -645,8 +645,8 @@ class TestRefreshQueryIntegration:
                 assert len(tmdb) == 1
 
     @pytest.mark.asyncio()
-    async def test_r_in_detail_runs_async_with_progress(self, mock_tmdb) -> None:
-        """Pressing 'r' in detail mode runs refresh asynchronously."""
+    async def test_r_in_metadata_runs_async_with_progress(self, mock_tmdb) -> None:
+        """Pressing 'r' in metadata view runs refresh asynchronously."""
         from tapes.ui.tree_app import TreeApp
 
         node1 = FileNode(
@@ -666,7 +666,7 @@ class TestRefreshQueryIntegration:
         app = TreeApp(model=model, movie_template=_tmpl, tv_template=_tmpl, config=config_obj)
 
         async with app.run_test() as pilot:
-            # Enter multi-detail mode
+            # Enter multi-file metadata view
             await pilot.press("v")
             await pilot.press("j")
             await pilot.press("enter")
@@ -680,13 +680,13 @@ class TestRefreshQueryIntegration:
 
 
 @pytest.mark.skipif(not HAS_PILOT, reason="textual pilot not available")
-class TestMultiDetailAcceptTriggersEpisodeQuery:
-    """Accepting a show match in multi-detail view must trigger episode queries
+class TestMultiMetadataAcceptTriggersEpisodeQuery:
+    """Accepting a show candidate in multi-file metadata view must trigger episode queries
     for ALL files, not just the cursor node."""
 
     @pytest.mark.asyncio()
-    async def test_accept_match_refreshes_all_files(self, mock_tmdb) -> None:
-        """Select 3 episode files, open multi-detail, accept show match.
+    async def test_accept_candidate_refreshes_all_files(self, mock_tmdb) -> None:
+        """Select 3 episode files, open multi-file metadata view, accept show candidate.
         All 3 files should get episode data from the refresh, not just the last."""
         from tapes.ui.tree_app import TreeApp
 
@@ -746,10 +746,10 @@ class TestMultiDetailAcceptTriggersEpisodeQuery:
             await pilot.press("v")
             await pilot.press("j")
             await pilot.press("j")
-            # Open multi-detail view
+            # Open multi-file metadata view
             await pilot.press("enter")
             assert app.state == AppState.METADATA
-            # Accept the match (focus_column defaults to "match")
+            # Accept the candidate (focus_column defaults to "candidate")
             # This writes tmdb_id/title/year/media_type to all 3 nodes
             await pilot.press("enter")
             # Wait for TMDB refresh workers to complete

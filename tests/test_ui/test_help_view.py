@@ -20,10 +20,10 @@ class TestHelpContent:
         plain = "\n".join(line.plain for line in lines)
         assert "File browser" in plain
 
-    def test_contains_detail_section(self) -> None:
+    def test_contains_metadata_section(self) -> None:
         lines = _build_help_content(80)
         plain = "\n".join(line.plain for line in lines)
-        assert "Detail view" in plain
+        assert "Metadata view" in plain
 
     def test_contains_tips_section(self) -> None:
         lines = _build_help_content(80)

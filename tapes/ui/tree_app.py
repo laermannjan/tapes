@@ -35,7 +35,7 @@ from tapes.ui.tree_view import TreeView
 
 logger = logging.getLogger(__name__)
 
-DETAIL_CHROME_LINES = 9
+METADATA_CHROME_LINES = 9
 
 
 def _format_bytes(n: int) -> str:
@@ -232,13 +232,13 @@ class TreeApp(App):
         self._metadata_snapshot = [
             _NodeSnapshot(node, copy.deepcopy(node.metadata), copy.deepcopy(node.candidates), node.staged),
         ]
-        detail = self.query_one(MetadataView)
-        detail.set_node(node)
-        detail.styles.height = len(detail.fields) + DETAIL_CHROME_LINES
-        detail.styles.display = "block"
+        mv = self.query_one(MetadataView)
+        mv.set_node(node)
+        mv.styles.height = len(mv.fields) + METADATA_CHROME_LINES
+        mv.styles.display = "block"
         self.query_one(TreeView).add_class("dimmed")
         self.query_one(BottomBar).styles.display = "none"  # ty: ignore[invalid-assignment]  # Textual RenderStyles setter
-        detail.focus()
+        mv.focus()
 
     def _show_metadata_view_multi(self, nodes: list[FileNode]) -> None:
         """Switch from tree view to metadata view for multiple file nodes."""
@@ -246,19 +246,19 @@ class TreeApp(App):
         self._metadata_snapshot = [
             _NodeSnapshot(n, copy.deepcopy(n.metadata), copy.deepcopy(n.candidates), n.staged) for n in nodes
         ]
-        detail = self.query_one(MetadataView)
-        detail.set_nodes(nodes)
-        detail.styles.height = len(detail.fields) + DETAIL_CHROME_LINES
-        detail.styles.display = "block"
+        mv = self.query_one(MetadataView)
+        mv.set_nodes(nodes)
+        mv.styles.height = len(mv.fields) + METADATA_CHROME_LINES
+        mv.styles.display = "block"
         self.query_one(TreeView).add_class("dimmed")
         self.query_one(BottomBar).styles.display = "none"  # ty: ignore[invalid-assignment]  # Textual RenderStyles setter
-        detail.focus()
+        mv.focus()
 
     def _show_tree(self) -> None:
         """Switch from metadata view back to tree view."""
         self._mode = AppState.TREE
-        detail = self.query_one(MetadataView)
-        detail.styles.display = "none"  # ty: ignore[invalid-assignment]  # Textual RenderStyles setter
+        mv = self.query_one(MetadataView)
+        mv.styles.display = "none"  # ty: ignore[invalid-assignment]  # Textual RenderStyles setter
         tv = self.query_one(TreeView)
         tv.remove_class("dimmed")
         self.query_one(BottomBar).styles.display = "block"
@@ -472,9 +472,9 @@ class TreeApp(App):
         # Capture nodes and whether fields will change BEFORE switching modes.
         # After _show_tree(), the MetadataChanged message would trigger
         # action_refresh_query in TREE mode, which only collects the cursor
-        # node instead of all files from the detail view.
-        detail_nodes = list(dv.file_nodes)
-        needs_refresh = dv.focus_column == "match"
+        # node instead of all files from the metadata view.
+        metadata_nodes = list(dv.file_nodes)
+        needs_refresh = dv.focus_column == "candidate"
 
         dv.accept_focused_column()
 
@@ -487,14 +487,14 @@ class TreeApp(App):
         self._metadata_snapshot = None
         self._show_tree()
 
-        # Trigger TMDB refresh for all detail nodes when fields changed.
+        # Trigger TMDB refresh for all metadata nodes when fields changed.
         # This replaces the stale MetadataChanged -> action_refresh_query path
         # which would only refresh the cursor node after the mode switch.
-        if needs_refresh and self.config.metadata.tmdb_token and detail_nodes and not self._tmdb_querying:
+        if needs_refresh and self.config.metadata.tmdb_token and metadata_nodes and not self._tmdb_querying:
             self._tmdb_querying = True
             self._update_footer()
             self.run_worker(
-                self._run_refresh_worker(detail_nodes),  # ty: ignore[invalid-argument-type]  # Textual WorkType stubs
+                self._run_refresh_worker(metadata_nodes),  # ty: ignore[invalid-argument-type]  # Textual WorkType stubs
                 thread=True,
             )
 
@@ -536,7 +536,7 @@ class TreeApp(App):
         self._update_footer()
 
     def action_tab_forward(self) -> None:
-        """Tab key: open commit preview from tree, cycle sources in detail."""
+        """Tab key: open commit preview from tree, cycle candidates in metadata view."""
         if self._mode == AppState.METADATA:
             dv = self.query_one(MetadataView)
             dv.cycle_candidate(1)
@@ -551,7 +551,7 @@ class TreeApp(App):
         self._show_commit()
 
     def action_start_edit(self) -> None:
-        """e key: start inline edit in detail view."""
+        """e key: start inline edit in metadata view."""
         if self._mode != AppState.METADATA:
             return
         self.query_one(MetadataView).start_edit()
@@ -788,7 +788,7 @@ class TreeApp(App):
             event.stop()
             return
 
-        # Tab key: commit preview from tree, cycle sources in detail
+        # Tab key: commit preview from tree, cycle candidates in metadata view
         # Must be intercepted here because Textual uses tab for focus cycling.
         if event.key == "tab" and self._mode != AppState.TREE_SEARCH:
             self.action_tab_forward()
@@ -892,7 +892,7 @@ class TreeApp(App):
         self._update_footer()
 
     def on_metadata_view_metadata_changed(self, _event: MetadataView.MetadataChanged) -> None:
-        """Auto-refresh TMDB when detail view metadata is edited."""
+        """Auto-refresh TMDB when metadata view fields are edited."""
         if self._tmdb_querying:
             return
         token = self.config.metadata.tmdb_token
@@ -901,7 +901,7 @@ class TreeApp(App):
         self.action_refresh_query()
 
     def _clear_quit_hint(self) -> None:
-        """Clear the quit hint from detail/commit view."""
+        """Clear the quit hint from metadata/commit view."""
         self.query_one(MetadataView).quit_hint = ""
         self.query_one(CommitView).quit_hint = ""
 
