@@ -20,7 +20,7 @@ from textual.events import Key
 
 from tapes.categorize import categorize_staged
 from tapes.config import TapesConfig
-from tapes.fields import MEDIA_TYPE, MEDIA_TYPE_EPISODE
+from tapes.fields import MEDIA_TYPE, MEDIA_TYPE_EPISODE, TMDB_ID
 from tapes.templates import can_fill_template, compute_dest, select_template
 from tapes.tree_model import (
     FileNode,
@@ -886,10 +886,29 @@ class TreeApp(App):
         """Called when all TMDB queries are complete."""
         self._tmdb_querying = False
         if self._mode == AppState.METADATA:
-            self.query_one(MetadataView).refresh()
+            # B1: if a show/movie was auto-accepted (tmdb_id newly set)
+            # while in metadata view, return to tree so the user sees
+            # the result in the destination preview.
+            mv = self.query_one(MetadataView)
+            if self._metadata_snapshot and self._should_return_to_tree(mv):
+                self._metadata_snapshot = None
+                self._show_tree()
+                return
+            mv.refresh()
         else:
             self.query_one(TreeView).refresh()
         self._update_footer()
+
+    def _should_return_to_tree(self, mv: MetadataView) -> bool:
+        """Check if TMDB auto-accept set tmdb_id that wasn't in the snapshot."""
+        if not self._metadata_snapshot:
+            return False
+        for snap in self._metadata_snapshot:
+            old_tmdb_id = snap.metadata.get(TMDB_ID)
+            new_tmdb_id = snap.node.metadata.get(TMDB_ID)
+            if old_tmdb_id is None and new_tmdb_id is not None:
+                return True
+        return False
 
     def on_metadata_view_metadata_changed(self, _event: MetadataView.MetadataChanged) -> None:
         """Auto-refresh TMDB when metadata view fields are edited."""
