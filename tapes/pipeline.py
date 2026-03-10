@@ -30,6 +30,40 @@ DEFAULT_MAX_RESULTS = 3
 logger = logging.getLogger(__name__)
 
 
+def _make_metadata_updater(
+    node: FileNode,
+    fields: dict[str, Any],
+    stage: bool,
+) -> Callable[[], None]:
+    """Create a closure that updates node metadata on the main thread.
+
+    Uses explicit parameters instead of closing over loop variables to avoid
+    late-binding bugs -- each closure captures the values at creation time,
+    not at call time.
+    """
+
+    def _apply() -> None:
+        for field_name, val in fields.items():
+            if val is not None:
+                node.metadata[field_name] = val
+        if stage:
+            node.staged = True
+
+    return _apply
+
+
+def _make_candidates_updater(
+    node: FileNode,
+    candidates: list[Candidate],
+) -> Callable[[], None]:
+    """Create a closure that extends node candidates."""
+
+    def _extend() -> None:
+        node.candidates.extend(candidates)
+
+    return _extend
+
+
 @dataclass
 class PipelineParams:
     """Bundled parameters for pipeline functions."""
@@ -578,24 +612,10 @@ def _query_tmdb_for_node(
                 _stageable = False
 
         # Apply best metadata (always), stage only if template is complete
-        _stage = _stageable
-
-        def _apply_best(_n: FileNode = node, _f: dict = _best_metadata, _s: bool = _stage) -> None:
-            for field, val in _f.items():
-                if val is not None:
-                    _n.metadata[field] = val
-            if _s:
-                _n.staged = True
-
-        _post(_apply_best)
+        _post(_make_metadata_updater(node, _best_metadata, stage=_stageable))
 
         # Always add show/movie-level candidates (invariant #1)
-        _candidates_auto = list(tmdb_candidates)
-
-        def _extend_auto(_n: FileNode = node, _c: list[Candidate] = _candidates_auto) -> None:
-            _n.candidates.extend(_c)
-
-        _post(_extend_auto)
+        _post(_make_candidates_updater(node, list(tmdb_candidates)))
 
         # Stage 2: if TV show, fetch episodes (which add their own candidates)
         if best.metadata.get(MEDIA_TYPE) == MEDIA_TYPE_EPISODE:
@@ -612,12 +632,7 @@ def _query_tmdb_for_node(
         return
 
     # Add show-level TMDB candidates (not episode candidates yet)
-    _candidates_copy = list(tmdb_candidates)
-
-    def _extend_candidates(_n: FileNode = node, _c: list[Candidate] = _candidates_copy) -> None:
-        _n.candidates.extend(_c)
-
-    _post(_extend_candidates)
+    _post(_make_candidates_updater(node, list(tmdb_candidates)))
 
 
 def _query_episodes(
@@ -737,22 +752,7 @@ def _query_episodes(
                 logger.debug("%s: episode auto-accept skipped, template fields incomplete", node.path.name)
                 stage = False
 
-        _stage = stage
-
-        def _apply_episode(
-            _n: FileNode = node, _f: dict = _best_metadata, _top: list[Candidate] = _top_copy, _s: bool = _stage
-        ) -> None:
-            for field, val in _f.items():
-                if val is not None:
-                    _n.metadata[field] = val
-            if _s:
-                _n.staged = True
-            _n.candidates.extend(_top)
-
-        _post(_apply_episode)
+        _post(_make_metadata_updater(node, _best_metadata, stage=stage))
+        _post(_make_candidates_updater(node, _top_copy))
     else:
-
-        def _add_episode_candidates(_n: FileNode = node, _top: list[Candidate] = _top_copy) -> None:
-            _n.candidates.extend(_top)
-
-        _post(_add_episode_candidates)
+        _post(_make_candidates_updater(node, _top_copy))
