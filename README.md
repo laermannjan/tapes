@@ -98,7 +98,7 @@ Once you get the hang of it, most of the work is just confirming what tapes alre
 
 ## Status
 
-Pre-alpha. The import pipeline and TUI work end to end. See [docs/](docs/) for architecture and design documents.
+**Early days.** Tapes works but hasn't seen wide use yet. Expect rough edges.
 
 ## License
 
