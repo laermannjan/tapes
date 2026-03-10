@@ -586,3 +586,27 @@ Remaining gaps (scroll indicator widget tests, `_render_plain` extraction) are
 tracked as future work.
 
 ---
+
+## I43: Stronger templating engine
+**Status:** `open`
+**Priority:** medium
+**Severity:** usability
+**Files:** `tapes/templates.py`
+
+Python's `str.format_map()` only supports the format spec mini-language
+(padding, alignment, number formatting). Users cannot apply transforms like
+lowercase, title case, or slug-style normalization in templates. For example,
+`{title.lower()}` does not work - it looks for a field literally named
+`title.lower()`.
+
+Need to define a good scope based on actual use cases, not arbitrary
+extensibility. Common needs:
+- Case conversion (lower, upper, title)
+- Whitespace normalization (replace spaces with dots or hyphens)
+- Stripping or replacing specific characters
+
+Possible approaches: custom format spec extensions (`{title:lower}`),
+a small set of built-in filters, or a lightweight template engine like
+Jinja2. Evaluate trade-offs between power and complexity before choosing.
+
+---
