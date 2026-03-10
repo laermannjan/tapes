@@ -390,6 +390,13 @@ class TestTemplateValidation:
         cfg = LibraryConfig(movie_template="{title} [{codec}].{ext}")
         assert "{codec}" in cfg.movie_template
 
+    def test_new_semantic_fields_accepted(self) -> None:
+        """Semantic fields split from guessit 'other' are valid in templates."""
+        for field in ("hdr", "three_d", "remux", "edition", "part"):
+            tmpl = f"{{title}} [{{{field}}}].{{ext}}"
+            cfg = LibraryConfig(movie_template=tmpl)
+            assert f"{{{field}}}" in cfg.movie_template
+
     def test_all_known_fields_accepted(self) -> None:
         """Every field in KNOWN_TEMPLATE_FIELDS can be used."""
         from tapes.config import KNOWN_TEMPLATE_FIELDS

@@ -33,9 +33,11 @@ class MetadataConfig(BaseModel):
 
 
 # Known template fields. Templates may only reference these (plus "ext" which
-# is always injected from the file suffix).
+# is always injected from the file suffix).  Includes all guessit fields
+# (after normalization) plus TMDB fields.
 KNOWN_TEMPLATE_FIELDS: frozenset[str] = frozenset(
     {
+        # Core identification
         "title",
         "year",
         "season",
@@ -44,11 +46,32 @@ KNOWN_TEMPLATE_FIELDS: frozenset[str] = frozenset(
         "media_type",
         "tmdb_id",
         "ext",
+        # Technical (normalized from guessit)
         "codec",
         "media_source",
         "audio",
         "resolution",
         "release_group",
+        "audio_channels",
+        "audio_profile",
+        "video_profile",
+        # Semantic (split from guessit "other")
+        "hdr",
+        "three_d",
+        "remux",
+        "other",
+        # Edition / part
+        "edition",
+        "part",
+        # Date (for daily shows)
+        "date",
+        # Alternative title (guessit fallback)
+        "alternative_title",
+        # Language
+        "language",
+        "subtitle_language",
+        # Color depth
+        "color_depth",
     }
 )
 
