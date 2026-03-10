@@ -1,13 +1,12 @@
 # tapes
 
-A command-line tool for organising movie and TV show files. It identifies media
-files by filename, fetches metadata from TMDB, renames and moves them into a
-clean directory structure, and maintains a queryable local library.
+A one-shot CLI tool for organising movie and TV show files. Point it at a
+directory of downloads, it identifies files by filename and TMDB metadata,
+lets you curate the results in an interactive TUI, then copies, moves, or
+links them into a clean library structure. No database, no persistent state
+between runs.
 
-Modelled after [beets](https://beets.io) but for video.
-
-**Status: pre-alpha.** `tapes import --dry-run` works end to end. Most other
-commands are stubbed. See [What works](#what-works).
+**Status: pre-alpha.** The full import pipeline and TUI work end to end.
 
 ---
 
@@ -25,27 +24,22 @@ cd tapes
 uv sync
 ```
 
-Copy and edit the example config:
+Set your TMDB token via environment variable or config file:
 
 ```sh
-cp tapes.toml.example tapes.toml
+export TMDB_TOKEN=your-read-access-token
 ```
 
-Minimal `tapes.toml`:
+Or create `~/.config/tapes/config.yaml` (see `config.example.yaml` for all
+options):
 
-```toml
-[library]
-movies = "~/Media/Movies"
-tv     = "~/Media/TV"
+```yaml
+metadata:
+  tmdb_token: "your-read-access-token"
 
-[metadata]
-tmdb_token = "your-token-here"
-```
-
-Or export the token as an environment variable:
-
-```sh
-export TMDB_TOKEN=your-token-here
+library:
+  movies: /media/movies
+  tv: /media/tv
 ```
 
 ## Usage
@@ -56,73 +50,111 @@ Preview what would be imported without touching any files:
 tapes import /path/to/downloads --dry-run
 ```
 
-Import files (default mode: copy):
+Import files (default operation: copy):
 
 ```sh
 tapes import /path/to/downloads
 ```
 
-Override mode for a single run:
+Override operation for a single run:
 
 ```sh
-tapes import /path/to/downloads --mode move
+tapes import /path/to/downloads --operation move
 ```
 
-Run tests:
+## How it works
 
-```sh
-uv run pytest
-```
+When you run `tapes import`, each file goes through a pipeline of
+identification, curation, and processing. Here is what happens at each step
+and the vocabulary tapes uses.
 
-## What works
+### Scan and extract
 
-- `tapes import --dry-run` — full pipeline: scan, identify (guessit + TMDB),
-  render destination paths, print summary table
-- `tapes import` — copy/move/link/hardlink with SHA-256 verification
-- Identification pipeline: DB cache, NFO scan, guessit, MediaInfo, TMDB
-- Session and operation logging to SQLite
+Tapes walks the input directory and creates a **file node** for every file it
+finds. Each node carries a **metadata** dict -- a set of key-value pairs
+called **fields** (title, year, season, episode, and so on). The initial
+metadata comes from parsing the filename with
+[guessit](https://github.com/guessit-io/guessit), which becomes the first
+**candidate**.
 
-## What is stubbed / not yet implemented
+A candidate is a potential source of metadata. It has a name (like "guessit"
+or "TMDB #1"), its own metadata dict, and a **score** measuring how well it
+matches the file.
 
-- `tapes move` — move already-imported files to a new path
-- `tapes check` — verify files still exist at their recorded paths
-- `tapes modify` — manually update metadata and rename on disk
-- `tapes query` — search the library
-- `tapes info / fields / stats / log` — library introspection commands
-- Interactive mode (disambiguation when confidence is low)
-- Companion file handling (subtitles, artwork, NFO)
-- Pre-flight collision detection
-- Plugin system
+### Search and score
 
-See [docs/plans/2026-03-04-tapes-implementation.md](docs/plans/2026-03-04-tapes-implementation.md)
-for the full task list.
+If a title was extracted, tapes searches TMDB and turns each result into a
+candidate. Each candidate is scored by comparing its metadata against the
+file's existing metadata -- title similarity (fuzzy string matching), year
+proximity, and so on. The score is a float from 0 to 1.
+
+### Auto-accept
+
+Tapes checks whether the top candidate should be accepted automatically. The
+gate has two conditions:
+
+1. The best score must be at least `min_score` (default 0.6).
+2. The best candidate must be **prominent** -- the gap between its score and
+   the runner-up must be at least `min_prominence` (default 0.15).
+
+A single candidate has infinite prominence and always passes. Two candidates
+at 0.99 and 0.98 do *not* auto-accept because the margin is too small -- you
+need to decide.
+
+When a candidate is auto-accepted, its metadata is written into the file
+node's metadata. For TV episodes this triggers a second query to find the
+specific episode (season, episode number, episode title).
+
+### Staging
+
+After metadata is populated, tapes checks whether the file has all the fields
+needed to fill its destination template (movie or TV). If so, the file is
+**staged** -- marked ready to commit. Staged files show a green checkmark in
+the tree.
+
+Files that are missing fields (a question mark in the destination path) cannot
+be staged until you fill in the gaps.
+
+### Curate (the TUI)
+
+The TUI opens as an interactive file tree. From here you can:
+
+- **Browse** the tree with `j`/`k`, collapse folders with `h`/`l`.
+- **Open the metadata view** with `enter` to inspect a file's candidates,
+  compare their metadata side by side, and accept or edit fields.
+- **Stage and unstage** files with `space`.
+- **Commit** with `tab` to preview which files will be processed, then
+  confirm.
+
+Inside the metadata view, you see two columns: the file's current metadata on
+the left and the selected candidate's metadata on the right. Green values are
+additions, amber values are changes. Use `tab` to cycle through candidates,
+`shift+tab` to toggle focus between the metadata and candidate columns, and
+`enter` to accept. Accepting writes the focused candidate's fields into the
+file's metadata and returns to the tree.
+
+If the auto-accept got it wrong or you want to override a field, press `e` to
+edit inline, `backspace` to clear, or `ctrl+r` to reset from the filename.
+
+### Commit
+
+When you are satisfied, press `tab` to open the commit view. It shows a
+summary of staged files grouped by status (ready, conflict, incomplete) and
+the file operation that will run (copy, move, link, or hardlink). Press
+`enter` to execute.
+
+Copies and moves use SHA-256 verification. Moves are implemented as
+copy-verify-delete for safety.
 
 ## Configuration
 
-All options with defaults:
+See `config.example.yaml` for all options with descriptions. Configuration
+is loaded from (highest priority first):
 
-```toml
-[library]
-movies  = ""                                 # required
-tv      = ""                                 # required
-db_path = "~/.local/share/tapes/library.db"
-
-[import]
-mode                 = "copy"   # copy | move | link | hardlink
-confidence_threshold = 0.9
-dry_run              = false
-
-[metadata]
-tmdb_token   = ""               # or set TMDB_TOKEN env var
-
-[templates]
-movie = "{title} ({year})/{title} ({year}){ext}"
-tv    = "{show}/Season {season:02d}/{show} - S{season:02d}E{episode:02d} - {episode_title}{ext}"
-
-[replace]
-": " = " - "
-"/"  = "-"
-```
+1. CLI flags (`--min-score`, `--operation`, etc.)
+2. Environment variables (`TAPES_METADATA__TMDB_TOKEN`, etc.)
+3. Config file (`~/.config/tapes/config.yaml` or `TAPES_CONFIG`)
+4. Defaults
 
 ## License
 
