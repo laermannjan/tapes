@@ -106,6 +106,9 @@ score = 0.7 * title_score + 0.3 * year_score
 - **year_score**: exact = 1.0, off-by-1 = 0.5, else 0.0.
   Missing year = 0.0 (penalized).
 - If `tmdb_id` matches exactly: override title_score to 1.0.
+- **media_type penalty**: if the query's `media_type` and the result's
+  `media_type` disagree, the score is multiplied by `MEDIA_TYPE_PENALTY`
+  (0.7). When they agree or either is absent, no penalty is applied.
 
 ### Episode Similarity (`compute_episode_similarity`)
 
@@ -120,7 +123,12 @@ score = 0.25 * season_match + 0.65 * episode_match + 0.10 * title_match
 
 ### Auto-Accept Gate (`should_auto_accept`)
 
-Single gate with two parameters:
+Before evaluating score thresholds, the pipeline checks that the best
+candidate's `media_type` matches the node's guessit `media_type`. If
+they disagree, auto-accept is skipped entirely. If guessit did not
+extract a `media_type`, the gate is skipped.
+
+When the media-type gate passes, two score conditions are evaluated:
 
 - **min_score**: best candidate's score must be >= `min_score`
   (default 0.6).
@@ -128,7 +136,7 @@ Single gate with two parameters:
   be >= `min_prominence` (default 0.15). A single candidate has
   infinite prominence and always passes this check.
 
-Both conditions must be met. If not, user must accept manually.
+All conditions must be met. If not, user must accept manually.
 
 ---
 
@@ -164,9 +172,11 @@ USER OPENS METADATA VIEW (enter on file or folder)
 
 ## Key Invariants
 
-1. **Candidates are always added.** Every TMDB query populates
-   `node.candidates`, whether auto-accept fires or not. The user
-   must always be able to see what TMDB returned.
+1. **Candidates are always added; cleared on acceptance.** Every TMDB
+   query populates `node.candidates`, whether auto-accept fires or not.
+   The user must always be able to see what TMDB returned. On acceptance
+   (auto or manual), prior candidates are cleared. Episode candidates are
+   added afterward by the subsequent episode query.
 
 2. **Accept and stage are separate.** Auto-accept writes metadata.
    Auto-stage checks template completeness. Neither implies the
