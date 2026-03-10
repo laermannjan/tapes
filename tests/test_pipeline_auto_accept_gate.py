@@ -12,7 +12,7 @@ from pathlib import Path
 import httpx
 import respx
 
-from tapes.fields import MEDIA_TYPE, MEDIA_TYPE_EPISODE, MEDIA_TYPE_MOVIE, TITLE, TMDB_ID, YEAR
+from tapes.fields import MEDIA_TYPE, MEDIA_TYPE_EPISODE, MEDIA_TYPE_MOVIE, SEASON, TITLE, TMDB_ID, YEAR
 from tapes.pipeline import PipelineParams, _query_tmdb_for_node
 from tapes.tmdb import BASE_URL
 from tapes.tree_model import FileNode
@@ -155,3 +155,78 @@ class TestMediaTypeMatchGate:
         assert TMDB_ID not in node.metadata
         # Candidates still populated
         assert len(node.candidates) >= 1
+
+
+def _mock_show_with_close_episodes():
+    """Set up TMDB mocks for a show where two episodes score very closely."""
+    # Two episodes with identical season, different episode numbers.
+    # When the query has no episode number, both get the same score
+    # (season match only = 0.25), so prominence = 0.0.
+    respx.get(f"{BASE_URL}/search/multi").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "results": [
+                    {
+                        "id": 9999,
+                        "media_type": "tv",
+                        "name": "Test Show",
+                        "first_air_date": "2020-01-01",
+                    }
+                ]
+            },
+        )
+    )
+    respx.get(f"{BASE_URL}/tv/9999").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "id": 9999,
+                "name": "Test Show",
+                "first_air_date": "2020-01-01",
+                "seasons": [{"season_number": 1}],
+            },
+        )
+    )
+    respx.get(f"{BASE_URL}/tv/9999/season/1").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "episodes": [
+                    {"episode_number": 1, "name": "Pilot", "season_number": 1},
+                    {"episode_number": 2, "name": "Second", "season_number": 1},
+                ]
+            },
+        )
+    )
+
+
+class TestEpisodeMinProminence:
+    """Verify min_prominence is forwarded to episode auto-accept."""
+
+    @respx.mock
+    def test_zero_min_prominence_accepts_close_episodes(self) -> None:
+        """With min_prominence=0.0, even zero-prominence episodes auto-accept."""
+        _mock_show_with_close_episodes()
+
+        # No episode number -> both episodes score equally -> prominence = 0.0
+        node = _make_node("test.show.s01.mp4", {TITLE: "Test Show", SEASON: 1})
+        params = PipelineParams(token=TOKEN, min_score=0.1, min_prominence=0.0)
+        _query_tmdb_for_node(node, params)
+
+        # With min_prominence=0.0, episode auto-accept should fire
+        assert node.metadata.get("episode_title") is not None
+
+    @respx.mock
+    def test_high_min_prominence_blocks_close_episodes(self) -> None:
+        """With high min_prominence, close episode scores block auto-accept."""
+        _mock_show_with_close_episodes()
+
+        node = _make_node("test.show.s01.mp4", {TITLE: "Test Show", SEASON: 1})
+        params = PipelineParams(token=TOKEN, min_score=0.1, min_prominence=0.5)
+        _query_tmdb_for_node(node, params)
+
+        # With min_prominence=0.5, episode prominence (0.0) is too low -> no auto-accept
+        assert node.metadata.get("episode_title") is None
+        # But candidates should be populated
+        assert len(node.candidates) > 0
