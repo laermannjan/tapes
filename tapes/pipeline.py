@@ -137,11 +137,15 @@ def _resolve_params(
     )
 
 
+_FETCH_FAILED = object()
+
+
 class _TmdbCache:
     """Thread-safe cache for TMDB API responses.
 
     If multiple threads request the same key, only one fetches;
-    the others block until the result is ready.
+    the others block until the result is ready.  When the fetcher
+    fails, waiting threads receive ``None`` instead of crashing.
     """
 
     def __init__(self) -> None:
@@ -152,7 +156,8 @@ class _TmdbCache:
     def get_or_fetch(self, key: tuple, fetch_fn: Callable[[], Any]) -> Any:
         with self._lock:
             if key in self._data:
-                return self._data[key]
+                val = self._data[key]
+                return None if val is _FETCH_FAILED else val
             if key in self._pending:
                 # Another thread is already fetching this key
                 event = self._pending[key]
@@ -166,20 +171,19 @@ class _TmdbCache:
         if not is_fetcher:
             event.wait()
             with self._lock:
-                if key in self._data:
-                    return self._data[key]
-            # Fetch failed for this key
-            raise KeyError(f"Fetch failed for {key}")
+                val = self._data.get(key, _FETCH_FAILED)
+                return None if val is _FETCH_FAILED else val
 
         # We are the fetcher
         try:
             result = fetch_fn()
             with self._lock:
                 self._data[key] = result
-        except Exception:
+        except Exception:  # noqa: BLE001
+            logger.warning("TMDB cache fetch failed for %s", key[0] if key else key)
             with self._lock:
-                del self._pending[key]  # allow retry
-            raise
+                self._data[key] = _FETCH_FAILED
+            return None
         else:
             return result
         finally:
@@ -624,13 +628,11 @@ def _query_tmdb_for_node(
     # media_type disagrees with the node's guessit media_type.
     node_media_type = node.metadata.get(MEDIA_TYPE)
     best_media_type = best.metadata.get(MEDIA_TYPE)
-    media_type_compatible = (
-        node_media_type is None
-        or best_media_type is None
-        or node_media_type == best_media_type
-    )
+    media_type_compatible = node_media_type is None or best_media_type is None or node_media_type == best_media_type
 
-    if media_type_compatible and should_auto_accept(similarities, min_score=params.min_score, min_prominence=params.min_prominence):
+    if media_type_compatible and should_auto_accept(
+        similarities, min_score=params.min_score, min_prominence=params.min_prominence
+    ):
         # Snapshot before dispatching -- the dict may be mutated later
         _best_metadata = dict(best.metadata)
 
@@ -741,7 +743,7 @@ def _query_episodes(
                 max_retries=params.tmdb_retries,
             )
 
-        for ep in episodes:
+        for ep in episodes or []:
             sim = compute_episode_similarity(node.metadata, ep)
             cand = Candidate(
                 name=f"TMDB #{len(all_episode_candidates) + 1}",
@@ -759,7 +761,7 @@ def _query_episodes(
     ep_similarities = [c.score for c in top_candidates]
     _top_copy = list(top_candidates)
 
-    if should_auto_accept(ep_similarities, min_score=params.min_score):
+    if should_auto_accept(ep_similarities, min_score=params.min_score, min_prominence=params.min_prominence):
         _best_metadata = dict(top_candidates[0].metadata)
 
         stage = True

@@ -775,8 +775,8 @@ class TestMultiMetadataAcceptTriggersEpisodeQuery:
 
 
 class TestTmdbCache:
-    def test_exception_does_not_deadlock(self) -> None:
-        """If fetch_fn raises, waiting threads should not hang."""
+    def test_failure_returns_none_not_deadlock(self) -> None:
+        """If fetch_fn raises, waiting threads get None (not deadlock)."""
         import threading
 
         from tapes.pipeline import _TmdbCache
@@ -786,23 +786,22 @@ class TestTmdbCache:
         def bad_fetch():
             raise RuntimeError("TMDB down")
 
-        # First call should raise
-        with pytest.raises(RuntimeError):
-            cache.get_or_fetch(("key",), bad_fetch)
+        # First call returns None on failure
+        result = cache.get_or_fetch(("key",), bad_fetch)
+        assert result is None
 
-        # Second call with same key should also raise (not deadlock)
-        results: list[str] = []
+        # Second call with same key also returns None (not deadlock)
+        results: list[object] = []
 
         def try_fetch():
-            try:
-                cache.get_or_fetch(("key",), bad_fetch)
-            except (RuntimeError, KeyError):
-                results.append("raised")
+            r = cache.get_or_fetch(("key",), bad_fetch)
+            results.append(r)
 
         t = threading.Thread(target=try_fetch)
         t.start()
         t.join(timeout=2.0)
         assert not t.is_alive(), "Thread deadlocked waiting for failed fetch"
+        assert results == [None]
 
 
 class TestExtractGuessitFields:
