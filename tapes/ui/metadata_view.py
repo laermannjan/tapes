@@ -13,6 +13,9 @@ from textual.reactive import reactive
 from textual.widget import Widget
 
 from tapes.fields import EPISODE, INT_FIELDS, MEDIA_TYPE, MEDIA_TYPE_EPISODE, SEASON, TMDB_ID
+
+# Fields displayed for context but not directly editable by the user.
+_READ_ONLY_FIELDS: frozenset[str] = frozenset({MEDIA_TYPE})
 from tapes.templates import compute_dest, select_template
 from tapes.tree_model import FileNode, compute_shared_fields
 from tapes.ui.colors import COLOR_ACCENT, COLOR_COLUMN_FOCUS_BG, COLOR_CURSOR_BG, COLOR_MUTED
@@ -88,17 +91,25 @@ class MetadataView(Widget):
         shared = self._shared_result()
         return shared.get(TMDB_ID) is not None and shared.get(MEDIA_TYPE) == MEDIA_TYPE_EPISODE
 
+    def _initial_cursor_row(self) -> int:
+        """Return the index of ``title`` in the field list, or 0."""
+        try:
+            return self.fields.index("title")
+        except ValueError:
+            return 0
+
     def on_mount(self) -> None:
         self.fields = get_display_fields(self._active_template())
+        self.cursor_row = self._initial_cursor_row()
 
     def set_node(self, node: FileNode) -> None:
         """Switch to a new file node, resetting cursor and edit state."""
         self.node = node
         self.file_nodes = [node]
-        self.cursor_row = 0
         self.candidate_index = 0
         self.focus_column = "candidate"
         self.fields = get_display_fields(self._active_template(node))
+        self.cursor_row = self._initial_cursor_row()
         self.editing = False
         self.refresh()
 
@@ -108,10 +119,10 @@ class MetadataView(Widget):
             return
         self.file_nodes = list(nodes)
         self.node = nodes[0]
-        self.cursor_row = 0
         self.candidate_index = 0
         self.focus_column = "candidate"
         self.fields = get_display_fields(self._active_template(self.node))
+        self.cursor_row = self._initial_cursor_row()
         self.editing = False
         self.refresh()
 
@@ -390,6 +401,8 @@ class MetadataView(Widget):
         if self.cursor_row < 0:
             return
         field_name = self.fields[self.cursor_row]
+        if field_name in _READ_ONLY_FIELDS:
+            return
         shared = self._shared_result()
         current = shared.get(field_name)
         if is_multi_value(current):
@@ -424,6 +437,8 @@ class MetadataView(Widget):
         if self.editing:
             return
         field_name = self.fields[self.cursor_row]
+        if field_name in _READ_ONLY_FIELDS:
+            return
         for n in self.file_nodes:
             n.metadata.pop(field_name, None)
         self.refresh()

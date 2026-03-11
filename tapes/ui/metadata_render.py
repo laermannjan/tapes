@@ -11,14 +11,12 @@ from tapes.ui.colors import COLOR_ADDITION, COLOR_DIFF, COLOR_MUTED
 def get_display_fields(template: str) -> list[str]:
     """Fields to show in the metadata grid, derived from template.
 
-    Always includes ``tmdb_id`` as the first field. Extracts remaining
-    field names from ``{field}`` placeholders and excludes ``ext``
-    (which is always derived from the file extension, not user-editable).
+    Always starts with ``media_type`` (read-only context) and ``tmdb_id``,
+    followed by remaining field names from ``{field}`` placeholders.
+    ``ext`` is excluded (always derived from the file extension).
     """
-    fields = [f for f in template_field_names(template) if f != "ext"]
-    if "tmdb_id" not in fields:
-        fields.insert(0, "tmdb_id")
-    return fields
+    fields = [f for f in template_field_names(template) if f not in ("ext", "media_type", "tmdb_id")]
+    return ["media_type", "tmdb_id", *fields]
 
 
 def display_val(val: Any) -> str:

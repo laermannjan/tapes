@@ -59,27 +59,29 @@ def _make_node() -> FileNode:
 class TestGetDisplayFields:
     def test_extracts_fields_from_template(self) -> None:
         fields = get_display_fields(TEMPLATE)
-        assert fields == ["tmdb_id", "title", "year", "season", "episode"]
+        assert fields == ["media_type", "tmdb_id", "title", "year", "season", "episode"]
 
-    def test_tmdb_id_always_first(self) -> None:
+    def test_media_type_and_tmdb_id_always_first(self) -> None:
         fields = get_display_fields("{title}/{year}")
-        assert fields[0] == "tmdb_id"
+        assert fields[0] == "media_type"
+        assert fields[1] == "tmdb_id"
 
-    def test_tmdb_id_not_duplicated_if_in_template(self) -> None:
-        fields = get_display_fields("{tmdb_id}/{title}")
+    def test_fixed_fields_not_duplicated(self) -> None:
+        fields = get_display_fields("{tmdb_id}/{media_type}/{title}")
         assert fields.count("tmdb_id") == 1
+        assert fields.count("media_type") == 1
 
     def test_excludes_ext(self) -> None:
         fields = get_display_fields("{title}.{ext}")
         assert "ext" not in fields
-        assert fields == ["tmdb_id", "title"]
+        assert fields == ["media_type", "tmdb_id", "title"]
 
     def test_empty_template(self) -> None:
-        assert get_display_fields("no_fields_here") == ["tmdb_id"]
+        assert get_display_fields("no_fields_here") == ["media_type", "tmdb_id"]
 
     def test_handles_format_specs(self) -> None:
         fields = get_display_fields("{season:02d}")
-        assert fields == ["tmdb_id", "season"]
+        assert fields == ["media_type", "tmdb_id", "season"]
 
 
 # --- display_val ---
@@ -108,32 +110,32 @@ class TestMetadataViewCursor:
         view = MetadataView(node, TEMPLATE, TEMPLATE)
         # Simulate on_mount
         view.fields = get_display_fields(TEMPLATE)
+        view.cursor_row = view._initial_cursor_row()
         return view
 
     def test_initial_position(self) -> None:
         view = self._make_view()
-        assert view.cursor_row == 0
+        assert view.cursor_row == 2  # starts on title
         assert view.candidate_index == 0
 
     def test_move_cursor_row_down(self) -> None:
         view = self._make_view()
         view.move_cursor(row_delta=1)
-        assert view.cursor_row == 1
+        assert view.cursor_row == 3  # year
 
     def test_move_cursor_row_up_clamps_at_zero(self) -> None:
         view = self._make_view()
-        # Start at row 0, move up twice
-        view.move_cursor(row_delta=-1)
+        # Move up past media_type to 0
+        for _ in range(5):
+            view.move_cursor(row_delta=-1)
         assert view.cursor_row == 0  # clamped at 0
-        view.move_cursor(row_delta=-1)
-        assert view.cursor_row == 0
 
     def test_move_cursor_row_down_clamps_at_max(self) -> None:
         view = self._make_view()
-        # Fields: tmdb_id, title, year, season, episode => max row = 4
+        # Fields: media_type, tmdb_id, title, year, season, episode => max row = 5
         for _ in range(10):
             view.move_cursor(row_delta=1)
-        assert view.cursor_row == 4
+        assert view.cursor_row == 5
 
     def test_cycle_candidate_right(self) -> None:
         view = self._make_view()
@@ -164,7 +166,7 @@ class TestMetadataViewCursor:
         view = self._make_view()
         view.editing = True
         view.move_cursor(row_delta=1)
-        assert view.cursor_row == 0
+        assert view.cursor_row == 2  # stays on title
 
     def test_cycle_candidate_noop_when_editing(self) -> None:
         view = self._make_view()
@@ -185,8 +187,7 @@ class TestMetadataViewEditing:
 
     def test_start_edit_populates_value(self) -> None:
         view = self._make_view()
-        # tmdb_id is now at index 0; title is at index 1
-        view.cursor_row = 1  # title
+        view.cursor_row = 2  # title (media_type=0, tmdb_id=1)
         view.start_edit()
         assert view.editing is True
         assert view.edit_value == "Breaking Bad"
@@ -194,13 +195,19 @@ class TestMetadataViewEditing:
     def test_start_edit_none_value(self) -> None:
         view = self._make_view()
         view.node.metadata.pop("title", None)
-        view.cursor_row = 1  # title
+        view.cursor_row = 2  # title
         view.start_edit()
         assert view.edit_value == ""
 
+    def test_start_edit_noop_on_read_only_field(self) -> None:
+        view = self._make_view()
+        view.cursor_row = 0  # media_type (read-only)
+        view.start_edit()
+        assert view.editing is False
+
     def test_apply_edit_updates_result(self) -> None:
         view = self._make_view()
-        view.cursor_row = 1  # title (tmdb_id is at 0)
+        view.cursor_row = 2  # title
         view.start_edit()
         view.edit_value = "Better Call Saul"
         view.apply_edit()
@@ -209,7 +216,7 @@ class TestMetadataViewEditing:
 
     def test_apply_edit_int_coercion_year(self) -> None:
         view = self._make_view()
-        view.cursor_row = 2  # year (tmdb_id is at 0)
+        view.cursor_row = 3  # year
         view.start_edit()
         view.edit_value = "2015"
         view.apply_edit()
@@ -218,7 +225,7 @@ class TestMetadataViewEditing:
 
     def test_apply_edit_int_coercion_season(self) -> None:
         view = self._make_view()
-        view.cursor_row = 3  # season (tmdb_id is at 0)
+        view.cursor_row = 4  # season
         view.start_edit()
         view.edit_value = "3"
         view.apply_edit()
@@ -227,7 +234,7 @@ class TestMetadataViewEditing:
 
     def test_apply_edit_int_coercion_episode(self) -> None:
         view = self._make_view()
-        view.cursor_row = 4  # episode (tmdb_id is at 0)
+        view.cursor_row = 5  # episode
         view.start_edit()
         view.edit_value = "10"
         view.apply_edit()
@@ -235,7 +242,7 @@ class TestMetadataViewEditing:
 
     def test_apply_edit_invalid_int_stays_string(self) -> None:
         view = self._make_view()
-        view.cursor_row = 2  # year (tmdb_id is at 0)
+        view.cursor_row = 3  # year
         view.start_edit()
         view.edit_value = "not_a_number"
         view.apply_edit()
@@ -243,7 +250,7 @@ class TestMetadataViewEditing:
 
     def test_cancel_edit_discards_changes(self) -> None:
         view = self._make_view()
-        view.cursor_row = 1  # title (tmdb_id is at 0)
+        view.cursor_row = 2  # title
         view.start_edit()
         view.edit_value = "Something Else"
         view.cancel_edit()
@@ -259,7 +266,7 @@ class TestMetadataViewSetNode:
         node = _make_node()
         view = MetadataView(node, TEMPLATE, TEMPLATE)
         view.fields = get_display_fields(TEMPLATE)
-        view.cursor_row = 2
+        view.cursor_row = 4
         view.candidate_index = 1
         view.editing = True
 
@@ -269,7 +276,7 @@ class TestMetadataViewSetNode:
         )
         view.set_node(new_node)
         assert view.node is new_node
-        assert view.cursor_row == 0
+        assert view.cursor_row == 2  # starts on title
         assert view.candidate_index == 0
         assert view.editing is False
 
@@ -278,7 +285,7 @@ class TestMetadataViewSetNode:
         view = MetadataView(node, TEMPLATE, TEMPLATE)
         view.fields = []
         view.set_node(node)
-        assert len(view.fields) == 5  # tmdb_id, title, year, season, episode
+        assert len(view.fields) == 6  # media_type, tmdb_id, title, year, season, episode
 
 
 # --- MetadataView.accept_current_candidate ---
@@ -385,7 +392,7 @@ class TestMultiFileMetadataView:
 
     def test_editing_applies_to_all_nodes(self) -> None:
         view, node1, node2 = self._make_multi_view()
-        view.cursor_row = 1  # title (tmdb_id is at 0)
+        view.cursor_row = 2  # title (media_type=0, tmdb_id=1)
         view.start_edit()
         view.edit_value = "Better Call Saul"
         view.apply_edit()
@@ -407,18 +414,18 @@ class TestMultiFileMetadataView:
 
     def test_set_nodes_resets_cursor(self) -> None:
         view, _, _ = self._make_multi_view()
-        view.cursor_row = 2
+        view.cursor_row = 4
         view.candidate_index = 1
         new_node = FileNode(path=Path("/x.mkv"), metadata={"title": "X"})
         view.set_nodes([new_node])
-        assert view.cursor_row == 0
+        assert view.cursor_row == 2  # starts on title
         assert view.candidate_index == 0
         assert not view.is_multi
 
     def test_edit_various_field_starts_empty(self) -> None:
         view, _, _ = self._make_multi_view()
         # episode is (2 values) -- multi-value marker
-        view.cursor_row = 4  # episode (tmdb_id at 0)
+        view.cursor_row = 5  # episode (media_type=0, tmdb_id=1)
         view.start_edit()
         assert view.edit_value == ""
 
@@ -495,6 +502,17 @@ class TestClearField:
         dv.cursor_row = dv.fields.index("title")
         dv.clear_field()
         assert "title" not in node.metadata
+
+    def test_clear_field_noop_on_read_only_field(self) -> None:
+        node = FileNode(
+            path=Path("/media/Inception.2010.mkv"),
+            metadata={"title": "Inception", "year": 2010, "media_type": "movie"},
+        )
+        dv = MetadataView(node, MOVIE_TPL, TV_TPL)
+        dv.fields = get_display_fields(dv._active_template())
+        dv.cursor_row = dv.fields.index("media_type")
+        dv.clear_field()
+        assert node.metadata["media_type"] == "movie"
 
     def test_clear_field_noop_during_edit(self) -> None:
         node = FileNode(
@@ -767,9 +785,9 @@ class TestTreeMetadataIntegration:
             assert app.state == AppState.METADATA
             assert dv.node is node
 
-            # Navigate in metadata view
+            # Navigate in metadata view (starts on title=2, j moves to year=3)
             await pilot.press("j")
-            assert dv.cursor_row == 1
+            assert dv.cursor_row == 3
 
             # Escape returns to tree
             await pilot.press("escape")
