@@ -156,7 +156,7 @@ class TreeView(Widget):
             max_width = max(max_width, width)
         inner_width = self.size.width  # self.size is already the content area
         max_allowed = inner_width // 2
-        return min(max_width + 3, max_allowed)
+        return min(max_width + 4, max_allowed)
 
     def render(self) -> RenderableType:
         """Render the visible window of the tree with cursor highlighting."""

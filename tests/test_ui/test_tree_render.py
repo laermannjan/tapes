@@ -132,7 +132,7 @@ class TestRenderFileRow:
         )
         row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
         plain = row.plain
-        assert "\u2713" in plain
+        assert "\u25c9" in plain
         assert "Inception (2010)/Inception (2010).mkv" in plain
 
     def test_unstaged_file(self) -> None:
@@ -508,19 +508,19 @@ class TestReadyToStageIndicator:
         node.metadata = {"media_type": "movie", "title": "Inception", "year": 2010}
         node.staged = True
         row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
-        assert "\u2713" in row.plain  # check mark
+        assert "\u25c9" in row.plain  # filled circle
 
     def test_ready_file_shows_hollow_square(self) -> None:
         node = FileNode(path=Path("movie.mkv"))
         node.metadata = {"media_type": "movie", "title": "Inception", "year": 2010}
         node.staged = False
         row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
-        assert "\u2610" in row.plain  # hollow square
+        assert "\u25cb" in row.plain  # empty circle
 
     def test_incomplete_file_shows_no_indicator(self) -> None:
         node = FileNode(path=Path("movie.mkv"))
         node.metadata = {"media_type": "movie", "title": "Inception"}  # no year
         node.staged = False
         row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
-        assert "\u2713" not in row.plain
-        assert "\u2610" not in row.plain
+        assert "\u25c9" not in row.plain
+        assert "\u25cb" in row.plain  # empty circle in warning color

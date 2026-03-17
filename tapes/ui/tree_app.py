@@ -681,7 +681,7 @@ class TreeApp(App):
         self.notify(f"Cancelled ({done}/{total} files processed)")
 
     def action_refresh_query(self) -> None:
-        if self._mode in _MODAL_STATES:
+        if self._mode in _MODAL_STATES or self._mode == AppState.METADATA:
             return
         if self._tmdb_querying:
             return  # Already querying
@@ -689,17 +689,14 @@ class TreeApp(App):
         if not self.config.metadata.tmdb_token:
             return
 
-        if self._mode == AppState.METADATA:
-            nodes = list(self.query_one(MetadataView).file_nodes)
+        tv = self.query_one(TreeView)
+        if tv.in_range_mode:
+            selected = tv.selected_nodes()
+            nodes = [n for n in selected if isinstance(n, FileNode)]
+            tv.clear_range_select()
         else:
-            tv = self.query_one(TreeView)
-            if tv.in_range_mode:
-                selected = tv.selected_nodes()
-                nodes = [n for n in selected if isinstance(n, FileNode)]
-                tv.clear_range_select()
-            else:
-                node = tv.cursor_node()
-                nodes = [node] if isinstance(node, FileNode) else []
+            node = tv.cursor_node()
+            nodes = [node] if isinstance(node, FileNode) else []
 
         if not nodes:
             return
@@ -899,7 +896,7 @@ class TreeApp(App):
             self.query_one(TreeView).refresh()
         self._update_footer()
 
-    def _should_return_to_tree(self, mv: MetadataView) -> bool:
+    def _should_return_to_tree(self, mv: MetadataView) -> bool:  # noqa: ARG002
         """Check if TMDB auto-accept set tmdb_id that wasn't in the snapshot."""
         if not self._metadata_snapshot:
             return False

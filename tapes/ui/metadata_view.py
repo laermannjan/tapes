@@ -13,25 +13,25 @@ from textual.reactive import reactive
 from textual.widget import Widget
 
 from tapes.fields import EPISODE, INT_FIELDS, MEDIA_TYPE, MEDIA_TYPE_EPISODE, SEASON, TMDB_ID
-
-# Fields displayed for context but not directly editable by the user.
-_READ_ONLY_FIELDS: frozenset[str] = frozenset({MEDIA_TYPE})
-from tapes.templates import compute_dest, select_template
+from tapes.templates import select_template
 from tapes.tree_model import FileNode, compute_shared_fields
-from tapes.ui.colors import COLOR_ACCENT, COLOR_COLUMN_FOCUS_BG, COLOR_CURSOR_BG, COLOR_MUTED
+from tapes.ui.colors import COLOR_ACCENT, COLOR_COLUMN_FOCUS_BG, COLOR_CURSOR_BG, COLOR_MISSING, COLOR_MUTED, LAVENDER
 from tapes.ui.metadata_render import (
     diff_style,
     display_val,
     get_display_fields,
     is_multi_value,
 )
-from tapes.ui.tree_render import render_dest, render_separator
+from tapes.ui.tree_render import render_dest_from_template, render_separator
+
+# Fields displayed for context but not directly editable by the user.
+_READ_ONLY_FIELDS: frozenset[str] = frozenset({MEDIA_TYPE})
 
 if TYPE_CHECKING:
     from rich.console import RenderableType
 
 # Column gap between field names, values, and candidate values.
-COL_GAP = "   "
+COL_GAP = "  "
 
 
 class MetadataView(Widget):
@@ -98,8 +98,12 @@ class MetadataView(Widget):
         except ValueError:
             return 0
 
+    def _metadata_keys(self) -> set[str]:
+        """Collect all metadata keys across current file nodes."""
+        return {k for n in self.file_nodes for k in n.metadata}
+
     def on_mount(self) -> None:
-        self.fields = get_display_fields(self._active_template())
+        self.fields = get_display_fields(self._active_template(), self._metadata_keys())
         self.cursor_row = self._initial_cursor_row()
 
     def set_node(self, node: FileNode) -> None:
@@ -108,7 +112,7 @@ class MetadataView(Widget):
         self.file_nodes = [node]
         self.candidate_index = 0
         self.focus_column = "candidate"
-        self.fields = get_display_fields(self._active_template(node))
+        self.fields = get_display_fields(self._active_template(node), set(node.metadata.keys()))
         self.cursor_row = self._initial_cursor_row()
         self.editing = False
         self.refresh()
@@ -121,7 +125,10 @@ class MetadataView(Widget):
         self.node = nodes[0]
         self.candidate_index = 0
         self.focus_column = "candidate"
-        self.fields = get_display_fields(self._active_template(self.node))
+        self.fields = get_display_fields(
+            self._active_template(self.node),
+            {k for n in nodes for k in n.metadata},
+        )
         self.cursor_row = self._initial_cursor_row()
         self.editing = False
         self.refresh()
@@ -181,11 +188,13 @@ class MetadataView(Widget):
 
         return (label_w, val_w, cand_w)
 
+    _COL_PAD = len(COL_GAP)
+
     def _col(self, text: str, width: int) -> str:
-        """Pad or truncate text to width."""
+        """Pad or truncate text to width, with trailing padding for highlights."""
         if len(text) > width:
-            return text[: width - 1] + "\u2026"
-        return text.ljust(width)
+            text = text[: width - 1] + "\u2026"
+        return text.ljust(width + self._COL_PAD)
 
     def _build_content(self, inner_width: int) -> list[Text]:
         """Render the full metadata view with separator and footer hints."""
@@ -235,8 +244,17 @@ class MetadataView(Widget):
             for idx, cand in enumerate(candidates):
                 if idx > 0:
                     line.append("  ")
+                cand_type = cand.metadata.get(MEDIA_TYPE, "")
+                if cand_type == "movie":
+                    type_label = "Movie"
+                elif cand_type == "episode" and EPISODE in cand.metadata:
+                    type_label = "Episode"
+                elif cand_type == "episode":
+                    type_label = "Series"
+                else:
+                    type_label = "TMDB"
                 conf = f" [{cand.score:.0%}]" if cand.score else ""
-                tab_text = f" TMDB #{idx + 1}{conf} "
+                tab_text = f" {type_label} #{idx + 1}{conf} "
                 if idx == self.candidate_index:
                     line.append(tab_text, style=f"on {COLOR_ACCENT} #000000")
                 else:
@@ -255,11 +273,11 @@ class MetadataView(Widget):
     def _render_path_line(self) -> Text:
         """Render single file: path -> destination on one line."""
         line = Text()
-        line.append(f"    {self._display_path(self.node)}")
+        line.append("    ")
+        line.append(self._display_path(self.node), style=LAVENDER)
         line.append("  ")
         line.append("\u2192 ", style=COLOR_MUTED)
-        dest = compute_dest(self.node, self._active_template())
-        line.append_text(render_dest(dest))
+        line.append_text(render_dest_from_template(self.node, self._active_template()))
         return line
 
     def _render_multi_path_line(self) -> Text:
@@ -268,15 +286,15 @@ class MetadataView(Widget):
         line = Text()
         line.append(f"    {count} files selected", style="bold")
 
-        dests: set[str] = set()
-        for n in self.file_nodes:
-            d = compute_dest(n, self._active_template(n))
-            dests.add(d or "???")
-
         line.append("  ")
         line.append("\u2192 ", style=COLOR_MUTED)
-        if len(dests) == 1:
-            line.append_text(render_dest(dests.pop()))
+        # Use first node for rendering when all destinations are identical.
+        first = render_dest_from_template(self.file_nodes[0], self._active_template(self.file_nodes[0]))
+        all_same = all(
+            render_dest_from_template(n, self._active_template(n)).plain == first.plain for n in self.file_nodes[1:]
+        )
+        if all_same:
+            line.append_text(first)
         else:
             line.append("(various destinations)", style=COLOR_MUTED)
         return line
@@ -292,8 +310,9 @@ class MetadataView(Widget):
             )
         hints = (
             "    enter to accept \u00b7 esc to discard"
-            " \u00b7 e to edit \u00b7 tab/shift+tab to cycle candidates"
-            " \u00b7 r to refresh \u00b7 ctrl+r to reset from filename"
+            " \u00b7 e to edit \u00b7 backspace to clear"
+            " \u00b7 shift+tab for column"
+            " \u00b7 ctrl+r to reset"
         )
         return Text(hints, style=f"italic {COLOR_MUTED}")
 
@@ -315,30 +334,37 @@ class MetadataView(Widget):
 
         label = f"    {field_name:<{label_w - 4}}"
         line.append(label, style=COLOR_MUTED)
-        line.append(COL_GAP)
+
+        meta_focus = self.focus_column == "metadata"
+        meta_bg = f" {COLOR_COLUMN_FOCUS_BG}" if meta_focus else ""
+
+        # Gap before metadata column - highlighted when metadata is focused.
+        line.append(COL_GAP, style=COLOR_COLUMN_FOCUS_BG if meta_focus else "")
 
         meta_raw = shared.get(field_name)
         if self.editing and is_cursor:
             edit_display = self.edit_value + "\u2588"
-            line.append(self._col(edit_display, val_w), style="underline")
+            line.append(self._col(edit_display, val_w), style=f"underline{meta_bg}")
+        elif meta_raw is None:
+            line.append(self._col("???", val_w), style=f"{COLOR_MISSING}{meta_bg}")
         else:
             meta_val = display_val(meta_raw)
             val_style = "bold" if is_cursor else ""
-            if self.focus_column == "metadata":
-                val_style += f" {COLOR_COLUMN_FOCUS_BG}"
-            line.append(self._col(meta_val, val_w), style=val_style)
+            line.append(self._col(meta_val, val_w), style=f"{val_style}{meta_bg}")
 
         if candidates and cand_w > 0 and self.candidate_index < len(candidates):
             cand = candidates[self.candidate_index]
             cand_raw = cand.metadata.get(field_name)
-            cand_val = display_val(cand_raw)
+            cand_val = display_val(cand_raw, missing="")
 
-            line.append(COL_GAP)
+            cand_focus = self.focus_column == "candidate"
+            cand_bg = f" {COLOR_COLUMN_FOCUS_BG}" if cand_focus else ""
+
+            # Gap before candidate column - highlighted when candidate is focused.
+            line.append(COL_GAP, style=COLOR_COLUMN_FOCUS_BG if cand_focus else "")
 
             base_style = "dim" if is_multi_value(meta_raw) else diff_style(meta_raw, cand_raw)
-            if self.focus_column == "candidate":
-                base_style += f" {COLOR_COLUMN_FOCUS_BG}"
-            line.append(self._col(cand_val, cand_w), style=base_style)
+            line.append(self._col(cand_val, cand_w), style=f"{base_style}{cand_bg}")
 
         if is_cursor and inner_width > 0:
             plain_len = len(line.plain)

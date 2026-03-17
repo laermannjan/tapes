@@ -99,6 +99,17 @@ def _sanitize_field(value: Any) -> Any:
     return result.strip(". _")
 
 
+def prepare_template_fields(node: FileNode) -> dict[str, Any]:
+    """Build a sanitized field dict from a node's metadata for template rendering.
+
+    Applies filename-safe sanitization to string values and adds the ``ext``
+    field from the file suffix.
+    """
+    fields: dict[str, Any] = {k: _sanitize_field(v) for k, v in node.metadata.items()}
+    fields["ext"] = full_extension(node.path)
+    return fields
+
+
 def can_fill_template(node: FileNode, merged_result: dict, movie_template: str, tv_template: str) -> bool:
     """Check if *merged_result* has all fields needed to fill the destination template.
 
@@ -123,8 +134,7 @@ def compute_dest(node: FileNode, template: str) -> str | None:
     String field values are sanitized to remove characters that are illegal
     in filenames (``/ \\ : * ? " < > |`` and control characters).
     """
-    fields: dict[str, Any] = {k: _sanitize_field(v) for k, v in node.metadata.items()}
-    fields["ext"] = full_extension(node.path)
+    fields = prepare_template_fields(node)
 
     needed = template_field_names(template)
     missing = [f for f in needed if fields.get(f) is None]

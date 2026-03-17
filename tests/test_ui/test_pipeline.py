@@ -563,7 +563,7 @@ class TestRefreshQueryIntegration:
             assert node.staged is True
 
     @pytest.mark.asyncio()
-    async def test_r_in_detail_refreshes_current_node(self, mock_tmdb) -> None:
+    async def test_r_in_detail_is_ignored(self, mock_tmdb) -> None:
         from tapes.ui.tree_app import TreeApp
 
         node = FileNode(
@@ -584,10 +584,9 @@ class TestRefreshQueryIntegration:
             assert app.state == AppState.METADATA
             await pilot.press("r")
             await app.workers.wait_for_complete()
-            # A3: auto-accept fires for Arrival (movie), clearing candidates
+            # r is ignored in metadata view - no TMDB refresh
             assert len(node.candidates) == 0
-            assert node.metadata.get("tmdb_id") == 329865
-            assert node.metadata.get("year") == 2016
+            assert node.metadata.get("tmdb_id") is None
 
     @pytest.mark.asyncio()
     async def test_r_in_tree_range_refreshes_all(self, mock_tmdb) -> None:
@@ -621,7 +620,7 @@ class TestRefreshQueryIntegration:
                 assert n.staged is True
 
     @pytest.mark.asyncio()
-    async def test_r_in_multi_detail_refreshes_all_nodes(self, mock_tmdb) -> None:
+    async def test_r_in_multi_detail_is_ignored(self, mock_tmdb) -> None:
         from tapes.ui.tree_app import TreeApp
 
         node1 = FileNode(
@@ -647,15 +646,14 @@ class TestRefreshQueryIntegration:
             assert app.state == AppState.METADATA
             await pilot.press("r")
             await app.workers.wait_for_complete()
-            # A3: auto-accept fires for both movies, clearing candidates
+            # r is ignored in metadata view - no TMDB refresh
             for n in [node1, node2]:
                 assert len(n.candidates) == 0
-                assert n.metadata.get("tmdb_id") is not None
-                assert n.staged is True
+                assert n.metadata.get("tmdb_id") is None
 
     @pytest.mark.asyncio()
     async def test_r_in_metadata_runs_async_with_progress(self, mock_tmdb) -> None:
-        """Pressing 'r' in metadata view runs refresh asynchronously."""
+        """Pressing 'r' in metadata view is ignored (no refresh)."""
         from tapes.ui.tree_app import TreeApp
 
         node1 = FileNode(
@@ -680,14 +678,12 @@ class TestRefreshQueryIntegration:
             await pilot.press("j")
             await pilot.press("enter")
             assert app.state == AppState.METADATA
-            # Press 'r' -- should not block
+            # Press 'r' -- ignored in metadata view
             await pilot.press("r")
             await app.workers.wait_for_complete()
-            # A3: auto-accept fires for both movies, clearing candidates
             for n in [node1, node2]:
                 assert len(n.candidates) == 0
-                assert n.metadata.get("tmdb_id") is not None
-                assert n.staged is True
+                assert n.metadata.get("tmdb_id") is None
 
 
 @pytest.mark.skipif(not HAS_PILOT, reason="textual pilot not available")

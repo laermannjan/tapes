@@ -3,27 +3,165 @@
 from __future__ import annotations
 
 import re as _re
+import string as _string
 from pathlib import Path
+from typing import Any
 
 from rich.text import Text
 
-from tapes.templates import can_fill_template, compute_dest, full_extension, select_template
+from tapes.templates import (
+    can_fill_template,
+    full_extension,
+    prepare_template_fields,
+    select_template,
+    template_field_names,
+)
 from tapes.tree_model import FileNode, FolderNode, TreeModel
 from tapes.ui.colors import (
+    AQUA,
+    AZURE,
     COLOR_MISSING,
     COLOR_MUTED,
     COLOR_MUTED_LIGHT,
     COLOR_STAGED,
+    FLINT,
+    LAVENDER,
+    SAND,
+    SPRING,
+    TEAL,
 )
+
+# Field-to-color mapping for destination rendering.
+# Fields not listed here use normal foreground (empty style).
+DEST_FIELD_COLORS: dict[str, str] = {
+    "title": SAND,
+    "year": AZURE,
+    "season": TEAL,
+    "episode": AQUA,
+    "episode_title": SPRING,
+    "ext": FLINT,
+}
+
+# Splits a literal string into word runs (odd indices) vs punctuation (even).
+_LITERAL_SPLIT_RE = _re.compile(r"([a-zA-Z]+\s*)")
 
 _MISSING_FIELD_RE = _re.compile(r"\{(\w+)\?\}")
 
+_DIM_FACTOR = 0.78
+
+
+def _dim_hex(color: str) -> str:
+    """Darken a hex color by reducing RGB channels."""
+    c = color.lstrip("#")
+    r, g, b = int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16)
+    f = _DIM_FACTOR
+    return f"#{int(r * f):02x}{int(g * f):02x}{int(b * f):02x}"
+
+
+# Precomputed dim versions for the directory portion.
+_DEST_FIELD_COLORS_DIM: dict[str, str] = {k: _dim_hex(v) if v else "" for k, v in DEST_FIELD_COLORS.items()}
+_FLINT_DIM = _dim_hex(FLINT)
+_MISSING_DIM = _dim_hex(COLOR_MISSING)
+
+
+def _render_literal(text: Text, literal: str, *, dim: bool = False) -> None:
+    """Append template literal text with sep/dim distinction.
+
+    Punctuation characters (parens, slashes, dots, dashes, spaces)
+    get normal foreground (separator). Word runs get dim (structural).
+    When *dim* is True, colors are darkened for the directory portion.
+    """
+    parts = _LITERAL_SPLIT_RE.split(literal)
+    for i, part in enumerate(parts):
+        if not part:
+            continue
+        if i % 2 == 0:
+            # Punctuation / separator
+            text.append(part, style=FLINT if dim else "")
+        else:
+            # Word text -> structural
+            text.append(part, style=_FLINT_DIM if dim else FLINT)
+
+
+def render_dest_from_template(node: FileNode, template: str) -> Text:
+    """Render a destination path with per-field semantic coloring.
+
+    Each template field is colored by its role (title, year, episode, etc.).
+    Literal text is split into separators (normal) and structural words (dim).
+    The directory portion (before the last ``/``) uses darkened colors.
+    Missing fields show ``{field?}`` with red braces and the field's own color.
+    Returns ``Text("???")`` when all fields are missing.
+    """
+    fields: dict[str, Any] = prepare_template_fields(node)
+
+    needed = template_field_names(template)
+    missing = {f for f in needed if fields.get(f) is None}
+
+    if len(missing) == len(needed):
+        return Text("???", style=COLOR_MUTED)
+
+    parts = list(_string.Formatter().parse(template))
+
+    # Find the template part containing the last / to split dir from filename.
+    split_part = -1
+    split_pos = -1
+    for i, (literal, _, _, _) in enumerate(parts):
+        if literal and "/" in literal:
+            split_part = i
+            split_pos = literal.rfind("/")
+
+    result = Text()
+    in_dir = split_part >= 0  # start in dir if there's any /
+
+    for part_idx, (literal, field_name, format_spec, _) in enumerate(parts):
+        if part_idx > split_part >= 0:
+            in_dir = False
+
+        if literal:
+            if part_idx == split_part:
+                # Split this literal: up to and including / is dir, rest is filename.
+                dir_literal = literal[: split_pos + 1]
+                file_literal = literal[split_pos + 1 :]
+                if dir_literal:
+                    _render_literal(result, dir_literal, dim=True)
+                if file_literal:
+                    _render_literal(result, file_literal, dim=False)
+                in_dir = False
+            else:
+                _render_literal(result, literal, dim=in_dir)
+
+        if field_name is not None:
+            colors = _DEST_FIELD_COLORS_DIM if in_dir else DEST_FIELD_COLORS
+            color = colors.get(field_name, "")
+            # Normal foreground fields get FLINT when in dir.
+            if in_dir and not color:
+                color = FLINT
+
+            if field_name in missing:
+                miss_color = _MISSING_DIM if in_dir else COLOR_MISSING
+                result.append("{", style=miss_color)
+                result.append(field_name, style=color or miss_color)
+                result.append("?}", style=miss_color)
+            else:
+                val = fields[field_name]
+                if format_spec:
+                    try:
+                        formatted = format(val, format_spec)
+                    except (ValueError, TypeError):
+                        formatted = str(val)
+                else:
+                    formatted = str(val)
+                result.append(formatted, style=color)
+
+    return result
+
 
 def render_dest(dest: str | None) -> Text:
-    """Render a destination path with semantic coloring.
+    """Render a pre-computed destination string with positional coloring.
+
+    Used as a fallback when no template/node is available.
 
     - If *dest* is ``None``: returns ``Text("???")`` in muted style.
-    - Arrow ``\u2192`` is dim.
     - Directory portion (everything before the last ``/``) is dim.
     - Filename stem (after last ``/``, before last ``.``) is normal foreground.
     - Extension (last ``.`` onward) is dim.
@@ -94,7 +232,7 @@ def render_file_row(
     When *arrow_col* is given, the filename area is padded so the arrow
     starts at that column position, creating aligned two-column output.
 
-    Staged files show a green tick before the destination.
+    Staged files show a filled circle before the destination.
     Ignored files are rendered in muted style.
     """
     effective_template = select_template(node, movie_template, tv_template)
@@ -117,25 +255,24 @@ def render_file_row(
     if node.ignored:
         row.append(filename, style="strike")
     else:
-        row.append(filename)
+        row.append(filename, style=LAVENDER)
 
         if arrow_col is not None:
             current_len = len(row.plain)
             if current_len < arrow_col:
                 row.append(" " * (arrow_col - current_len))
-            row.append("\u2192 ", style=COLOR_MUTED)
+            row.append("  \u2192  ", style=COLOR_MUTED)
         else:
             row.append("  \u2192  ", style=COLOR_MUTED)
 
         if node.staged:
-            row.append("\u2713 ", style=COLOR_STAGED)
+            row.append("\u25c9 ", style=COLOR_STAGED)
         elif can_fill_template(node, node.metadata, movie_template, tv_template):
-            row.append("\u2610 ", style=COLOR_MUTED)
+            row.append("\u25cb ", style=COLOR_MUTED)
         else:
-            row.append("  ")
+            row.append("\u25cb ", style=COLOR_MISSING)
 
-        dest = compute_dest(node, effective_template)
-        row.append_text(render_dest(dest))
+        row.append_text(render_dest_from_template(node, effective_template))
 
     return row
 

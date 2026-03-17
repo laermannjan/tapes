@@ -730,17 +730,17 @@ class TestTabBarMultipleSources:
 
         view = self._make_view_with_sources(3)
         plain = render_plain(view, width=120, height=30)
-        assert "TMDB #1" in plain
-        assert "TMDB #2" in plain
-        assert "TMDB #3" in plain
+        assert "Series #1" in plain
+        assert "Series #2" in plain
+        assert "Series #3" in plain
 
     def test_single_source_shows_one_tab(self) -> None:
         from tests.test_ui.conftest import render_plain
 
         view = self._make_view_with_sources(1)
         plain = render_plain(view, width=120, height=30)
-        assert "TMDB #1" in plain
-        assert "TMDB #2" not in plain
+        assert "Series #1" in plain
+        assert "Series #2" not in plain
 
     def test_tab_cycle_changes_active_tab(self) -> None:
         view = self._make_view_with_sources(3)
