@@ -97,56 +97,32 @@ Core
 
 ## Design documents
 
-**Current and authoritative:**
-- `docs/plans/2026-03-06-tui-redesign.md` -- UI/UX design spec (the source of truth)
-- `docs/plans/2026-03-06-tui-redesign-milestones.md` -- implementation milestones (M1-M16, all complete)
-- `docs/plans/2026-03-07-tui-visual-design.md` -- visual design spec (colors, layout, rendering)
-- `docs/plans/2026-03-08-visual-fixes-remaining.md` -- visual fixes summary (completed)
-
-**Completed implementation plans:**
-- `docs/plans/2026-03-08-layout-overhaul.md` -- layout overhaul (separators, BottomBar, inline views)
-- `docs/plans/2026-03-08-visual-and-commit-fixes.md` -- visual fixes + inline CommitView
-- `docs/plans/2026-03-08-code-review-fixes.md` -- confirm/discard model, keybinding overhaul
-
-**Testing and issue tracking:**
+**Active references:**
+- `docs/decisions.md` -- architectural decisions, rejected approaches, and learnings
 - `docs/testing.md` -- testing strategy (unit vs integration vs snapshot, anti-patterns)
 - `docs/issues.md` -- issue tracker with triage, merges, dependencies, priority tiers
+- `docs/mockups/` -- color palette, layout mockups, terminal screenshots
 
-**Mockups and references:**
-- `docs/mockups/color-swatches.html` -- color palette reference (all Claude palettes)
-- `docs/mockups/screenshots/column-layout-mockup.html` -- before/after layout comparison
-- `docs/mockups/screenshots/` -- terminal screenshots (gitignored)
-
-**Legacy (DO NOT use for implementation):**
-- `docs/legacy/` -- old designs from the initial spike and earlier iterations.
-  These describe dropped features (6-tier system, SQLite, plugins, event bus,
-  library management, grid TUI, companion-centric pipeline). Kept for
-  historical reference only.
+**Historical archive (DO NOT use for implementation):**
+- `docs/legacy/` -- all completed plans, old designs, and code reviews.
+  Includes early-stage designs (6-tier system, SQLite, plugins, event bus,
+  grid TUI, companion-centric pipeline) and all implementation plans from
+  the TUI redesign through visual overhaul. Kept for historical reference.
 
 ---
 
 ## Key decisions
 
-- **One-shot tool.** No database, no session tracking, no persistent state.
-  Each `tapes import` run is independent.
-- **Every file is first-class.** No special "companion" concept in the TUI.
-  Subtitles, artwork, etc. are just files with their own metadata.
-- **Candidate-based metadata curation.** Each file has a `metadata` dict (used
-  for destination) and a list of `Candidate` objects (guessit, TMDB matches).
-  Users cherry-pick values from candidates into the metadata.
-- **guessit-driven.** Metadata extraction relies on guessit.
-- **TMDB bearer token.** v4 read access token (`Authorization: Bearer`).
-  Config field: `tmdb_token`, env var: `TMDB_TOKEN`.
-- **Two templates.** `movie_template` and `tv_template`, selected by
-  `media_type` field. User can edit `media_type` to switch templates.
-- **Move = copy-then-delete.** Same-device move uses atomic `rename()`;
-  cross-device falls back to `shutil.copy2` + `unlink`. No application-level
-  checksumming -- `shutil.copy2` uses kernel-optimised copying
-  (`copy_file_range`, `sendfile`) which is reliable and fast. SHA-256
-  verification was evaluated and dropped due to unacceptable latency on
-  large files. Operation configurable (copy/move/link/hardlink).
-- **`--dry-run`** is a global safeguard: no files are ever copied, moved,
-  or modified.
+See `docs/decisions.md` for all architectural decisions, rejected approaches,
+and learnings. Key points:
+
+- **One-shot tool.** No database, no persistent state.
+- **Every file is first-class.** No companion concept.
+- **Candidate-based metadata curation.** Metadata dict + candidate list.
+- **guessit-driven.** Filename-based metadata extraction.
+- **Two templates** selected by `media_type` field.
+- **Move = copy-then-delete.** Kernel-optimized, no checksumming.
+- **`--dry-run`** safeguard: nothing happens to files.
 
 ---
 

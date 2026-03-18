@@ -2,15 +2,14 @@
 
 **DO NOT USE THESE FOR IMPLEMENTATION.**
 
-These documents are from earlier iterations of tapes (initial spike, grid TUI,
-old pipeline design). They are kept for historical reference only.
+This directory is the historical archive for the tapes project. It contains:
 
-The authoritative design documents are:
+- **Early designs** -- the initial spike, 6-tier system, SQLite database,
+  library management, plugins, event bus, grid TUI, companion-centric pipeline,
+  and the old import group model. All dropped or replaced.
+- **plans/** -- all completed implementation plans from the TUI redesign
+  (M1-M16), visual overhaul, config migration, keybinding redesign, pipeline
+  restructuring, and other features. These document what was built and why.
+- **reviews/** -- code review records.
 
-- `docs/plans/2026-03-06-tui-redesign.md` -- current UI/UX design spec
-- `docs/plans/2026-03-06-tui-redesign-milestones.md` -- implementation milestones (M1-M16 complete)
-
-Everything in this `legacy/` folder describes features, architectures, or
-workflows that have been **dropped or replaced**: the 6-tier system, SQLite
-database, library management, plugins, event bus, the old grid TUI, the
-companion-centric pipeline, and the old import group model.
+For the current state of the project, see `CLAUDE.md` in the repo root.

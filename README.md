@@ -6,7 +6,7 @@ Tapes renames and organizes media files into a clean directory structure. It gat
 
 It automates what it can and asks when it's not sure. Everything can be overruled, and nothing happens to your files without confirmation. Run it interactively to review and curate, or unattended to let it handle things on its own.
 
-Works as a terminal app, a web server, or inside Docker. Configure with CLI flags, a YAML config, or environment variables.
+Works as a terminal app or a web server. Configure with CLI flags, a YAML config, or environment variables.
 
 ```
 messy-collection/                         Movies/
@@ -18,8 +18,6 @@ messy-collection/                         Movies/
                                                 Season 01/
                                                   Breaking Bad - S01E01 - Pilot.mkv
 ```
-
-<!-- TODO: replace with asciinema recording of a real session -->
 
 ---
 
