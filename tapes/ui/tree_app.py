@@ -766,21 +766,22 @@ class TreeApp(App):
 
     def on_key(self, event: Key) -> None:
         """Intercept key events for h/l navigation, ctrl+c quit, shift+tab, and search mode."""
-        if self._mode == AppState.TREE and event.key in ("h", "left"):
+        if self._mode == AppState.TREE and event.key in ("h", "left", "l", "right", "shift+left", "shift+right"):
             tv = self.query_one(TreeView)
-            node = tv.cursor_node()
-            if isinstance(node, FolderNode) and not node.collapsed:
-                tv.toggle_folder_at_cursor()
-            else:
-                tv.move_to_parent()
-            event.prevent_default()
-            event.stop()
-            return
-        if self._mode == AppState.TREE and event.key in ("l", "right"):
-            tv = self.query_one(TreeView)
-            node = tv.cursor_node()
-            if isinstance(node, FolderNode) and node.collapsed:
-                tv.toggle_folder_at_cursor()
+            if event.key in ("h", "left"):
+                node = tv.cursor_node()
+                if isinstance(node, FolderNode) and not node.collapsed:
+                    tv.toggle_folder_at_cursor()
+                else:
+                    tv.move_to_parent()
+            elif event.key in ("l", "right"):
+                node = tv.cursor_node()
+                if isinstance(node, FolderNode) and node.collapsed:
+                    tv.toggle_folder_at_cursor()
+            elif event.key == "shift+left":
+                tv.scroll_horizontal(-TreeView.H_SCROLL_STEP)
+            elif event.key == "shift+right":
+                tv.scroll_horizontal(TreeView.H_SCROLL_STEP)
             event.prevent_default()
             event.stop()
             return

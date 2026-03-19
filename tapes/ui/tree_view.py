@@ -46,6 +46,7 @@ class TreeView(Widget):
         self._range_anchor: int | None = None
         self._filter_text: str = ""
         self._scroll_offset: int = 0
+        self._h_scroll_offset: int = 0
         self._arrow_col: int = DEFAULT_ARROW_COL
         self._refresh_items()
 
@@ -131,6 +132,7 @@ class TreeView(Widget):
 
         self._arrow_col = self._compute_arrow_col()
         self._scroll_offset = 0
+        self._h_scroll_offset = 0
 
     def _compute_arrow_col(self) -> int:
         """Compute the column position where the arrow/destination starts.
@@ -158,10 +160,11 @@ class TreeView(Widget):
         max_allowed = inner_width // 2
         return min(max_width + 4, max_allowed)
 
+    H_SCROLL_STEP = 4
+
     def render(self) -> RenderableType:
         """Render the visible window of the tree with cursor highlighting."""
-        w = self.size.width
-        inner_width = w  # self.size is already the content area
+        inner_width = self.size.width
 
         if not self._items:
             return Text("(empty)", style=COLOR_MUTED)
@@ -176,7 +179,10 @@ class TreeView(Widget):
 
         rng = self.selected_range
         arrow_col = self._arrow_col
-        content_lines: list[Text] = []
+
+        # First pass: render rows at full width to find max width for clamping
+        rendered_rows: list[Text] = []
+        max_row_width = 0
         for i in range(start, end):
             node, depth = self._items[i]
             effective_depth = 0 if self.flat_mode else depth
@@ -189,21 +195,30 @@ class TreeView(Widget):
                 root_path=self.root_path,
                 arrow_col=arrow_col,
             )
+            max_row_width = max(max_row_width, len(row_text.plain))
+            rendered_rows.append(row_text)
 
-            plain_len = len(row_text.plain)
-            if plain_len > inner_width:
-                row_text.truncate(inner_width)
-            elif plain_len < inner_width:
-                row_text.append(" " * (inner_width - plain_len))
+        # Clamp horizontal offset so we don't scroll into empty space
+        max_h_offset = max(0, max_row_width - inner_width)
+        self._h_scroll_offset = min(self._h_scroll_offset, max_h_offset)
+        h_off = self._h_scroll_offset
+
+        # Second pass: slice, style, collect
+        content_lines: list[Text] = []
+        for idx, full_row in enumerate(rendered_rows):
+            i = start + idx
+            node = self._items[i][0]
+
+            sliced_row = self._h_slice_row(full_row, h_off, inner_width)
 
             if isinstance(node, FileNode) and node.ignored:
-                row_text.stylize(COLOR_MUTED)
+                sliced_row.stylize(COLOR_MUTED)
             if i == self.cursor_index:
-                row_text.stylize(COLOR_CURSOR_BG)
+                sliced_row.stylize(COLOR_CURSOR_BG)
             elif rng and rng[0] <= i <= rng[1]:
-                row_text.stylize(COLOR_RANGE_BG)
+                sliced_row.stylize(COLOR_RANGE_BG)
 
-            content_lines.append(row_text)
+            content_lines.append(sliced_row)
 
         if has_more_above and content_lines:
             indicator = Text()
@@ -222,6 +237,30 @@ class TreeView(Widget):
             content_lines[-1] = indicator
 
         return Text("\n").join(content_lines)
+
+    @staticmethod
+    def _h_slice_row(row: Text, h_offset: int, width: int) -> Text:
+        """Slice a row horizontally and add ellipsis indicators where clipped."""
+        full_len = len(row.plain)
+
+        clipped_left = h_offset > 0 and full_len > 0
+        clipped_right = full_len > h_offset + width
+
+        # Slice the visible window
+        sliced = row[h_offset : h_offset + width]
+
+        # Add ellipsis indicators
+        if clipped_left and len(sliced.plain) > 0:
+            sliced = Text("\u2026", style=COLOR_MUTED) + sliced[1:]
+        if clipped_right and len(sliced.plain) > 0:
+            sliced = sliced[: width - 1] + Text("\u2026", style=COLOR_MUTED)
+
+        # Pad to fill viewport width for cursor highlighting
+        pad = width - len(sliced.plain)
+        if pad > 0:
+            sliced.append(" " * pad)
+
+        return sliced
 
     def move_cursor(self, delta: int) -> None:
         """Move the cursor by *delta* positions, clamping to bounds."""
@@ -276,9 +315,16 @@ class TreeView(Widget):
 
     SCROLLOFF = 3
 
+    def scroll_horizontal(self, delta: int) -> None:
+        """Scroll horizontally by delta characters, clamping to bounds."""
+        new_offset = self._h_scroll_offset + delta
+        self._h_scroll_offset = max(0, new_offset)
+        self.refresh()
+
     def on_resize(self) -> None:
-        """Recompute arrow column when widget is resized."""
+        """Recompute arrow column and clamp horizontal scroll when widget is resized."""
         self._arrow_col = self._compute_arrow_col()
+        self._h_scroll_offset = max(0, self._h_scroll_offset)
 
     def watch_cursor_index(self) -> None:
         """Keep cursor visible in viewport when index changes."""
