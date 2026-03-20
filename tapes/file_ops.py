@@ -81,6 +81,7 @@ def process_file(
     dry_run: bool = False,
     progress_callback: Callable[[int, int], None] | None = None,
     cancelled: Callable[[], bool] | None = None,
+    overwrite: bool = False,
 ) -> str:
     """Process a single file with the given operation.
 
@@ -95,16 +96,19 @@ def process_file(
         operation: One of "copy", "move", "link" (symlink), "hardlink".
         dry_run: If True, describe what would happen without doing it.
         cancelled: Callable returning ``True`` to abort mid-copy.
+        overwrite: If True, skip the ``dest.exists()`` guard. Used when
+            conflict resolution has determined this file should replace
+            an existing destination.
 
     Returns:
         A message describing what was done (or would be done).
 
     Raises:
-        FileExistsError: If dest already exists.
+        FileExistsError: If dest already exists and *overwrite* is False.
         ValueError: If operation is not recognized.
         OperationCancelledError: If *cancelled* returns ``True`` during copy.
     """
-    if dest.exists():
+    if not overwrite and dest.exists():
         raise FileExistsError(f"Destination already exists: {dest}")
 
     if dry_run:

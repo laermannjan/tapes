@@ -124,6 +124,26 @@ class TestProcessFileDestExists:
         with pytest.raises(FileExistsError):
             process_file(src, dest, "copy", dry_run=True)
 
+    def test_overwrite_skips_exists_check(self, tmp_path: Path) -> None:
+        src = tmp_path / "source.mkv"
+        src.write_text("new content")
+        dest = tmp_path / "dest.mkv"
+        dest.write_text("old content")
+
+        result = process_file(src, dest, "copy", overwrite=True)
+
+        assert dest.read_text() == "new content"
+        assert "Copied" in result
+
+    def test_overwrite_false_still_raises(self, tmp_path: Path) -> None:
+        src = tmp_path / "source.mkv"
+        src.write_text("data")
+        dest = tmp_path / "dest.mkv"
+        dest.write_text("existing")
+
+        with pytest.raises(FileExistsError):
+            process_file(src, dest, "copy", overwrite=False)
+
 
 class TestProcessFileUnknownOperation:
     def test_raises_value_error(self, tmp_path: Path) -> None:
