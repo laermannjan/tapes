@@ -138,6 +138,23 @@ def process_file(
     raise ValueError(f"Unknown operation: {operation!r}")
 
 
+def delete_files(paths: list[Path], *, dry_run: bool = False) -> list[str]:
+    """Delete a list of files. Returns a status message per file."""
+    results: list[str] = []
+    for path in paths:
+        if dry_run:
+            results.append(f"[dry-run] Would delete {path}")
+            continue
+        try:
+            path.unlink()
+            results.append(f"Deleted {path}")
+        except FileNotFoundError:
+            results.append(f"Not found: {path}")
+        except OSError as e:
+            results.append(f"Error deleting {path}: {e}")
+    return results
+
+
 def process_staged(
     files: list[tuple[Path, Path]],
     operation: str,

@@ -663,6 +663,14 @@ class TreeApp(App):
         if processed:
             self.model.remove_nodes(processed)
 
+        if self.config.library.delete_rejected:
+            from tapes.file_ops import delete_files
+
+            rejected = [f for f in self.model.all_files() if f.rejected]
+            if rejected:
+                delete_files([f.path for f in rejected], dry_run=self.config.dry_run)
+                self.model.remove_nodes(rejected)
+
         self._hide_commit()
         self.query_one(CommitView).progress_text = ""
         self.query_one(TreeView).refresh_tree()

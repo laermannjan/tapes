@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from tapes.file_ops import process_file, process_staged
+from tapes.file_ops import delete_files, process_file, process_staged
 
 
 class TestProcessFileCopy:
@@ -310,7 +310,7 @@ class TestCancellation:
 
         call_count = 0
 
-        def cancelling_copy(*args, **kwargs):  # type: ignore[no-untyped-def]
+        def cancelling_copy(*args, **kwargs):
             nonlocal call_count
             call_count += 1
             if call_count == 1:
@@ -327,3 +327,29 @@ class TestCancellation:
         assert len(results) == 0
         assert not dest1.exists()
         assert not dest2.exists()
+
+
+class TestDeleteFiles:
+    def test_deletes_listed_files(self, tmp_path: Path) -> None:
+        a = tmp_path / "a.mkv"
+        b = tmp_path / "b.mkv"
+        a.write_bytes(b"x" * 100)
+        b.write_bytes(b"x" * 100)
+        results = delete_files([a, b])
+        assert not a.exists()
+        assert not b.exists()
+        assert len(results) == 2
+
+    def test_missing_file_does_not_error(self, tmp_path: Path) -> None:
+        a = tmp_path / "nonexistent.mkv"
+        results = delete_files([a])
+        assert len(results) == 1
+        assert "not found" in results[0].lower() or "error" in results[0].lower()
+
+    def test_dry_run_does_not_delete(self, tmp_path: Path) -> None:
+        a = tmp_path / "a.mkv"
+        a.write_bytes(b"x" * 100)
+        results = delete_files([a], dry_run=True)
+        assert a.exists()
+        assert len(results) == 1
+        assert "[dry-run]" in results[0]
