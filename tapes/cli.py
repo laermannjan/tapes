@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -10,7 +11,7 @@ from rich.console import Console
 
 from tapes.config import load_config
 
-app = typer.Typer(name="tapes", no_args_is_help=True, invoke_without_command=True)
+app = typer.Typer(name="tapes")
 console = Console(highlight=False)
 
 
@@ -63,33 +64,64 @@ def _parse_csv(value: str | None) -> list[str] | None:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+def _build_serve_command(argv: list[str]) -> str:
+    """Build a shell command from argv, stripping --serve* flags.
+
+    Removes --serve, --serve-host <value>, and --serve-port <value>.
+    Handles both --flag value and --flag=value syntax.
+    Quotes arguments that contain spaces.
+    """
+    import shlex
+
+    serve_value_flags = {"--serve-host", "--serve-port"}
+    result: list[str] = []
+    skip_next = False
+
+    for arg in argv:
+        if skip_next:
+            skip_next = False
+            continue
+        if arg == "--serve":
+            continue
+        if arg in serve_value_flags:
+            skip_next = True
+            continue
+        if any(arg.startswith(f"{flag}=") for flag in serve_value_flags):
+            continue
+        result.append(shlex.quote(arg))
+
+    return " ".join(result)
+
+
+def _start_server(command: str, host: str, port: int) -> None:
+    """Start the textual-serve server. Extracted for testability."""
+    from textual_serve.server import Server
+
+    server = Server(command, host=host, port=port, title="tapes")
+    server.serve()
+
+
 # ---------------------------------------------------------------------------
-# Callbacks
+# Single command
 # ---------------------------------------------------------------------------
 
 
-@app.callback()
+@app.callback(invoke_without_command=True)
 def main(
+    path: Path | None = typer.Argument(None, help="Directory or file to process"),
+    # Global
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Debug logging"),
-) -> None:
-    """Tapes -- organise your movie and TV show files."""
-    import logging
-
-    if verbose:
-        logging.basicConfig(level=logging.WARNING)
-        logging.getLogger("tapes").setLevel(logging.DEBUG)
-
-
-# ---------------------------------------------------------------------------
-# Commands
-# ---------------------------------------------------------------------------
-
-
-@app.command("import")
-def import_cmd(
-    path: Path | None = typer.Argument(None, help="Directory or file to import"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview only, no file operations ever"),
     config_file: Path | None = typer.Option(None, "--config", "-c", help="Path to config file"),
+    # Serve
+    serve: bool = typer.Option(False, "--serve", help="Serve TUI in browser", rich_help_panel="Serve"),
+    serve_host: str = typer.Option(
+        "0.0.0.0",  # noqa: S104
+        "--serve-host",
+        help="Bind address for web server",
+        rich_help_panel="Serve",
+    ),
+    serve_port: int = typer.Option(8080, "--serve-port", help="Port for web server", rich_help_panel="Serve"),
     # Library
     library_movies: Path | None = typer.Option(
         None, "--library-movies", help="Movies library directory", rich_help_panel="Library"
@@ -146,7 +178,14 @@ def import_cmd(
         None, "--tmdb-retries", help="TMDB request retry count", rich_help_panel="Advanced"
     ),
 ) -> None:
-    """Import video files into the library."""
+    """Tapes - organise your movie and TV show files."""
+    import logging
+    import os
+
+    if verbose:
+        logging.basicConfig(level=logging.WARNING)
+        logging.getLogger("tapes").setLevel(logging.DEBUG)
+
     overrides = _build_overrides(
         dry_run=dry_run,
         library_movies=str(library_movies) if library_movies is not None else None,
@@ -170,6 +209,16 @@ def import_cmd(
 
     cfg = load_config(config_path=config_file, cli_overrides=overrides)
 
+    # Serve mode: CLI flag or config/env var
+    if serve or cfg.mode.serve:
+        os.environ.pop("TAPES_MODE__SERVE", None)
+        actual_host = serve_host if serve else cfg.mode.serve_host
+        actual_port = serve_port if serve else cfg.mode.serve_port
+        cmd = _build_serve_command(sys.argv)
+        console.print(f"Serving tapes on http://{actual_host}:{actual_port}")
+        _start_server(cmd, actual_host, actual_port)
+        return
+
     from tapes.scanner import scan
     from tapes.tree_model import build_tree
     from tapes.ui.tree_app import TreeApp
@@ -190,82 +239,12 @@ def import_cmd(
 
     root_path = resolved if resolved.is_dir() else resolved.parent
     model = build_tree(files, root_path)
-    movie_tmpl = cfg.library.movie_template
-    tv_tmpl = cfg.library.tv_template
     tui = TreeApp(
         model=model,
-        movie_template=movie_tmpl,
-        tv_template=tv_tmpl,
+        movie_template=cfg.library.movie_template,
+        tv_template=cfg.library.tv_template,
         root_path=root_path,
         auto_pipeline=True,
         config=cfg,
     )
     tui.run()
-
-
-def _build_serve_command(argv: list[str]) -> str:
-    """Build a shell command from argv, stripping --serve* flags.
-
-    Removes --serve, --serve-host <value>, and --serve-port <value>.
-    Handles both --flag value and --flag=value syntax.
-    Quotes arguments that contain spaces.
-    """
-    import shlex
-
-    serve_value_flags = {"--serve-host", "--serve-port"}
-    result: list[str] = []
-    skip_next = False
-
-    for arg in argv:
-        if skip_next:
-            skip_next = False
-            continue
-        if arg == "--serve":
-            continue
-        if arg in serve_value_flags:
-            skip_next = True
-            continue
-        if any(arg.startswith(f"{flag}=") for flag in serve_value_flags):
-            continue
-        result.append(shlex.quote(arg))
-
-    return " ".join(result)
-
-
-def _start_server(command: str, host: str, port: int) -> None:
-    """Start the textual-serve server. Extracted for testability."""
-    from textual_serve.server import Server
-
-    server = Server(command, host=host, port=port, title="tapes")
-    server.serve()
-
-
-@app.command("serve")
-def serve_cmd(
-    import_path: Path | None = typer.Option(None, "--import-path", help="Directory to import"),
-    host: str = typer.Option("0.0.0.0", "--host", help="Bind address"),  # noqa: S104
-    port: int = typer.Option(8080, "--port", help="Port number"),
-    config_file: Path | None = typer.Option(None, "--config", "-c", help="Path to config file"),
-) -> None:
-    """Serve the tapes TUI over the browser."""
-    import shlex
-
-    cfg = load_config(config_path=config_file)
-
-    # Resolve import path: --import-path flag > config
-    resolved_path = import_path or (Path(cfg.scan.import_path) if cfg.scan.import_path else None)
-    if resolved_path is None:
-        console.print("[red]Error:[/red] No import path. Use --import-path or set TAPES_SCAN__IMPORT_PATH.")
-        raise typer.Exit(code=1)
-
-    if cfg.metadata.tmdb_token:
-        console.print(f"TMDB token: configured ({len(cfg.metadata.tmdb_token)} chars)")
-    else:
-        console.print("[yellow]Warning:[/yellow] No TMDB token configured. Set TAPES_METADATA__TMDB_TOKEN.")
-
-    cmd = f"tapes import {shlex.quote(str(resolved_path))}"
-    if config_file:
-        cmd += f" --config {shlex.quote(str(config_file))}"
-
-    console.print(f"Serving tapes on http://{host}:{port}")
-    _start_server(cmd, host, port)

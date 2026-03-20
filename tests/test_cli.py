@@ -26,12 +26,7 @@ def test_help():
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
     assert "tapes" in result.output.lower()
-
-
-def test_import_help():
-    result = runner.invoke(app, ["import", "--help"])
-    assert result.exit_code == 0
-    assert "import" in result.output.lower()
+    assert "--serve" in result.output
 
 
 # ---------------------------------------------------------------------------
@@ -117,51 +112,53 @@ class TestBuildOverrides:
 
 
 # ---------------------------------------------------------------------------
-# Import command flags
+# Flags (single command, no subcommands)
 # ---------------------------------------------------------------------------
 
 
-class TestImportFlags:
+class TestFlags:
     def test_operation_flag_in_help(self) -> None:
-        result = runner.invoke(app, ["import", "--help"])
+        result = runner.invoke(app, ["--help"])
         assert "--operation" in result.output
 
     def test_tmdb_token_flag_in_help(self) -> None:
-        result = runner.invoke(app, ["import", "--help"])
+        result = runner.invoke(app, ["--help"])
         assert "--tmdb-token" in result.output
 
     def test_max_workers_flag_in_help(self) -> None:
-        result = runner.invoke(app, ["import", "--help"])
+        result = runner.invoke(app, ["--help"])
         assert "--max-workers" in result.output
 
     def test_library_flags_in_help(self) -> None:
-        result = runner.invoke(app, ["import", "--help"])
+        result = runner.invoke(app, ["--help"])
         assert "--library-movies" in result.output
         assert "--library-tv" in result.output
         assert "--movie-template" in result.output
         assert "--tv-template" in result.output
 
     def test_metadata_flags_in_help(self) -> None:
-        result = runner.invoke(app, ["import", "--help"])
+        result = runner.invoke(app, ["--help"])
         assert "--min-score" in result.output
         assert "--min-prominence" in result.output
         assert "--max-results" in result.output
 
     def test_scan_flags_in_help(self) -> None:
-        result = runner.invoke(app, ["import", "--help"])
+        result = runner.invoke(app, ["--help"])
         assert "--ignore-patterns" in result.output
         assert "--video-extensions" in result.output
 
     def test_advanced_flags_in_help(self) -> None:
-        result = runner.invoke(app, ["import", "--help"])
+        result = runner.invoke(app, ["--help"])
         assert "--tmdb-timeout" in result.output
         assert "--tmdb-retries" in result.output
 
     def test_help_panels_present(self) -> None:
-        result = runner.invoke(app, ["import", "--help"])
+        result = runner.invoke(app, ["--help"])
         assert "Library" in result.output
         assert "Metadata" in result.output
         assert "Advanced" in result.output
+        assert "Scan" in result.output
+        assert "Serve" in result.output
 
 
 # ---------------------------------------------------------------------------
@@ -170,10 +167,10 @@ class TestImportFlags:
 
 
 class TestAlwaysUsesLoadConfig:
-    """Both commands should always call load_config, not bypass it."""
+    """Both code paths should always call load_config, not bypass it."""
 
-    def test_import_uses_load_config_without_config_flag(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """import_cmd uses load_config even without --config flag."""
+    def test_uses_load_config_without_config_flag(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """main uses load_config even without --config flag."""
         # Set up a TAPES_CONFIG env var pointing to a yaml file
         config_file = tmp_path / "config.yaml"
         config_file.write_text("dry_run: true\n")
@@ -189,12 +186,12 @@ class TestAlwaysUsesLoadConfig:
 
         with patch("tapes.ui.tree_app.TreeApp") as mock_app_cls:
             mock_app_cls.return_value.run.return_value = None
-            runner.invoke(app, ["import", str(scan_dir)])
+            runner.invoke(app, [str(scan_dir)])
             # The config passed to TreeApp should have dry_run=True from yaml
             _kwargs = mock_app_cls.call_args[1]
             assert _kwargs["config"].dry_run is True
 
-    def test_import_dry_run_flag_sets_override(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_dry_run_flag_sets_override(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """--dry-run flag is passed as override to load_config."""
         scan_dir = tmp_path / "media"
         scan_dir.mkdir()
@@ -208,11 +205,11 @@ class TestAlwaysUsesLoadConfig:
 
         with patch("tapes.ui.tree_app.TreeApp") as mock_app_cls:
             mock_app_cls.return_value.run.return_value = None
-            runner.invoke(app, ["import", "--dry-run", str(scan_dir)])
+            runner.invoke(app, ["--dry-run", str(scan_dir)])
             _kwargs = mock_app_cls.call_args[1]
             assert _kwargs["config"].dry_run is True
 
-    def test_import_operation_flag_overrides_config(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_operation_flag_overrides_config(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """--operation flag overrides config file value."""
         import yaml
 
@@ -228,11 +225,11 @@ class TestAlwaysUsesLoadConfig:
 
         with patch("tapes.ui.tree_app.TreeApp") as mock_app_cls:
             mock_app_cls.return_value.run.return_value = None
-            runner.invoke(app, ["import", "--operation", "move", str(scan_dir)])
+            runner.invoke(app, ["--operation", "move", str(scan_dir)])
             _kwargs = mock_app_cls.call_args[1]
             assert _kwargs["config"].library.operation == "move"
 
-    def test_import_library_movies_flag_reaches_config(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_library_movies_flag_reaches_config(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """--library-movies flag sets cfg.library.movies."""
         monkeypatch.delenv("TAPES_CONFIG", raising=False)
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
@@ -245,11 +242,11 @@ class TestAlwaysUsesLoadConfig:
 
         with patch("tapes.ui.tree_app.TreeApp") as mock_app_cls:
             mock_app_cls.return_value.run.return_value = None
-            runner.invoke(app, ["import", "--library-movies", "/my/movies", str(scan_dir)])
+            runner.invoke(app, ["--library-movies", "/my/movies", str(scan_dir)])
             _kwargs = mock_app_cls.call_args[1]
             assert _kwargs["config"].library.movies == "/my/movies"
 
-    def test_import_library_tv_flag_reaches_config(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_library_tv_flag_reaches_config(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """--library-tv flag sets cfg.library.tv."""
         monkeypatch.delenv("TAPES_CONFIG", raising=False)
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
@@ -262,19 +259,19 @@ class TestAlwaysUsesLoadConfig:
 
         with patch("tapes.ui.tree_app.TreeApp") as mock_app_cls:
             mock_app_cls.return_value.run.return_value = None
-            runner.invoke(app, ["import", "--library-tv", "/my/tv", str(scan_dir)])
+            runner.invoke(app, ["--library-tv", "/my/tv", str(scan_dir)])
             _kwargs = mock_app_cls.call_args[1]
             assert _kwargs["config"].library.tv == "/my/tv"
 
 
 # ---------------------------------------------------------------------------
-# Import path fallback (CLI argument > config import_path > error)
+# Path fallback (CLI argument > config import_path > error)
 # ---------------------------------------------------------------------------
 
 
-class TestImportPathFallback:
-    def test_import_uses_config_import_path(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """import_cmd uses scan.import_path from config when no path argument given."""
+class TestPathFallback:
+    def test_uses_config_import_path(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """main uses scan.import_path from config when no path argument given."""
         monkeypatch.delenv("TAPES_CONFIG", raising=False)
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
 
@@ -288,96 +285,100 @@ class TestImportPathFallback:
 
         with patch("tapes.ui.tree_app.TreeApp") as mock_app_cls:
             mock_app_cls.return_value.run.return_value = None
-            result = runner.invoke(app, ["import"])
+            result = runner.invoke(app, [])
             assert result.exit_code == 0
             mock_app_cls.assert_called_once()
 
-    def test_import_errors_when_no_path(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """import_cmd exits with error when no path argument and no import_path configured."""
+    def test_errors_when_no_path(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """main exits with error when no path argument and no import_path configured."""
         monkeypatch.delenv("TAPES_CONFIG", raising=False)
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
 
-        result = runner.invoke(app, ["import"])
+        result = runner.invoke(app, [])
         assert result.exit_code != 0
 
 
 # ---------------------------------------------------------------------------
-# Serve command
+# Serve flag
 # ---------------------------------------------------------------------------
 
 
-def test_serve_help():
-    result = runner.invoke(app, ["serve", "--help"])
-    assert result.exit_code == 0
-    assert "--host" in result.output
-    assert "--port" in result.output
-    assert "--import-path" in result.output
-
-
-class TestServeCommand:
-    def test_serve_errors_when_no_import_path(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+class TestServeFlag:
+    def test_serve_calls_start_server(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("TAPES_CONFIG", raising=False)
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
-        result = runner.invoke(app, ["serve"])
-        assert result.exit_code != 0
-        assert "No import path" in result.output
-
-    def test_serve_constructs_command(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delenv("TAPES_CONFIG", raising=False)
-        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+        monkeypatch.setattr("sys.argv", ["tapes", "--serve", "/media"])
 
         from unittest.mock import patch
 
         with patch("tapes.cli._start_server") as mock_start:
-            runner.invoke(app, ["serve", "--import-path", "/media/my incoming"])
+            runner.invoke(app, ["--serve", "/media"])
             mock_start.assert_called_once()
-            cmd, host, port = mock_start.call_args[0]
-            assert cmd.startswith("tapes import ")
-            assert "'/media/my incoming'" in cmd
+            _cmd, host, port = mock_start.call_args[0]
             assert host == "0.0.0.0"  # noqa: S104
             assert port == 8080
 
     def test_serve_custom_host_port(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("TAPES_CONFIG", raising=False)
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+        monkeypatch.setattr(
+            "sys.argv", ["tapes", "--serve", "--serve-host", "127.0.0.1", "--serve-port", "3000", "/media"]
+        )
 
         from unittest.mock import patch
 
         with patch("tapes.cli._start_server") as mock_start:
-            runner.invoke(app, ["serve", "--import-path", "/media", "--host", "127.0.0.1", "--port", "3000"])
+            runner.invoke(app, ["--serve", "--serve-host", "127.0.0.1", "--serve-port", "3000", "/media"])
             mock_start.assert_called_once()
             _cmd, host, port = mock_start.call_args[0]
             assert host == "127.0.0.1"
             assert port == 3000
 
-    def test_serve_uses_config_import_path(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_serve_command_excludes_serve_flags(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("TAPES_CONFIG", raising=False)
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
-        monkeypatch.setenv("TAPES_SCAN__IMPORT_PATH", "/configured/path")
+        monkeypatch.setattr("sys.argv", ["tapes", "--serve", "--serve-port", "3000", "--dry-run", "/media"])
 
         from unittest.mock import patch
 
         with patch("tapes.cli._start_server") as mock_start:
-            runner.invoke(app, ["serve"])
+            runner.invoke(app, ["--serve", "--serve-port", "3000", "--dry-run", "/media"])
             mock_start.assert_called_once()
             cmd = mock_start.call_args[0][0]
-            assert "/configured/path" in cmd
+            assert "--serve" not in cmd
+            assert "--serve-port" not in cmd
+            assert "--dry-run" in cmd
+            assert "/media" in cmd
 
-    def test_serve_passes_config_file(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_serve_unsets_env_var(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("TAPES_CONFIG", raising=False)
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+        monkeypatch.setenv("TAPES_MODE__SERVE", "true")
+        monkeypatch.setattr("sys.argv", ["tapes", "--serve", "/media"])
 
-        config_file = tmp_path / "config.yaml"
-        config_file.write_text("scan:\n  import_path: /media\n")
+        import os
+        from unittest.mock import patch
+
+        with patch("tapes.cli._start_server"):
+            runner.invoke(app, ["--serve", "/media"])
+            assert "TAPES_MODE__SERVE" not in os.environ
+
+    def test_serve_via_env_var_only(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """TAPES_MODE__SERVE=true triggers serve mode without --serve flag."""
+        monkeypatch.delenv("TAPES_CONFIG", raising=False)
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+        monkeypatch.setenv("TAPES_MODE__SERVE", "true")
+        monkeypatch.setenv("TAPES_MODE__SERVE_PORT", "9000")
+        monkeypatch.setattr("sys.argv", ["tapes", "/media"])
 
         from unittest.mock import patch
 
         with patch("tapes.cli._start_server") as mock_start:
-            runner.invoke(app, ["serve", "--config", str(config_file)])
+            runner.invoke(app, ["/media"])
             mock_start.assert_called_once()
-            cmd = mock_start.call_args[0][0]
-            assert "--config" in cmd
-            assert str(config_file) in cmd
+            _cmd, host, port = mock_start.call_args[0]
+            assert host == "0.0.0.0"  # noqa: S104
+            assert port == 9000
 
 
 # ---------------------------------------------------------------------------
