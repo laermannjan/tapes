@@ -405,3 +405,31 @@ class TestTemplateValidation:
             tmpl = f"{{{field}}}.txt"
             cfg = LibraryConfig(movie_template=tmpl)
             assert cfg.movie_template == tmpl
+
+
+class TestModeConfig:
+    def test_mode_defaults(self) -> None:
+        from tapes.config import load_config
+
+        cfg = load_config()
+        assert cfg.mode.serve is False
+        assert cfg.mode.serve_host == "0.0.0.0"  # noqa: S104
+        assert cfg.mode.serve_port == 8080
+
+    def test_mode_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from tapes.config import load_config
+
+        monkeypatch.setenv("TAPES_MODE__SERVE", "true")
+        monkeypatch.setenv("TAPES_MODE__SERVE_PORT", "3000")
+        cfg = load_config()
+        assert cfg.mode.serve is True
+        assert cfg.mode.serve_port == 3000
+
+    def test_mode_from_yaml(self, tmp_path: Path) -> None:
+        from tapes.config import load_config
+
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text("mode:\n  serve: true\n  serve_port: 9000\n")
+        cfg = load_config(config_path=config_file)
+        assert cfg.mode.serve is True
+        assert cfg.mode.serve_port == 9000

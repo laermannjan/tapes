@@ -106,6 +106,12 @@ class AdvancedConfig(BaseModel):
     tmdb_retries: int = Field(default=3, ge=1)
 
 
+class ModeConfig(BaseModel):
+    serve: bool = False
+    serve_host: str = "0.0.0.0"  # noqa: S104
+    serve_port: int = Field(default=8080, ge=1, le=65535)
+
+
 # Module-level global is necessary because pydantic-settings calls
 # settings_customise_sources as a classmethod with a fixed signature --
 # there is no way to pass the YAML path or data through constructor args.
@@ -138,6 +144,7 @@ class TapesConfig(BaseSettings):
     metadata: MetadataConfig = MetadataConfig()
     library: LibraryConfig = LibraryConfig()
     advanced: AdvancedConfig = AdvancedConfig()
+    mode: ModeConfig = ModeConfig()
     dry_run: bool = False
 
     @model_validator(mode="after")
