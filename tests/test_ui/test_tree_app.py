@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
+
+if TYPE_CHECKING:
+    from tapes.config import TapesConfig
 
 from tapes.tree_model import (
     Candidate,
@@ -1271,3 +1275,222 @@ class TestTreeKeyRedesign:
             # Should move to parent folderA (index 0)
             assert tv.cursor_index == 0
             assert isinstance(tv.cursor_node(), FolderNode)
+
+
+# ---------------------------------------------------------------------------
+# Auto-commit tests
+# ---------------------------------------------------------------------------
+
+AUTO_COMMIT_DELAY = 0.1  # Short delay for testing
+
+
+def _auto_commit_config() -> TapesConfig:
+    """Create a TapesConfig with auto_commit enabled and a short delay."""
+    from tapes.config import ModeConfig, TapesConfig
+
+    return TapesConfig(mode=ModeConfig(auto_commit=True, auto_commit_delay=AUTO_COMMIT_DELAY))
+
+
+def _stageable_file(name: str = "top.mkv", title: str = "Top", year: int = 2020) -> FileNode:
+    """Create a FileNode with complete metadata so it passes the staging gate."""
+    node = FileNode(path=Path(f"/root/{name}"))
+    node.metadata = {"media_type": "movie", "title": title, "year": year}
+    return node
+
+
+@pytest.mark.skipif(not HAS_PILOT, reason="textual pilot not available")
+class TestAutoCommit:
+    @pytest.mark.asyncio()
+    async def test_auto_commit_disabled_by_default(self) -> None:
+        """No auto-commit timer when config.mode.auto_commit is False."""
+        from tapes.ui.tree_app import TreeApp
+
+        node = _stageable_file()
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
+        async with app.run_test() as pilot:
+            assert app._auto_commit_timer is None
+            await pilot.press("space")  # stage
+            assert app._auto_commit_timer is None
+
+    @pytest.mark.asyncio()
+    async def test_auto_commit_schedules_timer_on_stage(self) -> None:
+        """Staging a file starts the debounce timer when auto-commit is enabled."""
+        from tapes.ui.tree_app import TreeApp
+
+        node = _stageable_file()
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
+        cfg = _auto_commit_config()
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE, config=cfg)
+        async with app.run_test() as pilot:
+            assert app._auto_commit_timer is None
+            await pilot.press("space")  # stage
+            assert node.staged
+            assert app._auto_commit_timer is not None
+
+    @pytest.mark.asyncio()
+    async def test_timer_resets_on_repeated_staging(self) -> None:
+        """Staging a second file resets the debounce timer (new timer object)."""
+        from tapes.ui.tree_app import TreeApp
+
+        file_a = _stageable_file("file_a.mkv", "File A", 2020)
+        file_b = _stageable_file("file_b.mkv", "File B", 2021)
+        root = FolderNode(name="root", children=[file_a, file_b])
+        model = TreeModel(root=root)
+        cfg = _auto_commit_config()
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE, config=cfg)
+        async with app.run_test() as pilot:
+            await pilot.press("space")  # stage file_a
+            timer1 = app._auto_commit_timer
+            assert timer1 is not None
+            await pilot.press("j")  # move to file_b
+            await pilot.press("space")  # stage file_b
+            timer2 = app._auto_commit_timer
+            assert timer2 is not None
+            assert timer2 is not timer1  # timer was replaced
+
+    @pytest.mark.asyncio()
+    async def test_auto_commit_pending_when_not_in_tree(self) -> None:
+        """Timer sets pending flag when user is in a non-tree view."""
+        from tapes.ui.tree_app import TreeApp
+
+        node = _stageable_file()
+        node.status = FileStatus.STAGED  # pre-stage to avoid timing issues
+        folder = FolderNode(name="folder", children=[node])
+        root = FolderNode(name="root", children=[folder])
+        model = TreeModel(root=root)
+        cfg = _auto_commit_config()
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE, config=cfg)
+        async with app.run_test() as pilot:
+            # Enter metadata view first
+            await pilot.press("enter")  # open metadata for folder's files
+            assert app.state == AppState.METADATA
+            # Schedule auto-commit while in metadata view
+            app._schedule_auto_commit()
+            # Wait for debounce to fire
+            await pilot.pause(AUTO_COMMIT_DELAY + 0.5)
+            assert app._auto_commit_pending is True
+
+    @pytest.mark.asyncio()
+    async def test_pending_fires_on_return_from_help(self) -> None:
+        """Pending auto-commit fires when returning from help to tree."""
+        from tapes.ui.tree_app import TreeApp
+
+        node = _stageable_file()
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
+        cfg = _auto_commit_config()
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE, config=cfg)
+        async with app.run_test() as pilot:
+            await pilot.press("space")  # stage
+            assert node.staged
+            # Open help before debounce fires
+            await pilot.press("question_mark")
+            assert app.state == AppState.HELP
+            # Wait for debounce
+            await pilot.pause(AUTO_COMMIT_DELAY + 0.5)
+            assert app._auto_commit_pending is True
+            # Return to tree - pending should fire
+            await pilot.press("question_mark")
+            assert app.state == AppState.TREE
+            assert app._auto_commit_pending is False
+
+    @pytest.mark.asyncio()
+    async def test_pending_fires_on_return_from_search(self) -> None:
+        """Pending auto-commit fires when exiting search mode."""
+        from tapes.ui.tree_app import TreeApp
+
+        node = _stageable_file()
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
+        cfg = _auto_commit_config()
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE, config=cfg)
+        async with app.run_test() as pilot:
+            await pilot.press("space")  # stage
+            assert node.staged
+            # Enter search mode before debounce fires
+            await pilot.press("slash")
+            assert app.state == AppState.TREE_SEARCH
+            # Wait for debounce
+            await pilot.pause(AUTO_COMMIT_DELAY + 0.5)
+            assert app._auto_commit_pending is True
+            # Exit search - pending should fire
+            await pilot.press("escape")
+            assert app.state == AppState.TREE
+            assert app._auto_commit_pending is False
+
+    @pytest.mark.asyncio()
+    async def test_auto_commit_empty_staged_is_noop(self) -> None:
+        """Auto-commit with no staged files does nothing (no notification)."""
+        from tapes.ui.tree_app import TreeApp
+
+        node = FileNode(path=Path("/root/top.mkv"))
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
+        cfg = _auto_commit_config()
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE, config=cfg)
+        async with app.run_test() as pilot:
+            # Manually trigger _run_auto_commit with nothing staged
+            app._run_auto_commit()
+            await pilot.pause(0.1)
+            # Pending flag should be cleared
+            assert app._auto_commit_pending is False
+            # No crash, all files still present
+            assert len(model.all_files()) == 1
+
+    @pytest.mark.asyncio()
+    async def test_auto_commit_notification_without_rejections(self) -> None:
+        """Auto-commit notification shows processed count without rejection info."""
+        from unittest.mock import patch
+
+        from tapes.ui.tree_app import TreeApp
+
+        node = _stageable_file()
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
+        cfg = _auto_commit_config()
+        cfg.dry_run = True  # dry-run so no actual file ops
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE, config=cfg)
+        async with app.run_test() as _pilot:
+            notifications: list[str] = []
+            with patch.object(app, "notify", side_effect=lambda msg, **kw: notifications.append(msg)):
+                # Simulate auto-commit done callback with no rejections
+                app._on_auto_commit_done(
+                    pairs=[(node.path, Path("/lib/Top (2020).mkv"))],
+                    results=["[dry-run] Would copy ..."],
+                    staged=[node],
+                    batch_rejected=[],
+                )
+            assert len(notifications) == 1
+            assert "Auto-committed:" in notifications[0]
+            assert "1 file(s) processed" in notifications[0]
+            assert "rejected" not in notifications[0]
+
+    @pytest.mark.asyncio()
+    async def test_auto_commit_notification_with_rejections(self) -> None:
+        """Auto-commit notification includes rejection count when files were rejected."""
+        from unittest.mock import patch
+
+        from tapes.ui.tree_app import TreeApp
+
+        node = _stageable_file()
+        rejected_node = FileNode(path=Path("/root/dup.mkv"))
+        rejected_node.status = FileStatus.REJECTED
+        root = FolderNode(name="root", children=[node, rejected_node])
+        model = TreeModel(root=root)
+        cfg = _auto_commit_config()
+        cfg.dry_run = True
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE, config=cfg)
+        async with app.run_test() as _pilot:
+            notifications: list[str] = []
+            with patch.object(app, "notify", side_effect=lambda msg, **kw: notifications.append(msg)):
+                app._on_auto_commit_done(
+                    pairs=[(node.path, Path("/lib/Top (2020).mkv"))],
+                    results=["[dry-run] Would copy ..."],
+                    staged=[node],
+                    batch_rejected=[rejected_node],
+                )
+            assert len(notifications) == 1
+            assert "1 rejected" in notifications[0]

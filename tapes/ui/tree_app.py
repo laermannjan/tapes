@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, NamedTuple
 
 if TYPE_CHECKING:
+    from textual.timer import Timer
+
     from tapes.pipeline import PipelineParams
 
 from textual.app import App, ComposeResult
@@ -140,6 +142,9 @@ class TreeApp(App):
         self._search_query = ""
         self._last_ctrl_c: float = 0.0
         self._commit_cancelled: threading.Event | None = None
+        # Auto-commit state
+        self._auto_commit_timer: Timer | None = None
+        self._auto_commit_pending: bool = False
 
     @property
     def state(self) -> AppState:
@@ -206,6 +211,19 @@ class TreeApp(App):
 
         return _can_stage
 
+    def _post_update_with_auto_commit(self, fn: Callable[[], None]) -> None:
+        """Wrap pipeline post_update to trigger auto-commit debounce.
+
+        Dispatches *fn* to the main thread (via call_from_thread), then
+        also schedules an auto-commit debounce reset.
+        """
+
+        def _combined() -> None:
+            fn()
+            self._schedule_auto_commit()
+
+        self.call_from_thread(_combined)
+
     def _run_tmdb_worker(self) -> object:
         """Return a callable that runs TMDB queries in a background thread."""
         from tapes.pipeline import run_tmdb_pass
@@ -220,7 +238,7 @@ class TreeApp(App):
                 self.model,
                 params,
                 on_progress=on_progress,
-                post_update=self.call_from_thread,
+                post_update=self._post_update_with_auto_commit,
                 can_stage=self._make_can_stage(),
             )
             self.call_from_thread(self._on_tmdb_done)
@@ -266,6 +284,8 @@ class TreeApp(App):
         tv.focus()
         tv.refresh()
         self._update_footer()
+        if self._auto_commit_pending:
+            self._run_auto_commit()
 
     def _show_commit(self) -> None:
         """Show the commit confirmation view with conflict report."""
@@ -307,6 +327,8 @@ class TreeApp(App):
         tv.focus()
         tv.refresh()
         self._update_footer()
+        if self._auto_commit_pending:
+            self._run_auto_commit()
 
     def _discard_metadata(self) -> None:
         """Discard metadata view changes and return to tree."""
@@ -353,6 +375,8 @@ class TreeApp(App):
             tv.focus()
             tv.refresh()
             self._update_footer()
+            if self._auto_commit_pending:
+                self._run_auto_commit()
 
     def action_cursor_down(self) -> None:
         if self._mode in _MODAL_STATES:
@@ -388,6 +412,7 @@ class TreeApp(App):
             tv.clear_range_select()
             tv.refresh()
             self._update_footer()
+            self._schedule_auto_commit()
             return
         node = tv.cursor_node()
         if isinstance(node, FileNode):
@@ -400,6 +425,7 @@ class TreeApp(App):
             )
             tv.refresh()
             self._update_footer()
+            self._schedule_auto_commit()
 
     def _compute_file_pairs(self, staged: list[FileNode]) -> list[tuple[FileNode, Path]]:
         """Compute (node, destination) pairs for staged files."""
@@ -465,6 +491,8 @@ class TreeApp(App):
             self.notify("Incomplete metadata -- cannot stage")
         self.query_one(TreeView).refresh()
         self._update_footer()
+        if node.staged:
+            self._schedule_auto_commit()
 
     def _accept_metadata_and_return(self) -> None:
         """Accept metadata view changes, auto-stage if possible, return to tree."""
@@ -479,12 +507,16 @@ class TreeApp(App):
         dv.accept_focused_column()
 
         mt, tt = self.movie_template, self.tv_template
+        any_staged = False
         if self._metadata_snapshot:
             for snap in self._metadata_snapshot:
                 node = snap.node
                 if node.pending and can_fill_template(node, node.metadata, mt, tt):
                     node.status = FileStatus.STAGED
+                    any_staged = True
         self._metadata_snapshot = None
+        if any_staged:
+            self._schedule_auto_commit()
         self._show_tree()
 
         # Trigger TMDB refresh for all metadata nodes when fields changed.
@@ -688,6 +720,119 @@ class TreeApp(App):
         self.query_one(CommitView).progress_text = ""
         self.notify(f"Cancelled ({done}/{total} files processed)")
 
+    # ------------------------------------------------------------------
+    # Auto-commit: debounce timer, pending flag, background processing
+    # ------------------------------------------------------------------
+
+    def _schedule_auto_commit(self) -> None:
+        """Reset the auto-commit debounce timer after a staging event."""
+        if not self.config.mode.auto_commit:
+            return
+        if self._auto_commit_timer is not None:
+            self._auto_commit_timer.stop()
+        self._auto_commit_timer = self.set_timer(
+            self.config.mode.auto_commit_delay,
+            self._auto_commit_fire,
+        )
+
+    def _auto_commit_fire(self) -> None:
+        """Called when the debounce timer expires."""
+        self._auto_commit_timer = None
+        if self._mode != AppState.TREE:
+            self._auto_commit_pending = True
+            return
+        self._run_auto_commit()
+
+    def _run_auto_commit(self) -> None:
+        """Collect staged files, run conflict detection, process in background."""
+        from tapes.conflicts import detect_conflicts
+
+        self._auto_commit_pending = False
+
+        staged = [f for f in self.model.all_files() if f.staged]
+        if not staged:
+            return
+
+        pairs = self._compute_file_pairs(staged)
+        if not pairs:
+            return
+
+        report = detect_conflicts(
+            pairs,
+            conflict_resolution=self.config.library.conflict_resolution,
+        )
+
+        if not report.valid_pairs:
+            if report.rejected_count > 0:
+                self.notify(f"{report.rejected_count} file(s) rejected (conflicts)")
+                self.query_one(TreeView).refresh()
+                self._update_footer()
+            return
+
+        src_dest_pairs = [(n.path, dest) for n, dest in report.valid_pairs]
+        valid_nodes = [n for n, _ in report.valid_pairs]
+        batch_rejected = [n for p in report.problems for n in p.rejected_nodes]
+
+        self.run_worker(
+            self._run_auto_commit_worker(src_dest_pairs, valid_nodes, batch_rejected),  # ty: ignore[invalid-argument-type]  # Textual WorkType stubs
+            thread=True,
+        )
+
+    def _run_auto_commit_worker(
+        self,
+        pairs: list[tuple[Path, Path]],
+        staged: list[FileNode],
+        batch_rejected: list[FileNode],
+    ) -> object:
+        """Background worker for auto-commit batch processing."""
+        from tapes.file_ops import process_staged
+
+        operation = self.config.library.operation
+        dry_run = self.config.dry_run
+
+        def worker() -> None:
+            results = process_staged(
+                pairs,
+                operation,
+                dry_run=dry_run,
+            )
+            self.call_from_thread(self._on_auto_commit_done, pairs, results, staged, batch_rejected)
+
+        return worker
+
+    def _on_auto_commit_done(
+        self,
+        pairs: list[tuple[Path, Path]],
+        results: list[str],
+        staged: list[FileNode],
+        batch_rejected: list[FileNode],
+    ) -> None:
+        """Handle auto-commit batch completion."""
+        ok_srcs = {src for (src, _), msg in zip(pairs, results, strict=False) if not msg.startswith("Error")}
+        processed = [n for n in staged if n.path in ok_srcs]
+        errors = len(results) - len(ok_srcs)
+
+        if processed:
+            self.model.remove_nodes(processed)
+
+        if self.config.library.delete_rejected and batch_rejected:
+            from tapes.file_ops import delete_files
+
+            delete_files([n.path for n in batch_rejected], dry_run=self.config.dry_run)
+            self.model.remove_nodes(batch_rejected)
+
+        self.query_one(TreeView).refresh_tree()
+        self._update_footer()
+
+        parts: list[str] = []
+        parts.append(f"{len(processed)} file(s) processed")
+        n_rejected = len(batch_rejected)
+        if n_rejected:
+            parts.append(f"{n_rejected} rejected")
+        if errors:
+            parts.append(f"{errors} error(s)")
+        self.notify("Auto-committed: " + ", ".join(parts))
+
     def action_refresh_query(self) -> None:
         if self._mode in _MODAL_STATES or self._mode == AppState.METADATA:
             return
@@ -771,6 +916,8 @@ class TreeApp(App):
             bar.search_query = ""
             self.query_one(TreeView).clear_filter()
         self._update_footer()
+        if self._auto_commit_pending:
+            self._run_auto_commit()
 
     def on_key(self, event: Key) -> None:
         """Intercept key events for h/l navigation, ctrl+c quit, shift+tab, and search mode."""
