@@ -34,6 +34,7 @@ def select_template(node: FileNode, movie_template: str, tv_template: str) -> st
     return movie_template
 
 
+_SUBTITLE_EXTS = frozenset({"srt", "sub", "ass", "ssa", "idx"})
 _KNOWN_TAGS = frozenset({"forced", "sdh", "signs", "commentary"})
 
 
@@ -43,17 +44,23 @@ def _is_tag(s: str) -> bool:
 
 
 def full_extension(path: Path) -> str:
-    """Return the full extension, preserving tags like '.forced.en.srt'.
+    """Return the full extension, preserving tags for subtitle files.
 
-    Walks backwards through suffixes, collecting consecutive tags
-    (language codes, 'forced', 'sdh', etc.) that precede the final
-    extension.  Also picks up hyphen-prefixed tags (e.g. ``-forced``)
-    that appear just before the dot-suffix chain in the stem.
+    For subtitle files (.srt, .sub, .ass, .ssa, .idx), walks backwards
+    through suffixes collecting language codes and tags like 'forced',
+    'sdh', etc. Also picks up hyphen-prefixed tags (e.g. ``-forced``)
+    in the stem. For all other files, returns just the final extension.
     """
     suffixes = path.suffixes
     if not suffixes:
         return ""
-    # Always include the last suffix; walk backwards collecting tags
+
+    base_ext = suffixes[-1].lstrip(".")
+
+    # Only walk tags for subtitle files
+    if base_ext.lower() not in _SUBTITLE_EXTS:
+        return base_ext
+
     count = 1
     for i in range(len(suffixes) - 2, -1, -1):
         tag = suffixes[i].lstrip(".")
