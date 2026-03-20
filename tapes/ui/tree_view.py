@@ -9,7 +9,7 @@ from rich.text import Text
 from textual.reactive import reactive
 from textual.widget import Widget
 
-from tapes.tree_model import FileNode, FolderNode, TreeModel
+from tapes.tree_model import FileNode, FileStatus, FolderNode, TreeModel
 from tapes.ui.colors import COLOR_CURSOR_BG, COLOR_MUTED, COLOR_RANGE_BG
 from tapes.ui.tree_render import flatten_all_with_depth, flatten_with_depth, render_row
 
@@ -85,33 +85,32 @@ class TreeView(Widget):
         lo, hi = rng
         return [self._items[i][0] for i in range(lo, hi + 1)]
 
-    def _toggle_flag_range(self, attr: str) -> None:
-        """Toggle a boolean flag on all FileNodes in the selection range."""
+    def toggle_rejected_range(self) -> None:
+        """Toggle rejected on all FileNodes in the selection range."""
         nodes = self.selected_nodes()
         file_nodes = [n for n in nodes if isinstance(n, FileNode)]
         if not file_nodes:
             return
-        all_set = all(getattr(f, attr) for f in file_nodes)
+        all_rejected = all(f.rejected for f in file_nodes)
         for f in file_nodes:
-            setattr(f, attr, not all_set)
+            if all_rejected:
+                f.status = FileStatus.PENDING
+            else:
+                f.status = FileStatus.REJECTED
         self.refresh()
 
-    def toggle_ignored_range(self) -> None:
-        """Toggle ignored on all FileNodes in the selection range."""
-        self._toggle_flag_range("ignored")
-
-    def toggle_ignored_at_cursor(self) -> None:
-        """Toggle ignored on cursor or range."""
+    def toggle_rejected_at_cursor(self) -> None:
+        """Toggle rejected on cursor or range."""
         if self.in_range_mode:
-            self.toggle_ignored_range()
+            self.toggle_rejected_range()
             self.clear_range_select()
         else:
             node = self.cursor_node()
             if isinstance(node, FileNode):
-                self.model.toggle_ignored(node)
+                self.model.toggle_rejected(node)
                 self.refresh()
             elif isinstance(node, FolderNode):
-                self.model.toggle_ignored_recursive(node)
+                self.model.toggle_rejected_recursive(node)
                 self.refresh()
 
     def _refresh_items(self) -> None:
@@ -211,7 +210,7 @@ class TreeView(Widget):
 
             sliced_row = self._h_slice_row(full_row, h_off, inner_width)
 
-            if isinstance(node, FileNode) and node.ignored:
+            if isinstance(node, FileNode) and node.rejected:
                 sliced_row.stylize(COLOR_MUTED)
             if i == self.cursor_index:
                 sliced_row.stylize(COLOR_CURSOR_BG)
@@ -429,9 +428,9 @@ class TreeView(Widget):
             self._items = [(node, depth) for i, (node, depth) in enumerate(self._all_items) if i in keep]
 
     @property
-    def ignored_count(self) -> int:
-        """Number of ignored files."""
-        return sum(1 for f in self.model.all_files() if f.ignored)
+    def rejected_count(self) -> int:
+        """Number of rejected files."""
+        return sum(1 for f in self.model.all_files() if f.rejected)
 
     @property
     def item_count(self) -> int:

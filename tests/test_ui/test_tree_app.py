@@ -9,6 +9,7 @@ import pytest
 from tapes.tree_model import (
     Candidate,
     FileNode,
+    FileStatus,
     FolderNode,
     TreeModel,
 )
@@ -511,55 +512,55 @@ class TestTreeAppKeys:
 
 
 # ---------------------------------------------------------------------------
-# Ignore toggle unit tests
+# Reject toggle unit tests
 # ---------------------------------------------------------------------------
 
 
-class TestIgnoreToggle:
-    def test_toggle_ignored_on_file(self) -> None:
+class TestRejectToggle:
+    def test_toggle_rejected_on_file(self) -> None:
         view = _make_view(_expanded_model())
         view.move_cursor(1)  # file_a.mkv
         node = view.cursor_node()
         assert isinstance(node, FileNode)
-        assert not node.ignored
-        view.toggle_ignored_at_cursor()
-        assert node.ignored
-        view.toggle_ignored_at_cursor()
-        assert not node.ignored
+        assert not node.rejected
+        view.toggle_rejected_at_cursor()
+        assert node.rejected
+        view.toggle_rejected_at_cursor()
+        assert not node.rejected
 
-    def test_toggle_ignored_on_folder(self) -> None:
+    def test_toggle_rejected_on_folder(self) -> None:
         model = _expanded_model()
         view = _make_view(model)
         # Cursor on folderA
         node = view.cursor_node()
         assert isinstance(node, FolderNode)
-        view.toggle_ignored_at_cursor()
+        view.toggle_rejected_at_cursor()
         file_a = model.all_files()[0]
-        assert file_a.ignored
-        # Toggle again to un-ignore
-        view.toggle_ignored_at_cursor()
-        assert not file_a.ignored
+        assert file_a.rejected
+        # Toggle again to un-reject
+        view.toggle_rejected_at_cursor()
+        assert not file_a.rejected
 
-    def test_toggle_ignored_range(self) -> None:
+    def test_toggle_rejected_range(self) -> None:
         model = _expanded_model()
         view = _make_view(model)
         view.move_cursor(1)  # file_a.mkv
         view.start_range_select()
         view.move_cursor(2)  # cursor at 3, range covers 1-3
-        view.toggle_ignored_at_cursor()
+        view.toggle_rejected_at_cursor()
         assert not view.in_range_mode
         files = model.all_files()
-        assert files[0].ignored  # file_a
-        assert files[1].ignored  # file_b
+        assert files[0].rejected  # file_a
+        assert files[1].rejected  # file_b
 
-    def test_ignored_count(self) -> None:
+    def test_rejected_count(self) -> None:
         model = _expanded_model()
         view = _make_view(model)
-        assert view.ignored_count == 0
-        model.all_files()[0].ignored = True
-        assert view.ignored_count == 1
-        model.all_files()[1].ignored = True
-        assert view.ignored_count == 2
+        assert view.rejected_count == 0
+        model.all_files()[0].status = FileStatus.REJECTED
+        assert view.rejected_count == 1
+        model.all_files()[1].status = FileStatus.REJECTED
+        assert view.rejected_count == 2
 
 
 # ---------------------------------------------------------------------------
@@ -585,7 +586,7 @@ class TestCommitAction:
         from tapes.ui.tree_app import TreeApp
 
         model = _expanded_model()
-        model.all_files()[0].staged = True
+        model.all_files()[0].status = FileStatus.STAGED
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
@@ -597,7 +598,7 @@ class TestCommitAction:
         from tapes.ui.tree_app import TreeApp
 
         model = _expanded_model()
-        model.all_files()[0].staged = True
+        model.all_files()[0].status = FileStatus.STAGED
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
@@ -607,7 +608,7 @@ class TestCommitAction:
             assert app.state == AppState.TREE
 
     @pytest.mark.asyncio()
-    async def test_x_toggles_ignored(self) -> None:
+    async def test_x_toggles_rejected(self) -> None:
         from tapes.ui.tree_app import TreeApp
 
         model = _expanded_model()
@@ -619,12 +620,12 @@ class TestCommitAction:
             await pilot.press("j")
             node = tv.cursor_node()
             assert isinstance(node, FileNode)
-            assert not node.ignored
+            assert not node.rejected
             await pilot.press("x")
-            assert node.ignored
+            assert node.rejected
 
     @pytest.mark.asyncio()
-    async def test_footer_shows_ignored_count(self) -> None:
+    async def test_footer_shows_rejected_count(self) -> None:
         from tapes.ui.bottom_bar import BottomBar
         from tapes.ui.tree_app import TreeApp
 
@@ -632,11 +633,11 @@ class TestCommitAction:
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
 
         async with app.run_test() as pilot:
-            # Move to file and ignore it
+            # Move to file and reject it
             await pilot.press("j")
             await pilot.press("x")
             bar = app.query_one(BottomBar)
-            assert "1 ignored" in bar.stats_text
+            assert "1 rejected" in bar.stats_text
 
 
 # ---------------------------------------------------------------------------
@@ -1145,7 +1146,7 @@ class TestAppStateTransitions:
         from tapes.ui.tree_app import TreeApp
 
         model = _expanded_model()
-        model.all_files()[0].staged = True
+        model.all_files()[0].status = FileStatus.STAGED
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
         async with app.run_test() as pilot:
             assert app.state == AppState.TREE
@@ -1208,7 +1209,7 @@ class TestTreeKeyRedesign:
         from tapes.ui.tree_app import TreeApp
 
         model = _expanded_model()
-        model.all_files()[0].staged = True
+        model.all_files()[0].status = FileStatus.STAGED
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE)
         async with app.run_test() as pilot:
             await pilot.press("tab")

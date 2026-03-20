@@ -252,7 +252,7 @@ def render_file_row(
     else:
         filename = node.path.name
 
-    if node.ignored:
+    if node.rejected:
         row.append(filename, style="strike")
     else:
         row.append(filename, style=LAVENDER)

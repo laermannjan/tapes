@@ -53,7 +53,7 @@ def _build_help_content(width: int) -> list[Text]:
     lines.append(key_row("enter", "open metadata view"))
     lines.append(key_row("space", "stage / unstage for commit"))
     lines.append(key_row("h / l", "collapse / expand folder"))
-    lines.append(key_row("x", "ignore file (skip entirely)"))
+    lines.append(key_row("x", "reject file (won't be processed)"))
     lines.append(key_row("v", "start visual range select"))
     lines.append(key_row("/", "search and filter"))
     lines.append(key_row("r", "re-query TMDB with current metadata"))

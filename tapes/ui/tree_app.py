@@ -24,6 +24,7 @@ from tapes.fields import MEDIA_TYPE, MEDIA_TYPE_EPISODE, TMDB_ID
 from tapes.templates import can_fill_template, compute_dest, select_template
 from tapes.tree_model import (
     FileNode,
+    FileStatus,
     FolderNode,
     TreeModel,
 )
@@ -66,7 +67,7 @@ class _NodeSnapshot(NamedTuple):
     node: FileNode
     metadata: dict
     candidates: list
-    staged: bool
+    status: FileStatus
 
 
 class TreeApp(App):
@@ -79,7 +80,7 @@ class TreeApp(App):
         Binding("space", "toggle_staged", "Stage"),
         Binding("v", "range_select", "Range Select"),
         Binding("escape", "cancel", "Cancel"),
-        Binding("x", "toggle_ignored", "Ignore"),
+        Binding("x", "toggle_rejected", "Reject"),
         Binding("e", "start_edit", "Edit", show=False),
         Binding("r", "refresh_query", "Refresh"),
         Binding("grave_accent", "toggle_flat", "Flat/Tree"),
@@ -230,7 +231,7 @@ class TreeApp(App):
         """Switch from tree view to metadata view for a file node."""
         self._mode = AppState.METADATA
         self._metadata_snapshot = [
-            _NodeSnapshot(node, copy.deepcopy(node.metadata), copy.deepcopy(node.candidates), node.staged),
+            _NodeSnapshot(node, copy.deepcopy(node.metadata), copy.deepcopy(node.candidates), node.status),
         ]
         mv = self.query_one(MetadataView)
         mv.set_node(node)
@@ -244,7 +245,7 @@ class TreeApp(App):
         """Switch from tree view to metadata view for multiple file nodes."""
         self._mode = AppState.METADATA
         self._metadata_snapshot = [
-            _NodeSnapshot(n, copy.deepcopy(n.metadata), copy.deepcopy(n.candidates), n.staged) for n in nodes
+            _NodeSnapshot(n, copy.deepcopy(n.metadata), copy.deepcopy(n.candidates), n.status) for n in nodes
         ]
         mv = self.query_one(MetadataView)
         mv.set_nodes(nodes)
@@ -275,8 +276,7 @@ class TreeApp(App):
 
         report = detect_conflicts(
             node_pairs,
-            duplicate_resolution=self.config.metadata.duplicate_resolution,
-            disambiguation=self.config.metadata.disambiguation,
+            conflict_resolution=self.config.library.conflict_resolution,
         )
 
         self._mode = AppState.COMMIT
@@ -311,10 +311,10 @@ class TreeApp(App):
     def _discard_metadata(self) -> None:
         """Discard metadata view changes and return to tree."""
         if self._metadata_snapshot:
-            for node, metadata, candidates, staged in self._metadata_snapshot:
+            for node, metadata, candidates, status in self._metadata_snapshot:
                 node.metadata = metadata
                 node.candidates = candidates
-                node.staged = staged
+                node.status = status
             self._metadata_snapshot = None
         self._show_tree()
 
@@ -382,9 +382,9 @@ class TreeApp(App):
                 all_staged = all(f.staged for f in file_nodes)
                 for f in file_nodes:
                     if all_staged:
-                        f.staged = False
+                        f.status = FileStatus.PENDING
                     elif can_fill_template(f, f.metadata, mt, tt):
-                        f.staged = True
+                        f.status = FileStatus.STAGED
             tv.clear_range_select()
             tv.refresh()
             self._update_footer()
@@ -482,8 +482,8 @@ class TreeApp(App):
         if self._metadata_snapshot:
             for snap in self._metadata_snapshot:
                 node = snap.node
-                if can_fill_template(node, node.metadata, mt, tt):
-                    node.staged = True
+                if node.pending and can_fill_template(node, node.metadata, mt, tt):
+                    node.status = FileStatus.STAGED
         self._metadata_snapshot = None
         self._show_tree()
 
@@ -528,11 +528,11 @@ class TreeApp(App):
         if tv.in_range_mode:
             tv.clear_range_select()
 
-    def action_toggle_ignored(self) -> None:
+    def action_toggle_rejected(self) -> None:
         if self._mode != AppState.TREE:
             return
         tv = self.query_one(TreeView)
-        tv.toggle_ignored_at_cursor()
+        tv.toggle_rejected_at_cursor()
         self._update_footer()
 
     def action_tab_forward(self) -> None:
@@ -929,10 +929,10 @@ class TreeApp(App):
         if tv.filter_text:
             bar.stats_text = f"{tv.item_count} matched \u00b7 {tv.total_count} total"
         else:
-            ignored = tv.ignored_count
+            rejected = tv.rejected_count
             parts = [f"{tv.staged_count} staged"]
-            if ignored:
-                parts.append(f"{ignored} ignored")
+            if rejected:
+                parts.append(f"{rejected} rejected")
             parts.append(f"{tv.total_count} total")
             if self._tmdb_querying:
                 done, total = self._tmdb_progress

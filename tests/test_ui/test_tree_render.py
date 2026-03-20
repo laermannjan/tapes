@@ -7,7 +7,7 @@ from pathlib import Path
 from rich.text import Text
 
 from tapes.templates import compute_dest, select_template, template_field_names
-from tapes.tree_model import FileNode, FolderNode, TreeModel
+from tapes.tree_model import FileNode, FileStatus, FolderNode, TreeModel
 from tapes.ui.tree_render import (
     flatten_with_depth,
     render_dest,
@@ -127,7 +127,7 @@ class TestRenderFileRow:
     def test_staged_file_with_destination(self) -> None:
         node = FileNode(
             path=Path("/movies/Inception.mkv"),
-            staged=True,
+            status=FileStatus.STAGED,
             metadata={"title": "Inception", "year": 2010},
         )
         row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
@@ -138,16 +138,15 @@ class TestRenderFileRow:
     def test_unstaged_file(self) -> None:
         node = FileNode(
             path=Path("/movies/Inception.mkv"),
-            staged=False,
             metadata={"title": "Inception", "year": 2010},
         )
         row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
         assert "Inception.mkv" in row.plain
 
-    def test_ignored_file_strikethrough_no_destination(self) -> None:
+    def test_rejected_file_strikethrough_no_destination(self) -> None:
         node = FileNode(
             path=Path("/movies/Inception.mkv"),
-            ignored=True,
+            status=FileStatus.REJECTED,
             metadata={"title": "Inception", "year": 2010},
         )
         row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
@@ -506,21 +505,19 @@ class TestReadyToStageIndicator:
     def test_staged_file_shows_check(self) -> None:
         node = FileNode(path=Path("movie.mkv"))
         node.metadata = {"media_type": "movie", "title": "Inception", "year": 2010}
-        node.staged = True
+        node.status = FileStatus.STAGED
         row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
         assert "\u25c9" in row.plain  # filled circle
 
     def test_ready_file_shows_hollow_square(self) -> None:
         node = FileNode(path=Path("movie.mkv"))
         node.metadata = {"media_type": "movie", "title": "Inception", "year": 2010}
-        node.staged = False
         row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
         assert "\u25cb" in row.plain  # empty circle
 
     def test_incomplete_file_shows_no_indicator(self) -> None:
         node = FileNode(path=Path("movie.mkv"))
         node.metadata = {"media_type": "movie", "title": "Inception"}  # no year
-        node.staged = False
         row = render_file_row(node, MOVIE_TEMPLATE, TV_TEMPLATE)
         assert "\u25c9" not in row.plain
         assert "\u25cb" in row.plain  # empty circle in warning color

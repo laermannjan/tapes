@@ -71,8 +71,8 @@ class CommitView(Widget):
                     lines += 1  # header
                     for p in problems:
                         lines += 1  # problem line
-                        if p.skipped_nodes:
-                            lines += 1  # skipped count
+                        if p.rejected_nodes:
+                            lines += 1  # rejected count
         lines += 4  # lib paths + blank + blank + op line
         return lines
 
@@ -155,9 +155,9 @@ class CommitView(Widget):
                         line.append("    \u2717 ", style=COLOR_WARNING)
                         line.append(p.description, style=COLOR_WARNING)
                         content.append(line)
-                        if p.skipped_nodes:
+                        if p.rejected_nodes:
                             skip_line = Text()
-                            skip_line.append(f"       {len(p.skipped_nodes)} file(s) skipped", style=COLOR_MUTED)
+                            skip_line.append(f"       {len(p.rejected_nodes)} file(s) rejected", style=COLOR_MUTED)
                             content.append(skip_line)
 
         content.append(Text())
@@ -184,7 +184,7 @@ class CommitView(Widget):
         bottom.append("       ")
         if self.quit_hint:
             bottom.append(self.quit_hint, style=f"italic {COLOR_MUTED}")
-        elif self.conflict_report and self.conflict_report.skipped_count > 0:
+        elif self.conflict_report and self.conflict_report.rejected_count > 0:
             total_valid = len(self._files)
             bottom.append(
                 f"enter to confirm {total_valid} file{'s' if total_valid != 1 else ''} \u00b7 esc to cancel",

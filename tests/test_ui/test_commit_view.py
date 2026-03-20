@@ -217,7 +217,7 @@ class TestCommitViewConflicts:
         files = [FileNode(path=Path("/a.mkv"), metadata={"media_type": "movie"})]
         problem_node = FileNode(path=Path("/b.mkv"), metadata={})
         report = ConflictReport(
-            problems=[Problem(description="Cannot write to /lib", skipped_nodes=[problem_node])],
+            problems=[Problem(description="Cannot write to /lib", rejected_nodes=[problem_node])],
             valid_pairs=[(files[0], Path("/lib/a.mkv"))],
         )
         view = CommitView(files, "copy")
@@ -225,13 +225,13 @@ class TestCommitViewConflicts:
         plain = render_plain(view)
         assert "1 problem" in plain
         assert "Cannot write" in plain
-        assert "skipped" in plain
+        assert "rejected" in plain
 
-    def test_confirm_shows_count_when_skipped(self) -> None:
+    def test_confirm_shows_count_when_rejected(self) -> None:
         files = [FileNode(path=Path("/a.mkv"), metadata={"media_type": "movie"})]
         problem_node = FileNode(path=Path("/b.mkv"), metadata={})
         report = ConflictReport(
-            problems=[Problem(description="test", skipped_nodes=[problem_node])],
+            problems=[Problem(description="test", rejected_nodes=[problem_node])],
             valid_pairs=[(files[0], Path("/lib/a.mkv"))],
         )
         view = CommitView(files, "copy")
