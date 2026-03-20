@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import string
-import sys
 from pathlib import Path
 from typing import Any, Literal
 
@@ -261,10 +260,12 @@ def load_config(
         stale_keys = [k for k in ("duplicate_resolution", "disambiguation") if k in metadata_yaml]
         if stale_keys:
             keys_str = " and ".join(f"metadata.{k}" for k in stale_keys)
-            print(
-                f"WARNING: {keys_str} is no longer supported. "
-                "Use library.conflict_resolution instead.",
-                file=sys.stderr,
+            import warnings
+
+            warnings.warn(
+                f"{keys_str} is no longer supported. Use library.conflict_resolution instead.",
+                DeprecationWarning,
+                stacklevel=2,
             )
 
     return cfg

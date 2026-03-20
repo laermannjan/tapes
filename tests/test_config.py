@@ -437,34 +437,45 @@ class TestConflictConfig:
         with pytest.raises(ValidationError):
             LibraryConfig(conflict_resolution="warn")  # type: ignore[arg-type]
 
-    def test_migration_warning_duplicate_resolution(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_migration_warning_duplicate_resolution(self, tmp_path: Path) -> None:
+        import warnings
+
         from tapes.config import load_config
 
         config_file = tmp_path / "config.yaml"
         config_file.write_text("metadata:\n  duplicate_resolution: warn\n")
-        load_config(config_path=config_file)
-        captured = capsys.readouterr()
-        assert "duplicate_resolution" in captured.err
-        assert "library.conflict_resolution" in captured.err
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            load_config(config_path=config_file)
+        assert len(w) == 1
+        assert "duplicate_resolution" in str(w[0].message)
+        assert "library.conflict_resolution" in str(w[0].message)
 
-    def test_migration_warning_disambiguation(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_migration_warning_disambiguation(self, tmp_path: Path) -> None:
+        import warnings
+
         from tapes.config import load_config
 
         config_file = tmp_path / "config.yaml"
         config_file.write_text("metadata:\n  disambiguation: off\n")
-        load_config(config_path=config_file)
-        captured = capsys.readouterr()
-        assert "disambiguation" in captured.err
-        assert "library.conflict_resolution" in captured.err
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            load_config(config_path=config_file)
+        assert len(w) == 1
+        assert "disambiguation" in str(w[0].message)
+        assert "library.conflict_resolution" in str(w[0].message)
 
-    def test_no_migration_warning_for_clean_config(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_no_migration_warning_for_clean_config(self, tmp_path: Path) -> None:
+        import warnings
+
         from tapes.config import load_config
 
         config_file = tmp_path / "config.yaml"
         config_file.write_text("library:\n  conflict_resolution: skip\n")
-        load_config(config_path=config_file)
-        captured = capsys.readouterr()
-        assert captured.err == ""
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            load_config(config_path=config_file)
+        assert len(w) == 0
 
 
 class TestModeConfig:
