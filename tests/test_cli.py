@@ -378,3 +378,52 @@ class TestServeCommand:
             cmd = mock_start.call_args[0][0]
             assert "--config" in cmd
             assert str(config_file) in cmd
+
+
+# ---------------------------------------------------------------------------
+# _build_serve_command
+# ---------------------------------------------------------------------------
+
+
+class TestBuildServeCommand:
+    def test_strips_serve_flag(self) -> None:
+        from tapes.cli import _build_serve_command
+
+        result = _build_serve_command(["/path/to/tapes", "--serve", "/media"])
+        assert result == "/path/to/tapes /media"
+
+    def test_strips_serve_host_and_port(self) -> None:
+        from tapes.cli import _build_serve_command
+
+        result = _build_serve_command(
+            ["/path/to/tapes", "--serve", "--serve-host", "127.0.0.1", "--serve-port", "3000", "/media"]
+        )
+        assert result == "/path/to/tapes /media"
+
+    def test_strips_serve_flags_equals_syntax(self) -> None:
+        from tapes.cli import _build_serve_command
+
+        result = _build_serve_command(
+            ["/path/to/tapes", "--serve", "--serve-host=127.0.0.1", "--serve-port=3000", "/media"]
+        )
+        assert result == "/path/to/tapes /media"
+
+    def test_preserves_other_flags(self) -> None:
+        from tapes.cli import _build_serve_command
+
+        result = _build_serve_command(
+            ["/path/to/tapes", "--serve", "--dry-run", "--config", "/etc/tapes.yaml", "/media"]
+        )
+        assert result == "/path/to/tapes --dry-run --config /etc/tapes.yaml /media"
+
+    def test_quotes_args_with_spaces(self) -> None:
+        from tapes.cli import _build_serve_command
+
+        result = _build_serve_command(["/path/to/tapes", "--serve", "/media/my incoming"])
+        assert result == "/path/to/tapes '/media/my incoming'"
+
+    def test_preserves_verbose_short_flag(self) -> None:
+        from tapes.cli import _build_serve_command
+
+        result = _build_serve_command(["/path/to/tapes", "-v", "--serve", "/media"])
+        assert result == "/path/to/tapes -v /media"

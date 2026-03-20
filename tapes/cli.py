@@ -203,6 +203,35 @@ def import_cmd(
     tui.run()
 
 
+def _build_serve_command(argv: list[str]) -> str:
+    """Build a shell command from argv, stripping --serve* flags.
+
+    Removes --serve, --serve-host <value>, and --serve-port <value>.
+    Handles both --flag value and --flag=value syntax.
+    Quotes arguments that contain spaces.
+    """
+    import shlex
+
+    serve_value_flags = {"--serve-host", "--serve-port"}
+    result: list[str] = []
+    skip_next = False
+
+    for arg in argv:
+        if skip_next:
+            skip_next = False
+            continue
+        if arg == "--serve":
+            continue
+        if arg in serve_value_flags:
+            skip_next = True
+            continue
+        if any(arg.startswith(f"{flag}=") for flag in serve_value_flags):
+            continue
+        result.append(shlex.quote(arg))
+
+    return " ".join(result)
+
+
 def _start_server(command: str, host: str, port: int) -> None:
     """Start the textual-serve server. Extracted for testability."""
     from textual_serve.server import Server
