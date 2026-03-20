@@ -7,6 +7,7 @@ from pathlib import Path
 from tapes.tree_model import (
     Candidate,
     FileNode,
+    FileStatus,
     FolderNode,
     TreeModel,
     build_tree,
@@ -29,14 +30,41 @@ class TestCandidate:
         assert c.score == 0.0
 
 
+# --- FileStatus ---
+
+
+class TestFileStatus:
+    def test_default_status_is_pending(self) -> None:
+        node = FileNode(path=Path("test.mkv"))
+        assert node.status == FileStatus.PENDING
+        assert node.pending is True
+        assert node.staged is False
+        assert node.rejected is False
+
+    def test_staged_property(self) -> None:
+        node = FileNode(path=Path("test.mkv"))
+        node.status = FileStatus.STAGED
+        assert node.staged is True
+        assert node.pending is False
+        assert node.rejected is False
+
+    def test_rejected_property(self) -> None:
+        node = FileNode(path=Path("test.mkv"))
+        node.status = FileStatus.REJECTED
+        assert node.rejected is True
+        assert node.pending is False
+        assert node.staged is False
+
+
 # --- FileNode ---
 
 
 class TestFileNode:
     def test_defaults(self) -> None:
         n = FileNode(path=Path("/a/b.mkv"))
+        assert n.status == FileStatus.PENDING
         assert n.staged is False
-        assert n.ignored is False
+        assert n.rejected is False
         assert n.metadata == {}
         assert n.candidates == []
 
@@ -44,13 +72,11 @@ class TestFileNode:
         cand = Candidate(name="tmdb", metadata={"title": "X"}, score=0.95)
         n = FileNode(
             path=Path("/a.mkv"),
-            staged=True,
-            ignored=True,
+            status=FileStatus.STAGED,
             metadata={"title": "X"},
             candidates=[cand],
         )
         assert n.staged is True
-        assert n.ignored is True
         assert n.metadata["title"] == "X"
         assert len(n.candidates) == 1
 
@@ -84,14 +110,23 @@ class TestToggles:
         model.toggle_staged(n)
         assert n.staged is False
 
-    def test_toggle_ignored(self) -> None:
+    def test_toggle_rejected(self) -> None:
         n = FileNode(path=Path("/a.mkv"))
         model = TreeModel(root=FolderNode(name="r", children=[n]))
-        assert n.ignored is False
-        model.toggle_ignored(n)
-        assert n.ignored is True
-        model.toggle_ignored(n)
-        assert n.ignored is False
+        assert n.rejected is False
+        model.toggle_rejected(n)
+        assert n.rejected is True
+        model.toggle_rejected(n)
+        assert n.rejected is False
+
+    def test_toggle_rejected_from_staged(self) -> None:
+        """Pressing x on a staged file rejects it (one-way)."""
+        n = FileNode(path=Path("/a.mkv"), status=FileStatus.STAGED)
+        model = TreeModel(root=FolderNode(name="r", children=[n]))
+        assert n.staged is True
+        model.toggle_rejected(n)
+        assert n.rejected is True
+        assert n.staged is False
 
     def test_toggle_collapsed(self) -> None:
         sub = FolderNode(name="sub", collapsed=True)
@@ -102,8 +137,8 @@ class TestToggles:
         assert sub.collapsed is True
 
     def test_toggle_staged_recursive_all_staged_unstages(self) -> None:
-        f1 = FileNode(path=Path("/a.mkv"), staged=True)
-        f2 = FileNode(path=Path("/b.mkv"), staged=True)
+        f1 = FileNode(path=Path("/a.mkv"), status=FileStatus.STAGED)
+        f2 = FileNode(path=Path("/b.mkv"), status=FileStatus.STAGED)
         sub = FolderNode(name="sub", children=[f1, f2])
         model = TreeModel(root=FolderNode(name="r", children=[sub]))
 
@@ -112,8 +147,8 @@ class TestToggles:
         assert f2.staged is False
 
     def test_toggle_staged_recursive_mixed_stages_all(self) -> None:
-        f1 = FileNode(path=Path("/a.mkv"), staged=True)
-        f2 = FileNode(path=Path("/b.mkv"), staged=False)
+        f1 = FileNode(path=Path("/a.mkv"), status=FileStatus.STAGED)
+        f2 = FileNode(path=Path("/b.mkv"))
         sub = FolderNode(name="sub", children=[f1, f2])
         model = TreeModel(root=FolderNode(name="r", children=[sub]))
 
@@ -122,8 +157,8 @@ class TestToggles:
         assert f2.staged is True
 
     def test_toggle_staged_recursive_none_stages_all(self) -> None:
-        f1 = FileNode(path=Path("/a.mkv"), staged=False)
-        f2 = FileNode(path=Path("/b.mkv"), staged=False)
+        f1 = FileNode(path=Path("/a.mkv"))
+        f2 = FileNode(path=Path("/b.mkv"))
         sub = FolderNode(name="sub", children=[f1, f2])
         model = TreeModel(root=FolderNode(name="r", children=[sub]))
 
@@ -132,8 +167,8 @@ class TestToggles:
         assert f2.staged is True
 
     def test_toggle_staged_recursive_nested(self) -> None:
-        f1 = FileNode(path=Path("/a.mkv"), staged=False)
-        f2 = FileNode(path=Path("/b.mkv"), staged=True)
+        f1 = FileNode(path=Path("/a.mkv"))
+        f2 = FileNode(path=Path("/b.mkv"), status=FileStatus.STAGED)
         inner = FolderNode(name="inner", children=[f2])
         outer = FolderNode(name="outer", children=[f1, inner])
         model = TreeModel(root=FolderNode(name="r", children=[outer]))
@@ -240,8 +275,9 @@ class TestBuildTree:
         model = build_tree(files, tmp_path)
         f = model.root.children[0]
         assert isinstance(f, FileNode)
+        assert f.status == FileStatus.PENDING
         assert f.staged is False
-        assert f.ignored is False
+        assert f.rejected is False
         assert f.metadata == {}
         assert f.candidates == []
 
@@ -392,7 +428,7 @@ class TestStagingGate:
 
         node = FileNode(path=Path("movie.mkv"))
         node.metadata = {MEDIA_TYPE: "movie", TITLE: "Inception"}  # incomplete
-        node.staged = True  # force staged
+        node.status = FileStatus.STAGED  # force staged
         model = TreeModel(root=FolderNode(name="root", children=[node]))
 
         def can_stage(n: FileNode) -> bool:

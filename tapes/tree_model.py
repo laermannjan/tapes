@@ -4,8 +4,15 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
 from typing import Any
+
+
+class FileStatus(Enum):
+    PENDING = "pending"
+    STAGED = "staged"
+    REJECTED = "rejected"
 
 
 @dataclass
@@ -22,10 +29,21 @@ class FileNode:
     """A file in the tree."""
 
     path: Path
-    staged: bool = False
-    ignored: bool = False
+    status: FileStatus = FileStatus.PENDING
     metadata: dict[str, Any] = field(default_factory=dict)
     candidates: list[Candidate] = field(default_factory=list)
+
+    @property
+    def staged(self) -> bool:
+        return self.status == FileStatus.STAGED
+
+    @property
+    def rejected(self) -> bool:
+        return self.status == FileStatus.REJECTED
+
+    @property
+    def pending(self) -> bool:
+        return self.status == FileStatus.PENDING
 
 
 @dataclass
@@ -60,20 +78,26 @@ class TreeModel:
         node: FileNode,
         can_stage: Callable[[FileNode], bool] | None = None,
     ) -> None:
-        """Toggle staged flag on a file node.
+        """Toggle staged status on a file node.
 
         If *can_stage* is provided and the node is not currently staged,
         staging is only allowed when ``can_stage(node)`` returns True.
         Unstaging is always allowed.
         """
         if node.staged:
-            node.staged = False
+            node.status = FileStatus.PENDING
         elif can_stage is None or can_stage(node):
-            node.staged = True
+            node.status = FileStatus.STAGED
 
-    def toggle_ignored(self, node: FileNode) -> None:
-        """Toggle ignored flag on a file node."""
-        node.ignored = not node.ignored
+    def toggle_rejected(self, node: FileNode) -> None:
+        """Toggle rejected status on a file node.
+
+        PENDING <-> REJECTED (toggle), STAGED -> REJECTED (one-way).
+        """
+        if node.rejected:
+            node.status = FileStatus.PENDING
+        else:
+            node.status = FileStatus.REJECTED
 
     def toggle_collapsed(self, node: FolderNode) -> None:
         """Toggle collapsed flag on a folder node."""
@@ -113,23 +137,26 @@ class TreeModel:
         all_staged = all(f.staged for f in files)
         if all_staged:
             for f in files:
-                f.staged = False
+                f.status = FileStatus.PENDING
         else:
             for f in files:
                 if not f.staged and (can_stage is None or can_stage(f)):
-                    f.staged = True
+                    f.status = FileStatus.STAGED
 
-    def toggle_ignored_recursive(self, node: FolderNode) -> None:
-        """Toggle ignored on all file descendants.
+    def toggle_rejected_recursive(self, node: FolderNode) -> None:
+        """Toggle rejected on all file descendants.
 
-        If ALL are ignored, un-ignore all. Otherwise ignore all.
+        If ALL are rejected, un-reject all. Otherwise reject all.
         """
         files = collect_files(node)
         if not files:
             return
-        all_ignored = all(f.ignored for f in files)
+        all_rejected = all(f.rejected for f in files)
         for f in files:
-            f.ignored = not all_ignored
+            if all_rejected:
+                f.status = FileStatus.PENDING
+            else:
+                f.status = FileStatus.REJECTED
 
     def remove_nodes(self, nodes: list[FileNode]) -> None:
         """Remove file nodes from the tree and prune empty folders."""
