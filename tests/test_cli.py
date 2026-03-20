@@ -414,6 +414,31 @@ class TestServeFlag:
 # ---------------------------------------------------------------------------
 
 
+class TestAutoCommitFlags:
+    def test_auto_commit_in_help(self) -> None:
+        result = runner.invoke(app, ["--help"])
+        assert "--auto-commit" in result.output
+        assert "--auto-commit-delay" in result.output
+
+    def test_auto_commit_overrides(self) -> None:
+        from tapes.cli import _build_overrides
+
+        result = _build_overrides(auto_commit=True)
+        assert result["mode"]["auto_commit"] is True
+
+    def test_auto_commit_delay_overrides(self) -> None:
+        from tapes.cli import _build_overrides
+
+        result = _build_overrides(auto_commit_delay=5.0)
+        assert result["mode"]["auto_commit_delay"] == 5.0
+
+    def test_auto_commit_false_not_included(self) -> None:
+        from tapes.cli import _build_overrides
+
+        result = _build_overrides(auto_commit=False)
+        assert "mode" not in result or "auto_commit" not in result.get("mode", {})
+
+
 class TestBuildServeCommand:
     def test_strips_serve_flag(self) -> None:
         from tapes.cli import _build_serve_command

@@ -110,6 +110,8 @@ class ModeConfig(BaseModel):
     serve: bool = False
     serve_host: str = "0.0.0.0"  # noqa: S104
     serve_port: int = Field(default=8080, ge=1, le=65535)
+    auto_commit: bool = False
+    auto_commit_delay: float = Field(default=2.0, gt=0.0)
 
 
 # Module-level global is necessary because pydantic-settings calls

@@ -43,6 +43,7 @@ def _build_overrides(**kwargs: Any) -> dict[str, Any]:
         "max_workers": ("advanced", "max_workers"),
         "tmdb_timeout": ("advanced", "tmdb_timeout"),
         "tmdb_retries": ("advanced", "tmdb_retries"),
+        "auto_commit_delay": ("mode", "auto_commit_delay"),
     }
 
     overrides: dict[str, Any] = {}
@@ -55,6 +56,9 @@ def _build_overrides(**kwargs: Any) -> dict[str, Any]:
 
     if kwargs.get("delete_rejected"):
         overrides.setdefault("library", {})["delete_rejected"] = True
+
+    if kwargs.get("auto_commit"):
+        overrides.setdefault("mode", {})["auto_commit"] = True
 
     return overrides
 
@@ -124,6 +128,11 @@ def main(
         rich_help_panel="Serve",
     ),
     serve_port: int = typer.Option(8080, "--serve-port", help="Port for web server", rich_help_panel="Serve"),
+    # Mode
+    auto_commit: bool = typer.Option(False, "--auto-commit", help="Auto-process staged files", rich_help_panel="Mode"),
+    auto_commit_delay: float | None = typer.Option(
+        None, "--auto-commit-delay", help="Debounce delay in seconds", rich_help_panel="Mode"
+    ),
     # Library
     library_movies: Path | None = typer.Option(
         None, "--library-movies", help="Movies library directory", rich_help_panel="Library"
@@ -207,6 +216,8 @@ def main(
         max_workers=max_workers,
         tmdb_timeout=tmdb_timeout,
         tmdb_retries=tmdb_retries,
+        auto_commit=auto_commit,
+        auto_commit_delay=auto_commit_delay,
     )
 
     cfg = load_config(config_path=config_file, cli_overrides=overrides)

@@ -504,3 +504,30 @@ class TestModeConfig:
         cfg = load_config(config_path=config_file)
         assert cfg.mode.serve is True
         assert cfg.mode.serve_port == 9000
+
+
+class TestAutoCommitConfig:
+    def test_auto_commit_defaults(self) -> None:
+        from tapes.config import load_config
+
+        cfg = load_config()
+        assert cfg.mode.auto_commit is False
+        assert cfg.mode.auto_commit_delay == 2.0
+
+    def test_auto_commit_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from tapes.config import load_config
+
+        monkeypatch.setenv("TAPES_MODE__AUTO_COMMIT", "true")
+        monkeypatch.setenv("TAPES_MODE__AUTO_COMMIT_DELAY", "5.0")
+        cfg = load_config()
+        assert cfg.mode.auto_commit is True
+        assert cfg.mode.auto_commit_delay == 5.0
+
+    def test_auto_commit_from_yaml(self, tmp_path: Path) -> None:
+        from tapes.config import load_config
+
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text("mode:\n  auto_commit: true\n  auto_commit_delay: 3.0\n")
+        cfg = load_config(config_path=config_file)
+        assert cfg.mode.auto_commit is True
+        assert cfg.mode.auto_commit_delay == 3.0
