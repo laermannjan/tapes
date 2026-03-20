@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 
 from tapes.pipeline import refresh_tmdb_source, run_auto_pipeline
-from tapes.tree_model import Candidate, FileNode, FolderNode, TreeModel
+from tapes.tree_model import Candidate, FileNode, FileStatus, FolderNode, TreeModel
 from tapes.ui.tree_app import AppState
 
 TOKEN = "test-token"
@@ -213,6 +213,17 @@ class TestRunAutoPipeline:
         run_auto_pipeline(model, token="")
         node = model.all_files()[0]
         assert len(node.candidates) == 0
+        assert node.staged is False
+
+    def test_auto_accept_skips_rejected_node(self, mock_tmdb) -> None:
+        """Pipeline should not auto-stage a file the user has already rejected."""
+        model = _make_model("Dune.2021.1080p.BluRay.mkv")
+        node = model.all_files()[0]
+        # Simulate user manually rejecting the node before the pipeline runs
+        node.status = FileStatus.REJECTED
+        run_auto_pipeline(model, token=TOKEN)
+        # Node should remain rejected, not overridden by pipeline auto-accept
+        assert node.rejected is True
         assert node.staged is False
 
 

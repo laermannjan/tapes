@@ -23,7 +23,7 @@ from tapes.fields import (
     YEAR,
 )
 from tapes.similarity import DEFAULT_MIN_PROMINENCE, compute_episode_similarity, compute_similarity, should_auto_accept
-from tapes.tree_model import Candidate, FileNode, TreeModel
+from tapes.tree_model import Candidate, FileNode, FileStatus, TreeModel
 
 DEFAULT_MAX_WORKERS = 4
 DEFAULT_MAX_RESULTS = 3
@@ -56,8 +56,8 @@ def _make_metadata_updater(
                 node.metadata[field_name] = val
         if clear_candidates:
             node.candidates.clear()
-        if stage:
-            node.staged = True
+        if stage and node.pending:
+            node.status = FileStatus.STAGED
 
     return _apply
 
