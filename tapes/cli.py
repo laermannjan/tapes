@@ -36,8 +36,7 @@ def _build_overrides(**kwargs: Any) -> dict[str, Any]:
         "min_score": ("metadata", "min_score"),
         "min_prominence": ("metadata", "min_prominence"),
         "max_results": ("metadata", "max_results"),
-        "duplicate_resolution": ("metadata", "duplicate_resolution"),
-        "disambiguation": ("metadata", "disambiguation"),
+        "conflict_resolution": ("library", "conflict_resolution"),
         "language": ("metadata", "language"),
         "ignore_patterns": ("scan", "ignore_patterns"),
         "video_extensions": ("scan", "video_extensions"),
@@ -53,6 +52,9 @@ def _build_overrides(**kwargs: Any) -> dict[str, Any]:
 
     if kwargs.get("dry_run"):
         overrides["dry_run"] = True
+
+    if kwargs.get("delete_rejected"):
+        overrides.setdefault("library", {})["delete_rejected"] = True
 
     return overrides
 
@@ -151,11 +153,11 @@ def main(
     max_results: int | None = typer.Option(
         None, "--max-results", help="Max TMDB search results", rich_help_panel="Metadata"
     ),
-    duplicate_resolution: str | None = typer.Option(
-        None, "--duplicate-resolution", help="Duplicate handling: auto, warn, off", rich_help_panel="Metadata"
+    conflict_resolution: str | None = typer.Option(
+        None, "--conflict-resolution", help="Conflict handling: auto, skip, keep_all", rich_help_panel="Library"
     ),
-    disambiguation: str | None = typer.Option(
-        None, "--disambiguation", help="Disambiguation: auto, warn, off", rich_help_panel="Metadata"
+    delete_rejected: bool = typer.Option(
+        False, "--delete-rejected", help="Delete source files of rejected items on commit", rich_help_panel="Library"
     ),
     language: str | None = typer.Option(
         None, "--language", help="TMDB language code (e.g. de, fr, en-US)", rich_help_panel="Metadata"
@@ -197,8 +199,8 @@ def main(
         min_score=min_score,
         min_prominence=min_prominence,
         max_results=max_results,
-        duplicate_resolution=duplicate_resolution,
-        disambiguation=disambiguation,
+        conflict_resolution=conflict_resolution,
+        delete_rejected=delete_rejected,
         language=language,
         ignore_patterns=_parse_csv(ignore_patterns),
         video_extensions=_parse_csv(video_extensions),

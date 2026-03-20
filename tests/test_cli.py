@@ -110,6 +110,24 @@ class TestBuildOverrides:
         assert result["advanced"]["tmdb_timeout"] == 30.0
         assert result["advanced"]["tmdb_retries"] == 5
 
+    def test_conflict_resolution_maps_to_library(self) -> None:
+        from tapes.cli import _build_overrides
+
+        result = _build_overrides(conflict_resolution="skip")
+        assert result == {"library": {"conflict_resolution": "skip"}}
+
+    def test_delete_rejected_true_included(self) -> None:
+        from tapes.cli import _build_overrides
+
+        result = _build_overrides(delete_rejected=True)
+        assert result["library"]["delete_rejected"] is True
+
+    def test_delete_rejected_false_not_included(self) -> None:
+        from tapes.cli import _build_overrides
+
+        result = _build_overrides(delete_rejected=False)
+        assert "library" not in result or "delete_rejected" not in result.get("library", {})
+
 
 # ---------------------------------------------------------------------------
 # Flags (single command, no subcommands)
@@ -151,6 +169,16 @@ class TestFlags:
         result = runner.invoke(app, ["--help"])
         assert "--tmdb-timeout" in result.output
         assert "--tmdb-retries" in result.output
+
+    def test_conflict_flags_in_help(self) -> None:
+        result = runner.invoke(app, ["--help"])
+        assert "--conflict-resolution" in result.output
+        assert "--delete-rejected" in result.output
+
+    def test_old_duplicate_resolution_not_in_help(self) -> None:
+        result = runner.invoke(app, ["--help"])
+        assert "--duplicate-resolution" not in result.output
+        assert "--disambiguation" not in result.output
 
     def test_help_panels_present(self) -> None:
         result = runner.invoke(app, ["--help"])

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import string
+import sys
 from pathlib import Path
 from typing import Any, Literal
 
@@ -27,8 +28,6 @@ class MetadataConfig(BaseModel):
     min_score: float = Field(default=DEFAULT_MIN_SCORE, ge=0.0, le=1.0)
     min_prominence: float = Field(default=0.15, ge=0.0, le=1.0)
     max_results: int = Field(default=3, ge=1)
-    duplicate_resolution: Literal["auto", "warn", "off"] = "auto"
-    disambiguation: Literal["auto", "warn", "off"] = "auto"
     language: str = ""
 
 
@@ -93,6 +92,8 @@ class LibraryConfig(BaseModel):
         "{title} ({year})/Season {season:02d}/{title} - S{season:02d}E{episode:02d} - {episode_title}.{ext}"
     )
     operation: Literal["copy", "move", "link", "hardlink"] = "copy"
+    conflict_resolution: Literal["auto", "skip", "keep_all"] = "auto"
+    delete_rejected: bool = False
 
     @field_validator("movie_template", "tv_template")
     @classmethod
@@ -252,5 +253,18 @@ def load_config(
         cfg = TapesConfig(**(cli_overrides or {}))
     finally:
         _pending_yaml_data = {}
+
+    # Migration warning: old metadata.duplicate_resolution / metadata.disambiguation
+    # were replaced by library.conflict_resolution in a newer version.
+    metadata_yaml = yaml_data.get("metadata", {})
+    if isinstance(metadata_yaml, dict):
+        stale_keys = [k for k in ("duplicate_resolution", "disambiguation") if k in metadata_yaml]
+        if stale_keys:
+            keys_str = " and ".join(f"metadata.{k}" for k in stale_keys)
+            print(
+                f"WARNING: {keys_str} is no longer supported. "
+                "Use library.conflict_resolution instead.",
+                file=sys.stderr,
+            )
 
     return cfg
