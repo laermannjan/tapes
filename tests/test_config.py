@@ -561,3 +561,42 @@ class TestPollIntervalConfig:
         config_file.write_text("mode:\n  poll_interval: 5.0\n")
         cfg = load_config(config_path=config_file)
         assert cfg.mode.poll_interval == 5.0
+
+
+class TestHeadlessConfig:
+    def test_headless_default(self) -> None:
+        from tapes.config import load_config
+
+        cfg = load_config()
+        assert cfg.mode.headless is False
+        assert cfg.mode.log_file is None
+
+    def test_headless_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from tapes.config import load_config
+
+        monkeypatch.setenv("TAPES_MODE__HEADLESS", "true")
+        cfg = load_config()
+        assert cfg.mode.headless is True
+
+    def test_log_file_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from tapes.config import load_config
+
+        monkeypatch.setenv("TAPES_MODE__LOG_FILE", "/var/log/tapes.log")
+        cfg = load_config()
+        assert cfg.mode.log_file == "/var/log/tapes.log"
+
+    def test_log_file_empty_disables(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from tapes.config import load_config
+
+        monkeypatch.setenv("TAPES_MODE__LOG_FILE", "")
+        cfg = load_config()
+        assert cfg.mode.log_file == ""
+
+    def test_headless_from_yaml(self, tmp_path: Path) -> None:
+        from tapes.config import load_config
+
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text("mode:\n  headless: true\n  log_file: /tmp/tapes.log\n")
+        cfg = load_config(config_path=config_file)
+        assert cfg.mode.headless is True
+        assert cfg.mode.log_file == "/tmp/tapes.log"  # noqa: S108

@@ -113,6 +113,22 @@ class ModeConfig(BaseModel):
     auto_commit: bool = False
     auto_commit_delay: float = Field(default=2.0, gt=0.0)
     poll_interval: float = Field(default=10.0, ge=0.0)
+    headless: bool = False
+    log_file: str | None = None
+
+    @field_validator("log_file", mode="before")
+    @classmethod
+    def _preserve_empty_string(cls, v: object) -> object:
+        """Preserve empty string as empty string (not None).
+
+        pydantic-settings may coerce ``""`` to ``None`` for ``str | None``
+        fields when the value arrives from an env var.  This validator runs
+        before type coercion and keeps ``""`` as-is so callers can use it as
+        a sentinel meaning "disable file logging".
+        """
+        if v == "":
+            return ""
+        return v
 
 
 # Module-level global is necessary because pydantic-settings calls
