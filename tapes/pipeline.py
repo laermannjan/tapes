@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
-import logging
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import structlog
+
 if TYPE_CHECKING:
     import httpx
+
 
 from tapes.config import DEFAULT_MIN_SCORE
 from tapes.fields import (
@@ -28,7 +30,7 @@ from tapes.tree_model import Candidate, FileNode, FileStatus, TreeModel
 DEFAULT_MAX_WORKERS = 4
 DEFAULT_MAX_RESULTS = 3
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _make_metadata_updater(
@@ -180,7 +182,7 @@ class _TmdbCache:
             with self._lock:
                 self._data[key] = result
         except Exception:  # noqa: BLE001
-            logger.warning("TMDB cache fetch failed for %s", key[0] if key else key)
+            logger.warning("tmdb_cache_error", key=str(key[0]) if key else str(key))
             with self._lock:
                 self._data[key] = _FETCH_FAILED
             return None
@@ -525,7 +527,7 @@ def _populate_node_guessit(
     node.candidates = []
 
     key_fields = {k: v for k, v in filename_fields.items() if k in (TITLE, YEAR, SEASON, EPISODE, MEDIA_TYPE)}
-    logger.info("Guessit: %s -> %s", node.path.name, key_fields)
+    logger.info("guessit", file=node.path.name, **key_fields)
 
 
 def _query_tmdb_for_node(  # noqa: PLR0911
@@ -552,6 +554,7 @@ def _query_tmdb_for_node(  # noqa: PLR0911
     """
     from tapes import tmdb
 
+    log = logger.bind(file=node.path.name)
     _post = post_update if post_update is not None else lambda fn: fn()
 
     if not params.token:
@@ -611,7 +614,7 @@ def _query_tmdb_for_node(  # noqa: PLR0911
         )
 
     if not search_results:
-        logger.info("TMDB: %s -> no results", node.path.name)
+        log.info("tmdb_no_results")
         return
 
     tmdb_candidates: list[Candidate] = []
@@ -632,12 +635,10 @@ def _query_tmdb_for_node(  # noqa: PLR0911
 
     best_title = best.metadata.get(TITLE, "?")
     best_year = best.metadata.get(YEAR, "?")
-    logger.info(
-        "TMDB: %s -> best match: '%s' (%s) [score=%.2f]",
-        node.path.name,
-        best_title,
-        best_year,
-        best.score,
+    log.info("tmdb_match", match=best_title, year=best_year, score=best.score)
+    log.debug(
+        "tmdb_candidates",
+        candidates=[(c.name, c.metadata.get(TITLE), f"{c.score:.2f}") for c in tmdb_candidates],
     )
 
     # A2: media-type match gate -- skip auto-accept if best candidate's
@@ -647,17 +648,17 @@ def _query_tmdb_for_node(  # noqa: PLR0911
     media_type_compatible = node_media_type is None or best_media_type is None or node_media_type == best_media_type
 
     if not media_type_compatible:
-        logger.info(
-            "TMDB: %s -> media type mismatch (guessit=%s, tmdb=%s), not auto-accepting",
-            node.path.name,
-            node_media_type,
-            best_media_type,
-        )
+        log.info("tmdb_media_type_mismatch", guessit_type=node_media_type, tmdb_type=best_media_type)
         _post(_make_candidates_updater(node, list(tmdb_candidates)))
         return
 
     if not should_auto_accept(similarities, min_score=params.min_score, min_prominence=params.min_prominence):
-        logger.info("TMDB: %s -> not auto-accepted (needs manual curation)", node.path.name)
+        # Determine reason: low score or low prominence
+        if best.score < params.min_score:
+            log.info("not_staged", reason="low_score", score=best.score)
+        else:
+            prominence = best.score - similarities[1] if len(similarities) > 1 else best.score
+            log.info("not_staged", reason="low_prominence", score=best.score, prominence=prominence)
         _post(_make_candidates_updater(node, list(tmdb_candidates)))
         return
 
@@ -668,12 +669,12 @@ def _query_tmdb_for_node(  # noqa: PLR0911
     if can_stage is not None:
         merged = {**node.metadata, **{k: v for k, v in _best_metadata.items() if v is not None}}
         if not can_stage(node, merged):
-            logger.info("TMDB: %s -> auto-accepted but template incomplete, not staged", node.path.name)
+            log.info("not_staged", reason="template_incomplete")
             _stageable = False
         else:
-            logger.info("TMDB: %s -> auto-accepted and staged", node.path.name)
+            log.info("staged", reason="auto_accept")
     else:
-        logger.info("TMDB: %s -> auto-accepted and staged", node.path.name)
+        log.info("staged", reason="auto_accept")
 
     _post(_make_metadata_updater(node, _best_metadata, stage=_stageable, clear_candidates=True))
 
@@ -701,6 +702,7 @@ def _query_episodes(
     """Stage 2: fetch episode data for a TV show match."""
     from tapes import tmdb
 
+    log = logger.bind(file=node.path.name)
     _post = post_update if post_update is not None else lambda fn: fn()
 
     show_id = show_fields.get(TMDB_ID)
@@ -799,27 +801,15 @@ def _query_episodes(
         if can_stage is not None:
             merged = {**node.metadata, **{k: v for k, v in _best_metadata.items() if v is not None}}
             if not can_stage(node, merged):
-                logger.info(
-                    "TMDB: %s -> episode matched S%sE%s '%s' but template incomplete, not staged",
-                    node.path.name,
-                    ep_s,
-                    ep_e,
-                    ep_title,
-                )
+                log.info("not_staged", reason="episode_template_incomplete", season=ep_s, episode=ep_e, title=ep_title)
                 stage = False
             else:
-                logger.info(
-                    "TMDB: %s -> episode matched S%sE%s '%s', staged",
-                    node.path.name,
-                    ep_s,
-                    ep_e,
-                    ep_title,
-                )
+                log.info("episode_matched", season=ep_s, episode=ep_e, title=ep_title, staged=True)
         else:
-            logger.info("TMDB: %s -> episode matched S%sE%s '%s', staged", node.path.name, ep_s, ep_e, ep_title)
+            log.info("episode_matched", season=ep_s, episode=ep_e, title=ep_title, staged=True)
 
         _post(_make_metadata_updater(node, _best_metadata, stage=stage))
         _post(_make_candidates_updater(node, _top_copy))
     else:
-        logger.info("TMDB: %s -> episode not matched (needs manual curation)", node.path.name)
+        log.info("episode_not_matched", reason="needs_manual_curation")
         _post(_make_candidates_updater(node, _top_copy))
