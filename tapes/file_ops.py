@@ -143,10 +143,12 @@ def delete_files(paths: list[Path], *, dry_run: bool = False) -> list[str]:
     results: list[str] = []
     for path in paths:
         if dry_run:
+            logger.info("Delete: %s (dry-run)", path.name)
             results.append(f"[dry-run] Would delete {path}")
             continue
         try:
             path.unlink()
+            logger.info("Deleted: %s", path.name)
             results.append(f"Deleted {path}")
         except FileNotFoundError:
             results.append(f"Not found: {path}")
@@ -203,6 +205,7 @@ def process_staged(
                 cancelled=cancelled,
                 overwrite=dest in _overwrite,
             )
+            logger.info("Processed: %s -> %s (%s)", src.name, dest, operation)
             results.append(msg)
         except OperationCancelledError:
             break

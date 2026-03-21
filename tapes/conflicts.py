@@ -13,6 +13,7 @@ regardless of policy.
 
 from __future__ import annotations
 
+import logging
 import os
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -21,6 +22,8 @@ from typing import Literal
 
 from tapes.templates import full_extension
 from tapes.tree_model import FileNode, FileStatus
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -127,6 +130,7 @@ def _writability_check(
             remaining.append((node, dest))
         else:
             node.status = FileStatus.REJECTED
+            logger.info("Conflict: %s -> rejected (destination not writable: %s)", node.path.name, dest_dir)
             report.problems.append(
                 Problem(
                     description=f"Destination not writable: {dest_dir}",
@@ -156,24 +160,30 @@ def _resolve_group_auto(
 
     if isinstance(winner[0], ExistingFile):
         # Existing file wins - reject all staged files
+        logger.info("Conflict: existing file wins (%d bytes)", winner[2])
         for node, dest, _, _ in sorted_entries:
             if isinstance(node, FileNode):
                 node.status = FileStatus.REJECTED
+                logger.info(
+                    "Conflict: %s -> rejected (existing file at destination is larger or equal)", node.path.name
+                )
                 report.resolved.append(
                     ResolvedConflict(f"Rejected: {node.path.name} (existing file at {dest.name} is larger or equal)")
                 )
     else:
         # Staged file wins
+        logger.info("Conflict: %s wins (%d bytes)", winner[0].path.name, winner[2])
         result.append((winner[0], winner[1]))
-        # Check if winner beat an existing file - log overwrite
         for node, dest, _, _ in sorted_entries[1:]:
             if isinstance(node, ExistingFile):
+                logger.info("Conflict: existing file at %s will be overwritten", dest.name)
                 report.resolved.append(
                     ResolvedConflict(f"Overwrite: existing {dest.name} will be replaced by {winner[0].path.name}")
                 )
                 report.overwrite_dests.add(dest)
             elif isinstance(node, FileNode):
                 node.status = FileStatus.REJECTED
+                logger.info("Conflict: %s -> rejected (smaller than %s)", node.path.name, winner[0].path.name)
                 report.resolved.append(
                     ResolvedConflict(f"Rejected: {node.path.name} (smaller than {winner[0].path.name})")
                 )
@@ -269,6 +279,17 @@ def _resolve_conflicts(
             # No conflict (single staged file, no existing)
             remaining.extend(group)
             continue
+
+        staged_names = [n.path.name for n, _, _, _ in entries if isinstance(n, FileNode)]
+        has_existing = any(isinstance(e[0], ExistingFile) for e in entries)
+        logger.info(
+            "Conflict: %d files target %s%s (policy=%s): %s",
+            len(staged_names),
+            dest.name,
+            " (exists on disk)" if has_existing else "",
+            conflict_resolution,
+            ", ".join(staged_names),
+        )
 
         if conflict_resolution == "auto":
             remaining.extend(_resolve_group_auto(entries, report))

@@ -524,8 +524,11 @@ def _populate_node_guessit(
     node.metadata = dict(filename_fields)
     node.candidates = []
 
+    key_fields = {k: v for k, v in filename_fields.items() if k in (TITLE, YEAR, SEASON, EPISODE, MEDIA_TYPE)}
+    logger.info("Guessit: %s -> %s", node.path.name, key_fields)
 
-def _query_tmdb_for_node(
+
+def _query_tmdb_for_node(  # noqa: PLR0911
     node: FileNode,
     params: PipelineParams,
     cache: _TmdbCache | None = None,
@@ -608,6 +611,7 @@ def _query_tmdb_for_node(
         )
 
     if not search_results:
+        logger.info("TMDB: %s -> no results", node.path.name)
         return
 
     tmdb_candidates: list[Candidate] = []
@@ -626,10 +630,14 @@ def _query_tmdb_for_node(
     similarities = [c.score for c in tmdb_candidates]
     best = tmdb_candidates[0]
 
-    logger.debug(
-        "%s: candidates=%s",
+    best_title = best.metadata.get(TITLE, "?")
+    best_year = best.metadata.get(YEAR, "?")
+    logger.info(
+        "TMDB: %s -> best match: '%s' (%s) [score=%.2f]",
         node.path.name,
-        [(c.name, c.metadata.get(TITLE), f"{c.score:.2f}") for c in tmdb_candidates],
+        best_title,
+        best_year,
+        best.score,
     )
 
     # A2: media-type match gate -- skip auto-accept if best candidate's
@@ -638,35 +646,47 @@ def _query_tmdb_for_node(
     best_media_type = best.metadata.get(MEDIA_TYPE)
     media_type_compatible = node_media_type is None or best_media_type is None or node_media_type == best_media_type
 
-    if media_type_compatible and should_auto_accept(
-        similarities, min_score=params.min_score, min_prominence=params.min_prominence
-    ):
-        # Snapshot before dispatching -- the dict may be mutated later
-        _best_metadata = dict(best.metadata)
-
-        _stageable = True
-        if can_stage is not None:
-            merged = {**node.metadata, **{k: v for k, v in _best_metadata.items() if v is not None}}
-            if not can_stage(node, merged):
-                logger.debug("%s: auto-accept skipped, template fields incomplete", node.path.name)
-                _stageable = False
-
-        _post(_make_metadata_updater(node, _best_metadata, stage=_stageable, clear_candidates=True))
-
-        if best.metadata.get(MEDIA_TYPE) == MEDIA_TYPE_EPISODE:
-            _query_episodes(
-                node,
-                params,
-                best.metadata,
-                cache=cache,
-                client=client,
-                post_update=_post,
-                can_stage=can_stage,
-            )
-
+    if not media_type_compatible:
+        logger.info(
+            "TMDB: %s -> media type mismatch (guessit=%s, tmdb=%s), not auto-accepting",
+            node.path.name,
+            node_media_type,
+            best_media_type,
+        )
+        _post(_make_candidates_updater(node, list(tmdb_candidates)))
         return
 
-    _post(_make_candidates_updater(node, list(tmdb_candidates)))
+    if not should_auto_accept(similarities, min_score=params.min_score, min_prominence=params.min_prominence):
+        logger.info("TMDB: %s -> not auto-accepted (needs manual curation)", node.path.name)
+        _post(_make_candidates_updater(node, list(tmdb_candidates)))
+        return
+
+    # Auto-accepted
+    _best_metadata = dict(best.metadata)
+
+    _stageable = True
+    if can_stage is not None:
+        merged = {**node.metadata, **{k: v for k, v in _best_metadata.items() if v is not None}}
+        if not can_stage(node, merged):
+            logger.info("TMDB: %s -> auto-accepted but template incomplete, not staged", node.path.name)
+            _stageable = False
+        else:
+            logger.info("TMDB: %s -> auto-accepted and staged", node.path.name)
+    else:
+        logger.info("TMDB: %s -> auto-accepted and staged", node.path.name)
+
+    _post(_make_metadata_updater(node, _best_metadata, stage=_stageable, clear_candidates=True))
+
+    if best.metadata.get(MEDIA_TYPE) == MEDIA_TYPE_EPISODE:
+        _query_episodes(
+            node,
+            params,
+            best.metadata,
+            cache=cache,
+            client=client,
+            post_update=_post,
+            can_stage=can_stage,
+        )
 
 
 def _query_episodes(
@@ -771,15 +791,35 @@ def _query_episodes(
 
     if should_auto_accept(ep_similarities, min_score=params.min_score, min_prominence=params.min_prominence):
         _best_metadata = dict(top_candidates[0].metadata)
+        ep_title = _best_metadata.get("episode_title", "?")
+        ep_s = _best_metadata.get(SEASON, "?")
+        ep_e = _best_metadata.get(EPISODE, "?")
 
         stage = True
         if can_stage is not None:
             merged = {**node.metadata, **{k: v for k, v in _best_metadata.items() if v is not None}}
             if not can_stage(node, merged):
-                logger.debug("%s: episode auto-accept skipped, template fields incomplete", node.path.name)
+                logger.info(
+                    "TMDB: %s -> episode matched S%sE%s '%s' but template incomplete, not staged",
+                    node.path.name,
+                    ep_s,
+                    ep_e,
+                    ep_title,
+                )
                 stage = False
+            else:
+                logger.info(
+                    "TMDB: %s -> episode matched S%sE%s '%s', staged",
+                    node.path.name,
+                    ep_s,
+                    ep_e,
+                    ep_title,
+                )
+        else:
+            logger.info("TMDB: %s -> episode matched S%sE%s '%s', staged", node.path.name, ep_s, ep_e, ep_title)
 
         _post(_make_metadata_updater(node, _best_metadata, stage=stage))
         _post(_make_candidates_updater(node, _top_copy))
     else:
+        logger.info("TMDB: %s -> episode not matched (needs manual curation)", node.path.name)
         _post(_make_candidates_updater(node, _top_copy))

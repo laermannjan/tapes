@@ -57,7 +57,7 @@ def _string_similarity(a: str, b: str) -> float:
     strict = fuzz.ratio(a, b, processor=utils.default_process) / 100.0
     lenient = fuzz.token_set_ratio(a, b, processor=utils.default_process) / 100.0
     blend = STRICT_WEIGHT * strict + (1 - STRICT_WEIGHT) * lenient
-    logger.debug("string_sim %r vs %r: ratio=%.2f tset=%.2f blend=%.2f", a, b, strict, lenient, blend)
+    logger.log(5, "string_sim %r vs %r: ratio=%.2f tset=%.2f blend=%.2f", a, b, strict, lenient, blend)
     return blend
 
 
@@ -106,7 +106,8 @@ def compute_similarity(query: dict, result: dict) -> float:
     if q_type and r_type and q_type != r_type:
         total *= MEDIA_TYPE_PENALTY
 
-    logger.debug(
+    logger.log(
+        5,
         "similarity %r vs %r: title=%.2f year=%.2f -> %.2f",
         q_title,
         r_title,
@@ -155,7 +156,8 @@ def compute_episode_similarity(query: dict, episode: dict) -> float:
         score += EPISODE_TITLE_WEIGHT * _string_similarity(str(q_title), str(e_title))
 
     score = min(score, 1.0)
-    logger.debug(
+    logger.log(
+        5,
         "episode_sim S%sE%s vs S%sE%s: %.2f",
         query.get(SEASON, "?"),
         query.get(EPISODE, "?"),
