@@ -610,3 +610,20 @@ a small set of built-in filters, or a lightweight template engine like
 Jinja2. Evaluate trade-offs between power and complexity before choosing.
 
 ---
+
+## I44: Naming relics from pre-CLI-redesign era
+**Status:** `open`
+**Severity:** cleanup
+**Files:** `tapes/config.py`, `tapes/cli.py`, possibly others
+
+Several names in the codebase are leftovers from the old `tapes import` subcommand era:
+
+- `scan.import_path` - should be `scan.path` or `scan.source`
+- `--import-path` references in old tests or docs
+- `import_cmd` references in comments
+
+Audit the codebase for `import` references that should be updated to
+match the single-command design. Low priority since everything works,
+but confusing for new contributors.
+
+---
