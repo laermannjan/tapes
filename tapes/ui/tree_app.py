@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import copy
-import logging
 import threading
 import time
 from collections.abc import Callable
@@ -16,6 +15,7 @@ if TYPE_CHECKING:
 
     from tapes.pipeline import PipelineParams
 
+import structlog
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.events import Key
@@ -36,7 +36,7 @@ from tapes.ui.help_view import HELP_HEIGHT, HelpView
 from tapes.ui.metadata_view import MetadataView
 from tapes.ui.tree_view import TreeView
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 METADATA_CHROME_LINES = 9
 
@@ -178,7 +178,7 @@ class TreeApp(App):
         try:
             self.theme = "textual-ansi"
         except Exception:  # noqa: BLE001
-            logger.warning("Could not set textual-ansi theme, using default")
+            logger.warning("theme_error")
 
         self.query_one(BottomBar).operation = self.config.library.operation
 
@@ -214,7 +214,7 @@ class TreeApp(App):
             import signal
 
             def _handle_sigterm(_signum: int, _frame: object) -> None:
-                logger.info("Received SIGTERM, shutting down")
+                logger.info("sigterm_received")
                 self.exit()
 
             signal.signal(signal.SIGTERM, _handle_sigterm)
@@ -741,9 +741,8 @@ class TreeApp(App):
         msg = f"{len(processed)} file(s) processed"
         if errors:
             msg += f", {errors} error(s)"
-        if self.config.mode.headless:
-            logger.info(msg)
-        else:
+        logger.info("commit_done", processed=len(processed), errors=errors)
+        if not self.config.mode.headless:
             self.notify(msg)
 
     def _on_commit_cancelled(self, done: int, total: int) -> None:
@@ -883,9 +882,8 @@ class TreeApp(App):
         if errors:
             parts.append(f"{errors} error(s)")
         msg = "Auto-committed: " + ", ".join(parts)
-        if self.config.mode.headless:
-            logger.info(msg)
-        else:
+        logger.info("auto_commit_done", processed=len(processed), rejected=n_rejected, errors=errors)
+        if not self.config.mode.headless:
             self.notify(msg)
 
         self._check_headless_exit()
@@ -922,7 +920,7 @@ class TreeApp(App):
             and not self._auto_commit_pending
             and not any(f.staged for f in self.model.all_files())
         ):
-            logger.info("All work complete, exiting")
+            logger.info("headless_exit")
             self.exit()
 
     def action_refresh_query(self) -> None:

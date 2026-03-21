@@ -1783,7 +1783,7 @@ class TestHeadless:
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE, config=cfg)
         async with app.run_test() as _pilot:
             printed: list[str] = []
-            with patch("builtins.print", side_effect=lambda x: printed.append(str(x))):
+            with patch("builtins.print", side_effect=lambda *a, **kw: printed.append(str(a[0])) if a else None):
                 app._on_auto_commit_done(
                     pairs=[(node.path, Path("/lib/Top (2020).mkv"))],
                     results=["[dry-run] Would copy ..."],
@@ -1808,7 +1808,7 @@ class TestHeadless:
         async with app.run_test() as _pilot:
             printed: list[str] = []
             with (
-                patch("builtins.print", side_effect=lambda x: printed.append(str(x))),
+                patch("builtins.print", side_effect=lambda *a, **kw: printed.append(str(a[0])) if a else None),
                 patch.object(app, "notify"),
             ):
                 app._on_auto_commit_done(
@@ -1817,7 +1817,8 @@ class TestHeadless:
                     staged=[node],
                     batch_rejected=[],
                 )
-            assert len(printed) == 0
+            # _print_processed is not called in TUI mode - destination path must not appear
+            assert not any("/lib/Top (2020).mkv" in p for p in printed)
 
     @pytest.mark.asyncio()
     async def test_notify_becomes_log_in_headless(self) -> None:
@@ -1846,7 +1847,7 @@ class TestHeadless:
                     batch_rejected=[],
                 )
             assert len(notifications) == 0
-            assert any("Auto-committed:" in m for m in log_messages)
+            assert any("auto_commit_done" in m for m in log_messages)
 
     @pytest.mark.asyncio()
     async def test_headless_exit_after_tmdb_done(self) -> None:
