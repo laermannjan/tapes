@@ -526,8 +526,7 @@ def _populate_node_guessit(
     node.metadata = dict(filename_fields)
     node.candidates = []
 
-    key_fields = {k: v for k, v in filename_fields.items() if k in (TITLE, YEAR, SEASON, EPISODE, MEDIA_TYPE)}
-    logger.info("guessit", file=node.path.name, **key_fields)
+    logger.info("guessit", file=node.path.name, **filename_fields)
 
 
 def _query_tmdb_for_node(  # noqa: PLR0911
@@ -633,12 +632,25 @@ def _query_tmdb_for_node(  # noqa: PLR0911
     similarities = [c.score for c in tmdb_candidates]
     best = tmdb_candidates[0]
 
-    best_title = best.metadata.get(TITLE, "?")
-    best_year = best.metadata.get(YEAR, "?")
-    log.info("tmdb_match", match=best_title, year=best_year, score=best.score)
+    log.info(
+        "tmdb_match",
+        match=best.metadata.get(TITLE, "?"),
+        year=best.metadata.get(YEAR),
+        tmdb_id=best.metadata.get(TMDB_ID),
+        media_type=best.metadata.get(MEDIA_TYPE),
+        score=round(best.score, 3),
+    )
     log.debug(
         "tmdb_candidates",
-        candidates=[(c.name, c.metadata.get(TITLE), f"{c.score:.2f}") for c in tmdb_candidates],
+        candidates=[
+            {
+                "name": c.name,
+                "title": c.metadata.get(TITLE),
+                "tmdb_id": c.metadata.get(TMDB_ID),
+                "score": round(c.score, 3),
+            }
+            for c in tmdb_candidates
+        ],
     )
 
     # A2: media-type match gate -- skip auto-accept if best candidate's
@@ -652,13 +664,18 @@ def _query_tmdb_for_node(  # noqa: PLR0911
         _post(_make_candidates_updater(node, list(tmdb_candidates)))
         return
 
+    match_info = {
+        "match": best.metadata.get(TITLE),
+        "tmdb_id": best.metadata.get(TMDB_ID),
+        "score": round(best.score, 3),
+    }
+
     if not should_auto_accept(similarities, min_score=params.min_score, min_prominence=params.min_prominence):
-        # Determine reason: low score or low prominence
         if best.score < params.min_score:
-            log.info("not_staged", reason="low_score", score=best.score)
+            log.info("not_staged", reason="low_score", **match_info, min_score=params.min_score)
         else:
             prominence = best.score - similarities[1] if len(similarities) > 1 else best.score
-            log.info("not_staged", reason="low_prominence", score=best.score, prominence=prominence)
+            log.info("not_staged", reason="low_prominence", **match_info, prominence=round(prominence, 3))
         _post(_make_candidates_updater(node, list(tmdb_candidates)))
         return
 
@@ -669,12 +686,12 @@ def _query_tmdb_for_node(  # noqa: PLR0911
     if can_stage is not None:
         merged = {**node.metadata, **{k: v for k, v in _best_metadata.items() if v is not None}}
         if not can_stage(node, merged):
-            log.info("not_staged", reason="template_incomplete")
+            log.info("not_staged", reason="template_incomplete", **match_info)
             _stageable = False
         else:
-            log.info("staged", reason="auto_accept")
+            log.info("staged", reason="auto_accept", **match_info)
     else:
-        log.info("staged", reason="auto_accept")
+        log.info("staged", reason="auto_accept", **match_info)
 
     _post(_make_metadata_updater(node, _best_metadata, stage=_stageable, clear_candidates=True))
 
@@ -793,20 +810,25 @@ def _query_episodes(
 
     if should_auto_accept(ep_similarities, min_score=params.min_score, min_prominence=params.min_prominence):
         _best_metadata = dict(top_candidates[0].metadata)
-        ep_title = _best_metadata.get("episode_title", "?")
-        ep_s = _best_metadata.get(SEASON, "?")
-        ep_e = _best_metadata.get(EPISODE, "?")
+        ep_fields = {
+            "season": _best_metadata.get(SEASON),
+            "episode": _best_metadata.get(EPISODE),
+            "episode_title": _best_metadata.get("episode_title"),
+            "show": show_title,
+            "show_tmdb_id": show_id,
+            "score": round(top_candidates[0].score, 3),
+        }
 
         stage = True
         if can_stage is not None:
             merged = {**node.metadata, **{k: v for k, v in _best_metadata.items() if v is not None}}
             if not can_stage(node, merged):
-                log.info("not_staged", reason="episode_template_incomplete", season=ep_s, episode=ep_e, title=ep_title)
+                log.info("not_staged", reason="episode_template_incomplete", **ep_fields)
                 stage = False
             else:
-                log.info("episode_matched", season=ep_s, episode=ep_e, title=ep_title, staged=True)
+                log.info("episode_matched", staged=True, **ep_fields)
         else:
-            log.info("episode_matched", season=ep_s, episode=ep_e, title=ep_title, staged=True)
+            log.info("episode_matched", staged=True, **ep_fields)
 
         _post(_make_metadata_updater(node, _best_metadata, stage=stage))
         _post(_make_candidates_updater(node, _top_copy))

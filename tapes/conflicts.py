@@ -160,24 +160,26 @@ def _resolve_group_auto(
     winner = sorted_entries[0]
     result: list[tuple[FileNode, Path]] = []
 
+    dest_path = str(sorted_entries[0][1])
+
     if isinstance(winner[0], ExistingFile):
         # Existing file wins - reject all staged files
-        logger.info("conflict_resolved", winner="existing", winner_size=winner[2])
-        for node, dest, _, _ in sorted_entries:
+        logger.info("conflict_resolved", winner="existing", winner_size=winner[2], dest=dest_path)
+        for node, dest, size, _ in sorted_entries:
             if isinstance(node, FileNode):
                 node.status = FileStatus.REJECTED
                 log = logger.bind(file=node.path.name)
-                log.info("rejected", reason="conflict", detail="existing file wins")
+                log.info("rejected", reason="conflict", detail="existing file wins", size=size, dest=dest_path)
                 report.resolved.append(
                     ResolvedConflict(f"Rejected: {node.path.name} (existing file at {dest.name} is larger or equal)")
                 )
     else:
         # Staged file wins
-        logger.info("conflict_resolved", winner=winner[0].path.name, winner_size=winner[2])
+        logger.info("conflict_resolved", winner=winner[0].path.name, winner_size=winner[2], dest=dest_path)
         result.append((winner[0], winner[1]))
-        for node, dest, _, _ in sorted_entries[1:]:
+        for node, dest, size, _ in sorted_entries[1:]:
             if isinstance(node, ExistingFile):
-                logger.info("conflict_overwrite", dest=dest.name, winner=winner[0].path.name)
+                logger.info("conflict_overwrite", dest=str(dest), winner=winner[0].path.name, existing_size=size)
                 report.resolved.append(
                     ResolvedConflict(f"Overwrite: existing {dest.name} will be replaced by {winner[0].path.name}")
                 )
@@ -185,7 +187,7 @@ def _resolve_group_auto(
             elif isinstance(node, FileNode):
                 node.status = FileStatus.REJECTED
                 log = logger.bind(file=node.path.name)
-                log.info("rejected", reason="conflict", detail="smaller file")
+                log.info("rejected", reason="conflict", detail="smaller file", size=size, winner=winner[0].path.name)
                 report.resolved.append(
                     ResolvedConflict(f"Rejected: {node.path.name} (smaller than {winner[0].path.name})")
                 )
