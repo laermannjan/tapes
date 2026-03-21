@@ -1770,57 +1770,6 @@ class TestHeadless:
             assert not exit_called
 
     @pytest.mark.asyncio()
-    async def test_stdout_on_processed_file_headless(self) -> None:
-        """Processed filenames are printed to stdout in headless mode."""
-        from unittest.mock import patch
-
-        from tapes.ui.tree_app import TreeApp
-
-        node = _stageable_file()
-        root = FolderNode(name="root", children=[node])
-        model = TreeModel(root=root)
-        cfg = _headless_config()
-        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE, config=cfg)
-        async with app.run_test() as _pilot:
-            printed: list[str] = []
-            with patch("builtins.print", side_effect=lambda *a, **kw: printed.append(str(a[0])) if a else None):
-                app._on_auto_commit_done(
-                    pairs=[(node.path, Path("/lib/Top (2020).mkv"))],
-                    results=["[dry-run] Would copy ..."],
-                    staged=[node],
-                    batch_rejected=[],
-                )
-            assert any("/lib/Top (2020).mkv" in p for p in printed)
-
-    @pytest.mark.asyncio()
-    async def test_no_stdout_in_tui_mode(self) -> None:
-        """Processed filenames are NOT printed to stdout in TUI mode."""
-        from unittest.mock import patch
-
-        from tapes.ui.tree_app import TreeApp
-
-        node = _stageable_file()
-        root = FolderNode(name="root", children=[node])
-        model = TreeModel(root=root)
-        cfg = _auto_commit_config()
-        cfg.dry_run = True
-        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE, config=cfg)
-        async with app.run_test() as _pilot:
-            printed: list[str] = []
-            with (
-                patch("builtins.print", side_effect=lambda *a, **kw: printed.append(str(a[0])) if a else None),
-                patch.object(app, "notify"),
-            ):
-                app._on_auto_commit_done(
-                    pairs=[(node.path, Path("/lib/Top (2020).mkv"))],
-                    results=["[dry-run] Would copy ..."],
-                    staged=[node],
-                    batch_rejected=[],
-                )
-            # _print_processed is not called in TUI mode - destination path must not appear
-            assert not any("/lib/Top (2020).mkv" in p for p in printed)
-
-    @pytest.mark.asyncio()
     async def test_notify_becomes_log_in_headless(self) -> None:
         """Auto-commit notification goes to logger, not self.notify(), in headless mode."""
         from unittest.mock import patch

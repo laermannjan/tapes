@@ -718,10 +718,6 @@ class TreeApp(App):
         processed = [n for n in staged if n.path in ok_srcs]
         errors = len(results) - len(ok_srcs)
 
-        # Print processed files to stdout (headless composable output)
-        if self.config.mode.headless:
-            self._print_processed(pairs, results)
-
         if processed:
             self.model.remove_nodes(processed)
 
@@ -858,10 +854,6 @@ class TreeApp(App):
         for n in errored:
             n.status = FileStatus.PENDING
 
-        # Print processed files to stdout (headless composable output)
-        if self.config.mode.headless:
-            self._print_processed(pairs, results)
-
         if processed:
             self.model.remove_nodes(processed)
 
@@ -887,23 +879,6 @@ class TreeApp(App):
             self.notify(msg)
 
         self._check_headless_exit()
-
-    @staticmethod
-    def _print_processed(pairs: list[tuple[Path, Path]], results: list[str]) -> None:
-        """Print processed files to stdout for composability.
-
-        When stdout is a terminal: ``source -> dest``.
-        When piped: just ``dest`` (one per line, for xargs etc.).
-        """
-        import sys
-
-        is_tty = sys.stdout.isatty()
-        for (src, dest), msg in zip(pairs, results, strict=False):
-            if not msg.startswith("Error"):
-                if is_tty:
-                    print(f"{src} -> {dest}")  # noqa: T201
-                else:
-                    print(dest)  # noqa: T201
 
     def _check_headless_exit(self) -> None:
         """Exit the app if headless, one-shot, and all work is done."""

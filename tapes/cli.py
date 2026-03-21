@@ -112,37 +112,6 @@ def _start_server(command: str, host: str, port: int) -> None:
     server.serve()
 
 
-def _print_jq_summary(log_path: Path | None) -> None:
-    """Print a per-file summary from the JSON log using jq (if available)."""
-    import shutil
-    import subprocess
-
-    if not log_path or not log_path.exists():
-        return
-    jq_bin = shutil.which("jq")
-    if not jq_bin:
-        return
-
-    try:
-        result = subprocess.run(  # noqa: S603
-            [
-                jq_bin,
-                "-r",
-                'select(.file) | [.file, .event, (.reason // .dest // "")] | @tsv',
-            ],
-            input=log_path.read_text(),
-            capture_output=True,
-            text=True,
-            timeout=5,
-            check=False,
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            print("\n--- Summary ---", file=sys.stderr)  # noqa: T201
-            print(result.stdout.strip(), file=sys.stderr)  # noqa: T201
-    except (subprocess.TimeoutExpired, OSError):
-        pass
-
-
 def _setup_logging(*, headless: bool, verbose: bool, log_file: str | None) -> Path | None:
     """Configure structlog with JSON output. Returns the log file path (for jq summary).
 
@@ -205,22 +174,22 @@ def _setup_logging(*, headless: bool, verbose: bool, log_file: str | None) -> Pa
         file_handler.setFormatter(json_formatter)
         tapes_logger.addHandler(file_handler)
 
-    # Stderr handler (headless only)
-    # Human-readable when stderr is a terminal, JSON when piped
+    # Console handler (headless only) - logs to stdout
+    # Human-readable when stdout is a terminal, JSON when piped
     if headless:
-        if sys.stderr.isatty():
-            stderr_formatter = structlog.stdlib.ProcessorFormatter(
+        if sys.stdout.isatty():
+            console_formatter = structlog.stdlib.ProcessorFormatter(
                 processors=[
                     structlog.stdlib.ProcessorFormatter.remove_processors_meta,
                     structlog.dev.ConsoleRenderer(),
                 ],
             )
         else:
-            stderr_formatter = json_formatter
+            console_formatter = json_formatter
 
-        stderr_handler = logging.StreamHandler(sys.stderr)
-        stderr_handler.setFormatter(stderr_formatter)
-        tapes_logger.addHandler(stderr_handler)
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setFormatter(console_formatter)
+        tapes_logger.addHandler(console_handler)
 
     return resolved_log_path
 
@@ -373,7 +342,7 @@ def main(
 
     # Set up logging
     resolved_log_file = log_file if log_file is not None else cfg.mode.log_file
-    _log_path = _setup_logging(headless=is_headless, verbose=verbose, log_file=resolved_log_file)
+    _setup_logging(headless=is_headless, verbose=verbose, log_file=resolved_log_file)
 
     # Serve mode: CLI flag or config/env var
     if is_serve:
@@ -415,9 +384,5 @@ def main(
     )
     if is_headless:
         tui.run(headless=True)
-        # Show jq summary only when stderr was piped (JSON output).
-        # When stderr is a terminal, the user already sees human-readable logs.
-        if not sys.stderr.isatty():
-            _print_jq_summary(_log_path)
     else:
         tui.run()
