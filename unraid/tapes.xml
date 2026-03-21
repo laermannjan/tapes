@@ -22,7 +22,6 @@
   <WebUI>http://[IP]:[PORT:8080]/</WebUI>
   <Icon>https://raw.githubusercontent.com/laermannjan/tapes/main/docs/icon.png</Icon>
   <ExtraParams>--restart unless-stopped</ExtraParams>
-  <PostArgs>/data/source</PostArgs>
   <Config
     Name="WebUI Port"
     Target="8080"
@@ -77,26 +76,6 @@
     Required="true"
     Mask="true"
   ></Config>
-  <Config
-    Name="Movies Library Path (container)"
-    Target="TAPES_LIBRARY__MOVIES"
-    Default="/data/movies"
-    Description="Container path for movies library (must match the Movies Library mount)"
-    Type="Variable"
-    Display="advanced"
-    Required="false"
-    Mask="false"
-  >/data/movies</Config>
-  <Config
-    Name="TV Library Path (container)"
-    Target="TAPES_LIBRARY__TV"
-    Default="/data/tv"
-    Description="Container path for TV library (must match the TV Library mount)"
-    Type="Variable"
-    Display="advanced"
-    Required="false"
-    Mask="false"
-  >/data/tv</Config>
   <Config
     Name="Poll Interval"
     Target="TAPES_MODE__POLL_INTERVAL"

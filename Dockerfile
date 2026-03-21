@@ -11,7 +11,9 @@ RUN uv sync --frozen --no-dev
 
 EXPOSE 8080
 
-ENV PATH="/app/.venv/bin:$PATH"
+ENV PATH="/app/.venv/bin:$PATH" \
+    TAPES_LIBRARY__MOVIES=/data/movies \
+    TAPES_LIBRARY__TV=/data/tv
 
 ENTRYPOINT ["tapes"]
-CMD ["--serve", "--auto-commit"]
+CMD ["--serve", "--auto-commit", "/data/source"]
