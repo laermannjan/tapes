@@ -643,8 +643,10 @@ class TestHeadlessFlags:
 
 @pytest.fixture(autouse=True)
 def _clean_logging():
-    """Save and restore logging state to prevent test pollution."""
+    """Save and restore logging and structlog state to prevent test pollution."""
     import logging
+
+    import structlog
 
     tapes_logger = logging.getLogger("tapes")
     root_logger = logging.getLogger()
@@ -655,25 +657,30 @@ def _clean_logging():
     tapes_logger.handlers = old_tapes_handlers
     tapes_logger.level = old_tapes_level
     root_logger.handlers = old_root_handlers
+    structlog.reset_defaults()
 
 
 class TestSetupLogging:
-    def test_setup_logging_creates_file_handler(self, tmp_path: Path) -> None:
-        import logging
+    def test_produces_json(self, tmp_path: Path) -> None:
+        import json
+
+        import structlog
 
         from tapes.cli import _setup_logging
 
         log_file = tmp_path / "test.log"
         _setup_logging(headless=False, verbose=False, log_file=str(log_file))
 
-        logger = logging.getLogger("tapes")
-        logger.info("test message")
+        logger = structlog.get_logger("tapes.test")
+        logger.info("test_event", foo="bar")
 
-        assert log_file.exists()
-        content = log_file.read_text()
-        assert "test message" in content
+        content = log_file.read_text().strip()
+        data = json.loads(content)
+        assert data["event"] == "test_event"
+        assert data["foo"] == "bar"
+        assert "timestamp" in data
 
-    def test_setup_logging_stderr_in_headless(self, tmp_path: Path) -> None:
+    def test_stderr_in_headless(self, tmp_path: Path) -> None:
         import logging
 
         from tapes.cli import _setup_logging
@@ -681,7 +688,6 @@ class TestSetupLogging:
         _setup_logging(headless=True, verbose=False, log_file=str(tmp_path / "test.log"))
 
         logger = logging.getLogger("tapes")
-        # Check that a StreamHandler writing to stderr exists
         stderr_handlers = [
             h
             for h in logger.handlers
@@ -689,7 +695,7 @@ class TestSetupLogging:
         ]
         assert len(stderr_handlers) >= 1
 
-    def test_setup_logging_no_stderr_in_tui(self, tmp_path: Path) -> None:
+    def test_no_stderr_in_tui(self, tmp_path: Path) -> None:
         import logging
 
         from tapes.cli import _setup_logging
@@ -704,7 +710,7 @@ class TestSetupLogging:
         ]
         assert len(stderr_handlers) == 0
 
-    def test_setup_logging_empty_log_file_disables_file(self) -> None:
+    def test_empty_log_file_disables_file(self) -> None:
         import logging
 
         from tapes.cli import _setup_logging
@@ -715,7 +721,7 @@ class TestSetupLogging:
         file_handlers = [h for h in logger.handlers if isinstance(h, logging.FileHandler)]
         assert len(file_handlers) == 0
 
-    def test_setup_logging_verbose_sets_debug(self, tmp_path: Path) -> None:
+    def test_verbose_sets_debug(self, tmp_path: Path) -> None:
         import logging
 
         from tapes.cli import _setup_logging
@@ -724,3 +730,16 @@ class TestSetupLogging:
 
         logger = logging.getLogger("tapes")
         assert logger.level == logging.DEBUG
+
+    def test_returns_log_path(self, tmp_path: Path) -> None:
+        from tapes.cli import _setup_logging
+
+        log_file = tmp_path / "test.log"
+        result = _setup_logging(headless=False, verbose=False, log_file=str(log_file))
+        assert result == log_file
+
+    def test_returns_none_when_file_disabled(self) -> None:
+        from tapes.cli import _setup_logging
+
+        result = _setup_logging(headless=False, verbose=False, log_file="")
+        assert result is None

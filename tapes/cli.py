@@ -112,8 +112,8 @@ def _start_server(command: str, host: str, port: int) -> None:
     server.serve()
 
 
-def _setup_logging(*, headless: bool, verbose: bool, log_file: str | None) -> None:
-    """Configure logging handlers for file and optionally stderr.
+def _setup_logging(*, headless: bool, verbose: bool, log_file: str | None) -> Path | None:
+    """Configure structlog with JSON output. Returns the log file path (for jq summary).
 
     Args:
         headless: If True, also log to stderr.
@@ -122,17 +122,41 @@ def _setup_logging(*, headless: bool, verbose: bool, log_file: str | None) -> No
     """
     import logging
 
-    log_format = "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
-    formatter = logging.Formatter(log_format, datefmt="%Y-%m-%d %H:%M:%S")
+    import structlog
 
-    # Root logger at WARNING (suppress noisy third-party loggers).
-    # Don't use basicConfig -- it adds a default StreamHandler that
-    # would duplicate our explicit handlers.
+    log_level = logging.DEBUG if verbose else logging.INFO
+
+    # Suppress noisy third-party loggers.
+    # Don't use basicConfig - it adds a default stderr handler.
     logging.getLogger().setLevel(logging.WARNING)
 
+    # structlog processors for the structlog -> stdlib bridge
+    structlog.configure(
+        processors=[
+            structlog.contextvars.merge_contextvars,
+            structlog.processors.add_log_level,
+            structlog.processors.TimeStamper(fmt="iso"),
+            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+        ],
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        wrapper_class=structlog.stdlib.BoundLogger,
+        cache_logger_on_first_use=True,
+    )
+
+    # ProcessorFormatter renders the final JSON on the stdlib side
+    formatter = structlog.stdlib.ProcessorFormatter(
+        processors=[
+            structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+            structlog.processors.JSONRenderer(),
+        ],
+    )
+
     tapes_logger = logging.getLogger("tapes")
-    tapes_logger.setLevel(logging.DEBUG if verbose else logging.INFO)
-    tapes_logger.propagate = False  # prevent duplicate output via root handler
+    tapes_logger.setLevel(log_level)
+    tapes_logger.propagate = False
+    tapes_logger.handlers.clear()
+
+    resolved_log_path: Path | None = None
 
     # File handler
     if log_file != "":
@@ -141,12 +165,12 @@ def _setup_logging(*, headless: bool, verbose: bool, log_file: str | None) -> No
 
             log_dir = Path(user_state_dir("tapes"))
             log_dir.mkdir(parents=True, exist_ok=True)
-            log_path = log_dir / "tapes.log"
+            resolved_log_path = log_dir / "tapes.log"
         else:
-            log_path = Path(log_file)
-            log_path.parent.mkdir(parents=True, exist_ok=True)
+            resolved_log_path = Path(log_file)
+            resolved_log_path.parent.mkdir(parents=True, exist_ok=True)
 
-        file_handler = logging.FileHandler(log_path)
+        file_handler = logging.FileHandler(resolved_log_path)
         file_handler.setFormatter(formatter)
         tapes_logger.addHandler(file_handler)
 
@@ -155,6 +179,8 @@ def _setup_logging(*, headless: bool, verbose: bool, log_file: str | None) -> No
         stderr_handler = logging.StreamHandler(sys.stderr)
         stderr_handler.setFormatter(formatter)
         tapes_logger.addHandler(stderr_handler)
+
+    return resolved_log_path
 
 
 # ---------------------------------------------------------------------------
@@ -305,7 +331,7 @@ def main(
 
     # Set up logging
     resolved_log_file = log_file if log_file is not None else cfg.mode.log_file
-    _setup_logging(headless=is_headless, verbose=verbose, log_file=resolved_log_file)
+    _log_path = _setup_logging(headless=is_headless, verbose=verbose, log_file=resolved_log_file)
 
     # Serve mode: CLI flag or config/env var
     if is_serve:
