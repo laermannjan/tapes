@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -17,7 +18,7 @@ from tapes.tree_model import (
     FolderNode,
     TreeModel,
 )
-from tapes.ui.tree_app import AppState
+from tapes.ui.tree_app import AppState, _NodeSnapshot
 from tapes.ui.tree_view import TreeView
 
 # ---------------------------------------------------------------------------
@@ -1494,3 +1495,201 @@ class TestAutoCommit:
                 )
             assert len(notifications) == 1
             assert "1 rejected" in notifications[0]
+
+
+# ---------------------------------------------------------------------------
+# Directory polling tests
+# ---------------------------------------------------------------------------
+
+
+def _poll_config(poll_interval: float = 1.0) -> TapesConfig:
+    """Create a TapesConfig with polling enabled."""
+    from tapes.config import ModeConfig, TapesConfig
+
+    return TapesConfig(mode=ModeConfig(poll_interval=poll_interval))
+
+
+def _poll_config_disabled() -> TapesConfig:
+    """Create a TapesConfig with polling disabled."""
+    from tapes.config import ModeConfig, TapesConfig
+
+    return TapesConfig(mode=ModeConfig(poll_interval=0.0))
+
+
+def _build_app_from_dir(tmp_path: Path, config: TapesConfig | None = None) -> tuple:
+    """Build a TreeApp from real files on disk.
+
+    Returns (app, model) where model is the TreeModel inside the app.
+    """
+    from tapes.scanner import scan
+    from tapes.tree_model import build_tree
+    from tapes.ui.tree_app import TreeApp
+
+    files = scan(tmp_path)
+    model = build_tree(files, tmp_path)
+    cfg = config or _poll_config_disabled()
+    app = TreeApp(
+        model=model,
+        movie_template=TEMPLATE,
+        tv_template=TEMPLATE,
+        root_path=tmp_path,
+        config=cfg,
+    )
+    return app, model
+
+
+@pytest.mark.skipif(not HAS_PILOT, reason="textual pilot not available")
+class TestPolling:
+    @pytest.mark.asyncio()
+    async def test_no_poll_timer_when_interval_zero(self, tmp_path: Path) -> None:
+        """poll_interval=0 means no timer is started."""
+
+        (tmp_path / "movie.mkv").touch()
+        app, _model = _build_app_from_dir(tmp_path, config=_poll_config_disabled())
+        async with app.run_test():
+            assert app._poll_timer is None
+
+    @pytest.mark.asyncio()
+    async def test_poll_timer_started_on_mount(self, tmp_path: Path) -> None:
+        """poll_interval>0 starts a set_interval timer."""
+
+        (tmp_path / "movie.mkv").touch()
+        app, _model = _build_app_from_dir(tmp_path, config=_poll_config(5.0))
+        async with app.run_test():
+            assert app._poll_timer is not None
+
+    @pytest.mark.asyncio()
+    async def test_poll_detects_new_file(self, tmp_path: Path) -> None:
+        """New file appearing in directory is added to tree."""
+        (tmp_path / "existing.mkv").touch()
+        app, model = _build_app_from_dir(tmp_path)
+        async with app.run_test():
+            paths_before = {f.path for f in model.all_files()}
+            assert len(paths_before) == 1
+
+            # Add a new file to disk
+            new_file = tmp_path / "new_movie.mkv"
+            new_file.touch()
+
+            # Trigger poll manually
+            app._poll_directory()
+
+            paths_after = {f.path for f in model.all_files()}
+            assert new_file in paths_after
+            assert len(paths_after) == 2
+
+    @pytest.mark.asyncio()
+    async def test_poll_detects_removed_file(self, tmp_path: Path) -> None:
+        """File deleted from directory is removed from tree."""
+        file_a = tmp_path / "file_a.mkv"
+        file_b = tmp_path / "file_b.mkv"
+        file_a.touch()
+        file_b.touch()
+        app, model = _build_app_from_dir(tmp_path)
+        async with app.run_test():
+            assert len(model.all_files()) == 2
+
+            # Remove one file from disk
+            file_a.unlink()
+
+            app._poll_directory()
+
+            paths_after = {f.path for f in model.all_files()}
+            assert file_a not in paths_after
+            assert file_b in paths_after
+            assert len(paths_after) == 1
+
+    @pytest.mark.asyncio()
+    async def test_poll_preserves_staged_status(self, tmp_path: Path) -> None:
+        """Staged files keep their status after tree rebuild."""
+        existing = tmp_path / "existing.mkv"
+        existing.touch()
+        app, model = _build_app_from_dir(tmp_path)
+        async with app.run_test():
+            # Stage the existing file
+            files = model.all_files()
+            assert len(files) == 1
+            files[0].status = FileStatus.STAGED
+
+            # Add a new file to trigger rebuild
+            (tmp_path / "new.mkv").touch()
+            app._poll_directory()
+
+            # Find the existing file in the rebuilt tree
+            rebuilt_files = {f.path: f for f in model.all_files()}
+            assert rebuilt_files[existing].status == FileStatus.STAGED
+
+    @pytest.mark.asyncio()
+    async def test_poll_preserves_metadata(self, tmp_path: Path) -> None:
+        """Files keep their metadata after tree rebuild."""
+        existing = tmp_path / "existing.mkv"
+        existing.touch()
+        app, model = _build_app_from_dir(tmp_path)
+        async with app.run_test():
+            # Set custom metadata on the existing file
+            files = model.all_files()
+            files[0].metadata = {"title": "Custom Title", "year": 2024}
+
+            # Add a new file to trigger rebuild
+            (tmp_path / "new.mkv").touch()
+            app._poll_directory()
+
+            # Check that metadata was preserved
+            rebuilt_files = {f.path: f for f in model.all_files()}
+            assert rebuilt_files[existing].metadata["title"] == "Custom Title"
+            assert rebuilt_files[existing].metadata["year"] == 2024
+
+    @pytest.mark.asyncio()
+    async def test_poll_protects_metadata_snapshot(self, tmp_path: Path) -> None:
+        """Files in metadata view are not removed even if deleted from disk."""
+        file_to_edit = tmp_path / "editing.mkv"
+        file_to_edit.touch()
+        app, model = _build_app_from_dir(tmp_path)
+        async with app.run_test():
+            # Simulate that the user has this file open in metadata view
+            files = model.all_files()
+            assert len(files) == 1
+            target_node = files[0]
+            app._metadata_snapshot = [
+                _NodeSnapshot(
+                    target_node,
+                    copy.deepcopy(target_node.metadata),
+                    copy.deepcopy(target_node.candidates),
+                    target_node.status,
+                ),
+            ]
+
+            # Delete the file from disk
+            file_to_edit.unlink()
+
+            app._poll_directory()
+
+            # File should still be in the tree (protected by snapshot)
+            paths_after = {f.path for f in model.all_files()}
+            assert file_to_edit in paths_after
+
+    @pytest.mark.asyncio()
+    async def test_poll_runs_guessit_on_new_files_only(self, tmp_path: Path) -> None:
+        """Guessit runs only on newly discovered files."""
+        existing = tmp_path / "Existing.Movie.2020.mkv"
+        existing.touch()
+        app, model = _build_app_from_dir(tmp_path)
+        async with app.run_test():
+            # Set custom metadata that should NOT be overwritten by guessit
+            files = model.all_files()
+            files[0].metadata = {"title": "My Custom Title", "year": 9999}
+
+            # Add a new file
+            new_file = tmp_path / "New.Movie.2024.mkv"
+            new_file.touch()
+
+            app._poll_directory()
+
+            # Existing file should keep its custom metadata (guessit not re-run)
+            rebuilt_files = {f.path: f for f in model.all_files()}
+            assert rebuilt_files[existing].metadata["title"] == "My Custom Title"
+            assert rebuilt_files[existing].metadata["year"] == 9999
+
+            # New file should have guessit-populated metadata
+            new_node = rebuilt_files[new_file]
+            assert new_node.metadata.get("title") is not None

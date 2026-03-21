@@ -145,6 +145,9 @@ class TreeApp(App):
         # Auto-commit state
         self._auto_commit_timer: Timer | None = None
         self._auto_commit_pending: bool = False
+        # Polling state
+        self._poll_timer: Timer | None = None
+        self._tmdb_queue: list[FileNode] = []
 
     @property
     def state(self) -> AppState:
@@ -195,6 +198,13 @@ class TreeApp(App):
                 )
         else:
             self._update_footer()
+
+        # Start directory polling if interval > 0
+        if self.config.mode.poll_interval > 0:
+            self._poll_timer = self.set_interval(
+                self.config.mode.poll_interval,
+                self._poll_directory,
+            )
 
     def _make_pipeline_params(self) -> PipelineParams:
         """Build PipelineParams from current config."""
@@ -1045,12 +1055,14 @@ class TreeApp(App):
             mv = self.query_one(MetadataView)
             if self._metadata_snapshot and self._should_return_to_tree(mv):
                 self._metadata_snapshot = None
+                self._maybe_start_tmdb_worker()
                 self._show_tree()
                 return
             mv.refresh()
         else:
             self.query_one(TreeView).refresh()
         self._update_footer()
+        self._maybe_start_tmdb_worker()
 
     def _should_return_to_tree(self, mv: MetadataView) -> bool:  # noqa: ARG002
         """Check if TMDB auto-accept set tmdb_id that wasn't in the snapshot."""
@@ -1098,3 +1110,138 @@ class TreeApp(App):
             bar.hint_text = "enter to confirm \u00b7 esc to cancel"
         else:
             bar.hint_text = "enter to view \u00b7 space to stage \u00b7 tab to commit \u00b7 ? for help"
+
+    # ------------------------------------------------------------------
+    # Directory polling: re-scan, diff, rebuild tree, migrate state
+    # ------------------------------------------------------------------
+
+    def _poll_directory(self) -> None:
+        """Re-scan the directory and update the tree with new/removed files."""
+        from tapes.pipeline import run_guessit_pass
+        from tapes.scanner import scan
+
+        if self.root_path is None:
+            return
+
+        cfg = self.config
+        scanned = scan(
+            self.root_path,
+            ignore_patterns=cfg.scan.ignore_patterns,
+            video_extensions=cfg.scan.video_extensions,
+        )
+        scanned_set = set(scanned)
+        known_paths = {f.path for f in self.model.all_files()}
+
+        new_paths = scanned_set - known_paths
+        removed_paths = known_paths - scanned_set
+
+        if not new_paths and not removed_paths:
+            return
+
+        # Guard: protect files in active metadata snapshot from removal
+        if self._metadata_snapshot:
+            snapshot_paths = {snap.node.path for snap in self._metadata_snapshot}
+            protected = removed_paths & snapshot_paths
+            if protected:
+                removed_paths -= protected
+                scanned_set |= protected
+                if not new_paths and not removed_paths:
+                    return
+
+        # Save state from current tree
+        state_map: dict[Path, tuple[FileStatus, dict, list]] = {}
+        for node in self.model.all_files():
+            state_map[node.path] = (
+                node.status,
+                node.metadata.copy(),
+                list(node.candidates),
+            )
+
+        # Save cursor position
+        tv = self.query_one(TreeView)
+        cursor_path: Path | None = None
+        cursor_node = tv.cursor_node()
+        if isinstance(cursor_node, FileNode):
+            cursor_path = cursor_node.path
+
+        # Rebuild tree
+        from tapes.tree_model import build_tree
+
+        new_model = build_tree(sorted(scanned_set), self.root_path)
+
+        # Migrate state to new tree
+        new_files: list[FileNode] = []
+        for node in new_model.all_files():
+            if node.path in state_map:
+                status, metadata, candidates = state_map[node.path]
+                node.status = status
+                node.metadata = metadata
+                node.candidates = candidates
+            else:
+                new_files.append(node)
+
+        # Replace model root
+        self.model.root = new_model.root
+        self.model._cached_files = None  # noqa: SLF001
+
+        # Run guessit on new files only
+        if new_files:
+            run_guessit_pass(self.model, root_path=self.root_path, nodes=new_files)
+
+        # Queue new files for TMDB
+        if new_files and cfg.metadata.tmdb_token:
+            self._tmdb_queue.extend(new_files)
+            self._maybe_start_tmdb_worker()
+
+        # Refresh UI
+        tv.refresh_tree()
+        self._restore_cursor(tv, cursor_path)
+        self._update_footer()
+
+    def _restore_cursor(self, tv: TreeView, target_path: Path | None) -> None:
+        """Restore cursor to the node at target_path, or clamp to valid range."""
+        if target_path is None:
+            return
+        for i, (node, _depth) in enumerate(tv._items):  # noqa: SLF001
+            if isinstance(node, FileNode) and node.path == target_path:
+                tv.cursor_index = i
+                return
+        if tv._items:  # noqa: SLF001
+            tv.cursor_index = min(tv.cursor_index, len(tv._items) - 1)  # noqa: SLF001
+        else:
+            tv.cursor_index = 0
+
+    def _maybe_start_tmdb_worker(self) -> None:
+        """Start a TMDB worker for queued new files if none is running."""
+        if self._tmdb_querying or not self._tmdb_queue:
+            return
+
+        from tapes.pipeline import run_tmdb_pass
+
+        # Drain the queue into a temporary model for the worker
+        nodes = list(self._tmdb_queue)
+        self._tmdb_queue.clear()
+
+        self._tmdb_querying = True
+        self._update_footer()
+
+        params = self._make_pipeline_params()
+
+        def worker() -> None:
+            # Create a minimal model containing just the queued nodes
+            temp_root = FolderNode(name="temp", children=nodes)
+            temp_model = TreeModel(root=temp_root)
+
+            def on_progress(done: int, total: int) -> None:
+                self.call_from_thread(self._on_tmdb_progress, done, total)
+
+            run_tmdb_pass(
+                temp_model,
+                params,
+                on_progress=on_progress,
+                post_update=self._post_update_with_auto_commit,
+                can_stage=self._make_can_stage(),
+            )
+            self.call_from_thread(self._on_tmdb_done)
+
+        self.run_worker(worker, thread=True)
