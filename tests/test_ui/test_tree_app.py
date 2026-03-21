@@ -1866,3 +1866,75 @@ class TestHeadless:
                 app._tmdb_querying = True
                 app._on_tmdb_done()
             assert len(check_calls) == 1
+
+    @pytest.mark.asyncio()
+    async def test_headless_exit_after_error_in_auto_commit(self) -> None:
+        """Errored files don't block headless exit - they should be unstaged."""
+        from unittest.mock import patch
+
+        from tapes.ui.tree_app import TreeApp
+
+        node = _stageable_file()
+        node.status = FileStatus.STAGED
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
+        cfg = _headless_config(poll_interval=0.0)
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE, config=cfg)
+        async with app.run_test() as _pilot:
+            exit_called = False
+            original_exit = app.exit
+
+            def track_exit(*args, **kwargs):
+                nonlocal exit_called
+                exit_called = True
+                original_exit(*args, **kwargs)
+
+            with patch.object(app, "exit", side_effect=track_exit):
+                app._on_auto_commit_done(
+                    pairs=[(node.path, Path("/lib/Top (2020).mkv"))],
+                    results=["Error: something went wrong"],
+                    staged=[node],
+                    batch_rejected=[],
+                )
+            # Node should no longer be staged (error -> PENDING)
+            assert not node.staged
+            # App should exit despite the error
+            assert exit_called
+
+    @pytest.mark.asyncio()
+    async def test_headless_exit_when_no_staged_files(self) -> None:
+        """No staged files triggers headless exit check."""
+        from unittest.mock import patch
+
+        from tapes.ui.tree_app import TreeApp
+
+        node = FileNode(path=Path("/root/mystery.mkv"))
+        # Node is PENDING, not staged
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
+        cfg = _headless_config(poll_interval=0.0)
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE, config=cfg)
+        async with app.run_test() as _pilot:
+            check_calls = []
+            with patch.object(app, "_check_headless_exit", side_effect=lambda: check_calls.append(1)):
+                app._run_auto_commit()
+            assert len(check_calls) >= 1
+
+    @pytest.mark.asyncio()
+    async def test_headless_exit_run_auto_commit_calls_exit_check(self) -> None:
+        """_run_auto_commit calls _check_headless_exit on early returns."""
+        from unittest.mock import patch
+
+        from tapes.ui.tree_app import TreeApp
+
+        # No staged files at all
+        node = FileNode(path=Path("/root/top.mkv"))
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
+        cfg = _headless_config(poll_interval=0.0)
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE, config=cfg)
+        async with app.run_test() as _pilot:
+            check_calls = []
+            with patch.object(app, "_check_headless_exit", side_effect=lambda: check_calls.append(1)):
+                app._run_auto_commit()
+            assert len(check_calls) >= 1

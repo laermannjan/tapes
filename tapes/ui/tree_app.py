@@ -781,10 +781,15 @@ class TreeApp(App):
 
         staged = [f for f in self.model.all_files() if f.staged]
         if not staged:
+            self._check_headless_exit()
             return
 
         pairs = self._compute_file_pairs(staged)
         if not pairs:
+            # Staged files have no computable destination - unstage them
+            for f in staged:
+                f.status = FileStatus.PENDING
+            self._check_headless_exit()
             return
 
         report = detect_conflicts(
@@ -797,6 +802,7 @@ class TreeApp(App):
                 self.notify(f"{report.rejected_count} file(s) rejected (conflicts)")
                 self.query_one(TreeView).refresh()
                 self._update_footer()
+            self._check_headless_exit()
             return
 
         src_dest_pairs = [(n.path, dest) for n, dest in report.valid_pairs]
@@ -840,7 +846,12 @@ class TreeApp(App):
         """Handle auto-commit batch completion."""
         ok_srcs = {src for (src, _), msg in zip(pairs, results, strict=False) if not msg.startswith("Error")}
         processed = [n for n in staged if n.path in ok_srcs]
-        errors = len(results) - len(ok_srcs)
+        errored = [n for n in staged if n.path not in ok_srcs]
+        errors = len(errored)
+
+        # Unstage errored files so they don't block headless exit
+        for n in errored:
+            n.status = FileStatus.PENDING
 
         # Print processed files to stdout (headless composable output)
         if self.config.mode.headless:
