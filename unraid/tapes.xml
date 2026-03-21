@@ -20,7 +20,20 @@
   </Overview>
   <Category>MediaApp:Other</Category>
   <WebUI>http://[IP]:[PORT:8080]/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/laermannjan/tapes/main/unraid/tapes.xml</TemplateURL>
   <Icon>https://raw.githubusercontent.com/laermannjan/tapes/main/docs/icon.png</Icon>
+  <GitHub>https://github.com/laermannjan/tapes</GitHub>
+  <ReadMe>https://raw.githubusercontent.com/laermannjan/tapes/main/README.md</ReadMe>
+  <Date>2026-03-22</Date>
+  <Changes>
+### 2026-03-22
+- Initial release
+- Web UI via textual-serve
+- Auto-commit with debounce
+- Directory polling
+- Structured JSON logging
+- Conflict resolution (auto/skip/keep_all)
+  </Changes>
   <ExtraParams>--restart unless-stopped</ExtraParams>
   <PostArgs>--serve --auto-commit</PostArgs>
   <Config
