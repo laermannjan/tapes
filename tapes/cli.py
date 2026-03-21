@@ -298,6 +298,13 @@ def main(
         console.print("[red]Error:[/red] Cannot use --headless with --serve.")
         raise typer.Exit(code=1)
 
+    # Validate: headless requires TMDB token
+    if is_headless and not cfg.metadata.tmdb_token:
+        console.print(
+            "[red]Error:[/red] --headless requires a TMDB token. Set --tmdb-token or TAPES_METADATA__TMDB_TOKEN."
+        )
+        raise typer.Exit(code=1)
+
     # Set up logging
     resolved_log_file = log_file if log_file is not None else cfg.mode.log_file
     _setup_logging(headless=is_headless, verbose=verbose, log_file=resolved_log_file)

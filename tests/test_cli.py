@@ -515,6 +515,7 @@ class TestHeadlessFlags:
     def test_headless_implies_auto_commit(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("TAPES_CONFIG", raising=False)
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+        monkeypatch.setenv("TAPES_METADATA__TMDB_TOKEN", "fake-token")
 
         scan_dir = tmp_path / "media"
         scan_dir.mkdir()
@@ -547,9 +548,19 @@ class TestHeadlessFlags:
         result = runner.invoke(app, ["--headless", "/media"])
         assert result.exit_code != 0
 
+    def test_headless_requires_tmdb_token(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("TAPES_CONFIG", raising=False)
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+        monkeypatch.delenv("TMDB_TOKEN", raising=False)
+
+        result = runner.invoke(app, ["--headless", "/media"])
+        assert result.exit_code != 0
+        assert "tmdb" in result.output.lower()
+
     def test_headless_runs_app_in_headless_mode(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("TAPES_CONFIG", raising=False)
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+        monkeypatch.setenv("TAPES_METADATA__TMDB_TOKEN", "fake-token")
 
         scan_dir = tmp_path / "media"
         scan_dir.mkdir()
@@ -581,6 +592,7 @@ class TestHeadlessFlags:
     def test_one_shot_implies_headless_and_no_polling(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("TAPES_CONFIG", raising=False)
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+        monkeypatch.setenv("TAPES_METADATA__TMDB_TOKEN", "fake-token")
 
         scan_dir = tmp_path / "media"
         scan_dir.mkdir()
