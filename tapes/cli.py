@@ -112,6 +112,37 @@ def _start_server(command: str, host: str, port: int) -> None:
     server.serve()
 
 
+def _print_jq_summary(log_path: Path | None) -> None:
+    """Print a per-file summary from the JSON log using jq (if available)."""
+    import shutil
+    import subprocess
+
+    if not log_path or not log_path.exists():
+        return
+    jq_bin = shutil.which("jq")
+    if not jq_bin:
+        return
+
+    try:
+        result = subprocess.run(  # noqa: S603
+            [
+                jq_bin,
+                "-r",
+                'select(.file) | [.file, .event, (.reason // .dest // "")] | @tsv',
+            ],
+            input=log_path.read_text(),
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            print("\n--- Summary ---", file=sys.stderr)  # noqa: T201
+            print(result.stdout.strip(), file=sys.stderr)  # noqa: T201
+    except (subprocess.TimeoutExpired, OSError):
+        pass
+
+
 def _setup_logging(*, headless: bool, verbose: bool, log_file: str | None) -> Path | None:
     """Configure structlog with JSON output. Returns the log file path (for jq summary).
 
@@ -373,5 +404,6 @@ def main(
     )
     if is_headless:
         tui.run(headless=True)
+        _print_jq_summary(_log_path)
     else:
         tui.run()
