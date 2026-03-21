@@ -812,7 +812,11 @@ class TreeApp(App):
 
         src_dest_pairs = [(n.path, dest) for n, dest in report.valid_pairs]
         valid_nodes = [n for n, _ in report.valid_pairs]
-        batch_rejected = [n for p in report.problems for n in p.rejected_nodes]
+        # Collect all nodes that were rejected by this batch's conflict detection.
+        # This includes both problem-rejected (writability) and auto-resolved
+        # (conflict losers whose status was set to REJECTED by detect_conflicts).
+        staged_set = {id(n) for n in valid_nodes}
+        batch_rejected = [f for f in staged if f.rejected and id(f) not in staged_set]
         overwrite_dests = report.overwrite_dests
         self._commit_in_progress = True
 
