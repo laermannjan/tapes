@@ -164,7 +164,7 @@ def _resolve_group_auto(
 
     if isinstance(winner[0], ExistingFile):
         # Existing file wins - reject all staged files
-        logger.info("conflict_resolved", winner="existing", winner_size=winner[2], dest=dest_path)
+        logger.debug("conflict_resolved", winner="existing", winner_size=winner[2], dest=dest_path)
         for node, dest, size, _ in sorted_entries:
             if isinstance(node, FileNode):
                 node.status = FileStatus.REJECTED
@@ -175,7 +175,7 @@ def _resolve_group_auto(
                 )
     else:
         # Staged file wins
-        logger.info("conflict_resolved", winner=winner[0].path.name, winner_size=winner[2], dest=dest_path)
+        logger.debug("conflict_resolved", winner=winner[0].path.name, winner_size=winner[2], dest=dest_path)
         result.append((winner[0], winner[1]))
         for node, dest, size, _ in sorted_entries[1:]:
             if isinstance(node, ExistingFile):

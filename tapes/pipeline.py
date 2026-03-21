@@ -526,7 +526,7 @@ def _populate_node_guessit(
     node.metadata = dict(filename_fields)
     node.candidates = []
 
-    logger.info("extract", file=node.path.name, **filename_fields)
+    logger.debug("extract", file=node.path.name, **filename_fields)
 
 
 def _query_tmdb_for_node(  # noqa: PLR0911

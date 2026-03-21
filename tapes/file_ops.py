@@ -211,7 +211,7 @@ def process_staged(
         except OperationCancelledError:
             break
         except FileExistsError:
-            logger.warning("file_exists", file=str(src), dest=str(dest))
+            logger.error("file_exists", file=str(src), dest=str(dest))  # noqa: TRY400
             results.append(f"Error: {dest} already exists")
         except Exception:
             logger.error("processing_error", file=str(src), exc_info=True)  # noqa: G201
