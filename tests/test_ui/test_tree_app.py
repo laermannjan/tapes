@@ -1868,6 +1868,123 @@ class TestHeadless:
             assert len(check_calls) == 1
 
     @pytest.mark.asyncio()
+    async def test_headless_exit_blocked_by_pending_timer_between_batches(self) -> None:
+        """After first batch, exit is blocked by pending debounce. After second, exit fires."""
+        from unittest.mock import patch
+
+        from tapes.ui.tree_app import TreeApp
+
+        node_a = _stageable_file("a.mkv", "Movie A", 2020)
+        node_b = _stageable_file("b.mkv", "Movie B", 2021)
+        root = FolderNode(name="root", children=[node_a, node_b])
+        model = TreeModel(root=root)
+        cfg = _headless_config(poll_interval=0.0)
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE, config=cfg)
+        async with app.run_test() as _pilot:
+            exit_calls: list[int] = []
+            original_exit = app.exit
+
+            def track_exit(*args, **kwargs):
+                exit_calls.append(1)
+                original_exit(*args, **kwargs)
+
+            with patch.object(app, "exit", side_effect=track_exit):
+                # First batch: process node_a. Simulate pending timer for node_b.
+                app._auto_commit_timer = app.set_timer(10.0, lambda: None)
+                app._on_auto_commit_done(
+                    pairs=[(node_a.path, Path("/lib/Movie A (2020).mkv"))],
+                    results=["[dry-run] Would copy ..."],
+                    staged=[node_a],
+                    batch_rejected=[],
+                )
+                # Exit should NOT fire (timer pending)
+                assert len(exit_calls) == 0
+
+                # Second batch: process node_b, no more pending work
+                app._auto_commit_timer.stop()
+                app._auto_commit_timer = None
+                app._on_auto_commit_done(
+                    pairs=[(node_b.path, Path("/lib/Movie B (2021).mkv"))],
+                    results=["[dry-run] Would copy ..."],
+                    staged=[node_b],
+                    batch_rejected=[],
+                )
+                # Now exit SHOULD fire
+                assert len(exit_calls) == 1
+
+    @pytest.mark.asyncio()
+    async def test_headless_does_not_exit_while_tmdb_querying(self) -> None:
+        """App must not exit while TMDB worker is still running."""
+        from unittest.mock import patch
+
+        from tapes.ui.tree_app import TreeApp
+
+        node = _stageable_file()
+        node.status = FileStatus.STAGED
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
+        cfg = _headless_config(poll_interval=0.0)
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE, config=cfg)
+        async with app.run_test() as _pilot:
+            exit_called = False
+            original_exit = app.exit
+
+            def track_exit(*args, **kwargs):
+                nonlocal exit_called
+                exit_called = True
+                original_exit(*args, **kwargs)
+
+            # Simulate TMDB still running
+            app._tmdb_querying = True
+
+            with patch.object(app, "exit", side_effect=track_exit):
+                app._on_auto_commit_done(
+                    pairs=[(node.path, Path("/lib/Top (2020).mkv"))],
+                    results=["[dry-run] Would copy ..."],
+                    staged=[node],
+                    batch_rejected=[],
+                )
+            assert not exit_called  # Must NOT exit while TMDB is querying
+
+    @pytest.mark.asyncio()
+    async def test_headless_does_not_exit_while_debounce_pending(self) -> None:
+        """App must not exit while an auto-commit debounce timer is pending."""
+        from unittest.mock import patch
+
+        from tapes.ui.tree_app import TreeApp
+
+        node_a = _stageable_file("a.mkv", "Movie A", 2020)
+        node_b = _stageable_file("b.mkv", "Movie B", 2021)
+        node_a.status = FileStatus.STAGED
+        node_b.status = FileStatus.STAGED
+        root = FolderNode(name="root", children=[node_a, node_b])
+        model = TreeModel(root=root)
+        cfg = _headless_config(poll_interval=0.0)
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE, config=cfg)
+        async with app.run_test() as _pilot:
+            exit_called = False
+            original_exit = app.exit
+
+            def track_exit(*args, **kwargs):
+                nonlocal exit_called
+                exit_called = True
+                original_exit(*args, **kwargs)
+
+            # Start a debounce timer (simulating node_b was just staged)
+            app._schedule_auto_commit()
+
+            with patch.object(app, "exit", side_effect=track_exit):
+                # Process only node_a
+                app._on_auto_commit_done(
+                    pairs=[(node_a.path, Path("/lib/Movie A (2020).mkv"))],
+                    results=["[dry-run] Would copy ..."],
+                    staged=[node_a],
+                    batch_rejected=[],
+                )
+            # Timer is still pending for node_b - must NOT exit
+            assert not exit_called
+
+    @pytest.mark.asyncio()
     async def test_headless_exit_after_error_in_auto_commit(self) -> None:
         """Errored files don't block headless exit - they should be unstaged."""
         from unittest.mock import patch
