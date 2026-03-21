@@ -206,6 +206,16 @@ class TreeApp(App):
                 self._poll_directory,
             )
 
+        # SIGTERM handler for graceful shutdown (Docker, systemd)
+        if self.config.mode.headless:
+            import signal
+
+            def _handle_sigterm(_signum: int, _frame: object) -> None:
+                logger.info("Received SIGTERM, shutting down")
+                self.exit()
+
+            signal.signal(signal.SIGTERM, _handle_sigterm)
+
     def _make_pipeline_params(self) -> PipelineParams:
         """Build PipelineParams from current config."""
         from tapes.pipeline import PipelineParams
@@ -702,6 +712,12 @@ class TreeApp(App):
         processed = [n for n in staged if n.path in ok_srcs]
         errors = len(results) - len(ok_srcs)
 
+        # Print processed destinations to stdout (headless composable output)
+        if self.config.mode.headless:
+            for (_src, dest), msg in zip(pairs, results, strict=False):
+                if not msg.startswith("Error"):
+                    print(dest)  # noqa: T201
+
         if processed:
             self.model.remove_nodes(processed)
 
@@ -721,7 +737,10 @@ class TreeApp(App):
         msg = f"{len(processed)} file(s) processed"
         if errors:
             msg += f", {errors} error(s)"
-        self.notify(msg)
+        if self.config.mode.headless:
+            logger.info(msg)
+        else:
+            self.notify(msg)
 
     def _on_commit_cancelled(self, done: int, total: int) -> None:
         """Handle commit cancellation -- return to tree view."""
@@ -822,6 +841,12 @@ class TreeApp(App):
         processed = [n for n in staged if n.path in ok_srcs]
         errors = len(results) - len(ok_srcs)
 
+        # Print processed destinations to stdout (headless composable output)
+        if self.config.mode.headless:
+            for (_src, dest), msg in zip(pairs, results, strict=False):
+                if not msg.startswith("Error"):
+                    print(dest)  # noqa: T201
+
         if processed:
             self.model.remove_nodes(processed)
 
@@ -841,7 +866,31 @@ class TreeApp(App):
             parts.append(f"{n_rejected} rejected")
         if errors:
             parts.append(f"{errors} error(s)")
-        self.notify("Auto-committed: " + ", ".join(parts))
+        msg = "Auto-committed: " + ", ".join(parts)
+        if self.config.mode.headless:
+            logger.info(msg)
+        else:
+            self.notify(msg)
+
+        self._check_headless_exit()
+
+    def _check_headless_exit(self) -> None:
+        """Exit the app if headless, one-shot, and all work is done."""
+        if not self.config.mode.headless:
+            return
+        if self.config.mode.poll_interval > 0:
+            return  # Persistent mode, never auto-exit
+
+        # All-work-done condition
+        if (
+            not self._tmdb_querying
+            and not self._tmdb_queue
+            and self._auto_commit_timer is None
+            and not self._auto_commit_pending
+            and not any(f.staged for f in self.model.all_files())
+        ):
+            logger.info("All work complete, exiting")
+            self.exit()
 
     def action_refresh_query(self) -> None:
         if self._mode in _MODAL_STATES or self._mode == AppState.METADATA:
@@ -1063,6 +1112,7 @@ class TreeApp(App):
             self.query_one(TreeView).refresh()
         self._update_footer()
         self._maybe_start_tmdb_worker()
+        self._check_headless_exit()
 
     def _should_return_to_tree(self, mv: MetadataView) -> bool:  # noqa: ARG002
         """Check if TMDB auto-accept set tmdb_id that wasn't in the snapshot."""

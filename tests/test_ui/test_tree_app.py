@@ -1693,3 +1693,176 @@ class TestPolling:
             # New file should have guessit-populated metadata
             new_node = rebuilt_files[new_file]
             assert new_node.metadata.get("title") is not None
+
+
+# ---------------------------------------------------------------------------
+# Headless mode tests
+# ---------------------------------------------------------------------------
+
+
+def _headless_config(poll_interval: float = 0.0) -> TapesConfig:
+    """Create a TapesConfig with headless mode enabled."""
+    from tapes.config import ModeConfig, TapesConfig
+
+    return TapesConfig(
+        mode=ModeConfig(
+            headless=True,
+            auto_commit=True,
+            auto_commit_delay=AUTO_COMMIT_DELAY,
+            poll_interval=poll_interval,
+        ),
+        dry_run=True,
+    )
+
+
+@pytest.mark.skipif(not HAS_PILOT, reason="textual pilot not available")
+class TestHeadless:
+    @pytest.mark.asyncio()
+    async def test_headless_exit_when_no_work(self) -> None:
+        """App exits automatically when headless, poll_interval=0, and no work remains."""
+        from tapes.ui.tree_app import TreeApp
+
+        node = _stageable_file()
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
+        cfg = _headless_config(poll_interval=0.0)
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE, config=cfg)
+        async with app.run_test() as _pilot:
+            # Simulate auto-commit done callback with the file processed
+            app._on_auto_commit_done(
+                pairs=[(node.path, Path("/lib/Top (2020).mkv"))],
+                results=["[dry-run] Would copy ..."],
+                staged=[node],
+                batch_rejected=[],
+            )
+            # _check_headless_exit should have called self.exit()
+            # In textual test harness, exit sets _exit flag
+            assert app.return_code is not None or app._exit
+
+    @pytest.mark.asyncio()
+    async def test_headless_no_exit_with_polling(self) -> None:
+        """App does not auto-exit when poll_interval > 0 (persistent mode)."""
+        from unittest.mock import patch
+
+        from tapes.ui.tree_app import TreeApp
+
+        node = _stageable_file()
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
+        cfg = _headless_config(poll_interval=10.0)
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE, config=cfg)
+        async with app.run_test() as _pilot:
+            exit_called = False
+            original_exit = app.exit
+
+            def track_exit(*args, **kwargs):
+                nonlocal exit_called
+                exit_called = True
+                original_exit(*args, **kwargs)
+
+            with patch.object(app, "exit", side_effect=track_exit):
+                app._on_auto_commit_done(
+                    pairs=[(node.path, Path("/lib/Top (2020).mkv"))],
+                    results=["[dry-run] Would copy ..."],
+                    staged=[node],
+                    batch_rejected=[],
+                )
+            assert not exit_called
+
+    @pytest.mark.asyncio()
+    async def test_stdout_on_processed_file_headless(self) -> None:
+        """Processed filenames are printed to stdout in headless mode."""
+        from unittest.mock import patch
+
+        from tapes.ui.tree_app import TreeApp
+
+        node = _stageable_file()
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
+        cfg = _headless_config()
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE, config=cfg)
+        async with app.run_test() as _pilot:
+            printed: list[str] = []
+            with patch("builtins.print", side_effect=lambda x: printed.append(str(x))):
+                app._on_auto_commit_done(
+                    pairs=[(node.path, Path("/lib/Top (2020).mkv"))],
+                    results=["[dry-run] Would copy ..."],
+                    staged=[node],
+                    batch_rejected=[],
+                )
+            assert any("/lib/Top (2020).mkv" in p for p in printed)
+
+    @pytest.mark.asyncio()
+    async def test_no_stdout_in_tui_mode(self) -> None:
+        """Processed filenames are NOT printed to stdout in TUI mode."""
+        from unittest.mock import patch
+
+        from tapes.ui.tree_app import TreeApp
+
+        node = _stageable_file()
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
+        cfg = _auto_commit_config()
+        cfg.dry_run = True
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE, config=cfg)
+        async with app.run_test() as _pilot:
+            printed: list[str] = []
+            with (
+                patch("builtins.print", side_effect=lambda x: printed.append(str(x))),
+                patch.object(app, "notify"),
+            ):
+                app._on_auto_commit_done(
+                    pairs=[(node.path, Path("/lib/Top (2020).mkv"))],
+                    results=["[dry-run] Would copy ..."],
+                    staged=[node],
+                    batch_rejected=[],
+                )
+            assert len(printed) == 0
+
+    @pytest.mark.asyncio()
+    async def test_notify_becomes_log_in_headless(self) -> None:
+        """Auto-commit notification goes to logger, not self.notify(), in headless mode."""
+        from unittest.mock import patch
+
+        from tapes.ui.tree_app import TreeApp
+
+        node = _stageable_file()
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
+        cfg = _headless_config()
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE, config=cfg)
+        async with app.run_test() as _pilot:
+            notifications: list[str] = []
+            log_messages: list[str] = []
+            with (
+                patch.object(app, "notify", side_effect=lambda msg, **kw: notifications.append(msg)),
+                patch("tapes.ui.tree_app.logger") as mock_logger,
+            ):
+                mock_logger.info = lambda msg, *a, **kw: log_messages.append(msg)
+                app._on_auto_commit_done(
+                    pairs=[(node.path, Path("/lib/Top (2020).mkv"))],
+                    results=["[dry-run] Would copy ..."],
+                    staged=[node],
+                    batch_rejected=[],
+                )
+            assert len(notifications) == 0
+            assert any("Auto-committed:" in m for m in log_messages)
+
+    @pytest.mark.asyncio()
+    async def test_headless_exit_after_tmdb_done(self) -> None:
+        """_check_headless_exit is called from _on_tmdb_done."""
+        from unittest.mock import patch
+
+        from tapes.ui.tree_app import TreeApp
+
+        node = FileNode(path=Path("/root/top.mkv"))
+        root = FolderNode(name="root", children=[node])
+        model = TreeModel(root=root)
+        cfg = _headless_config()
+        app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE, config=cfg)
+        async with app.run_test() as _pilot:
+            check_calls = []
+            with patch.object(app, "_check_headless_exit", side_effect=lambda: check_calls.append(1)):
+                app._tmdb_querying = True
+                app._on_tmdb_done()
+            assert len(check_calls) == 1
