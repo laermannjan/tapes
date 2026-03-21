@@ -196,6 +196,9 @@ class TreeApp(App):
                     self._run_tmdb_worker(),  # ty: ignore[invalid-argument-type]  # Textual WorkType stubs
                     thread=True,
                 )
+            else:
+                # No TMDB token - check if headless should exit (nothing to stage)
+                self._check_headless_exit()
         else:
             self._update_footer()
 

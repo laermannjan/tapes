@@ -125,11 +125,14 @@ def _setup_logging(*, headless: bool, verbose: bool, log_file: str | None) -> No
     log_format = "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
     formatter = logging.Formatter(log_format, datefmt="%Y-%m-%d %H:%M:%S")
 
-    # Root logger at WARNING (suppress noisy third-party loggers)
-    logging.basicConfig(level=logging.WARNING)
+    # Root logger at WARNING (suppress noisy third-party loggers).
+    # Don't use basicConfig -- it adds a default StreamHandler that
+    # would duplicate our explicit handlers.
+    logging.getLogger().setLevel(logging.WARNING)
 
     tapes_logger = logging.getLogger("tapes")
     tapes_logger.setLevel(logging.DEBUG if verbose else logging.INFO)
+    tapes_logger.propagate = False  # prevent duplicate output via root handler
 
     # File handler
     if log_file != "":
