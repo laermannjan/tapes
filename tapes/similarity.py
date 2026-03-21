@@ -6,14 +6,13 @@ strategy (fuzzy, integer distance, exact) and weight.
 
 from __future__ import annotations
 
-import logging
-
+import structlog
 from rapidfuzz import fuzz, utils
 
 from tapes.config import DEFAULT_MIN_SCORE
 from tapes.fields import EPISODE, EPISODE_TITLE, MEDIA_TYPE, SEASON, TITLE, TMDB_ID, YEAR
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # ---------------------------------------------------------------------------
 # Configuration -- all tuning parameters in one place
@@ -57,7 +56,7 @@ def _string_similarity(a: str, b: str) -> float:
     strict = fuzz.ratio(a, b, processor=utils.default_process) / 100.0
     lenient = fuzz.token_set_ratio(a, b, processor=utils.default_process) / 100.0
     blend = STRICT_WEIGHT * strict + (1 - STRICT_WEIGHT) * lenient
-    logger.log(5, "string_sim %r vs %r: ratio=%.2f tset=%.2f blend=%.2f", a, b, strict, lenient, blend)
+    logger.debug("string_sim", a=a, b=b, ratio=strict, tset=lenient, blend=blend)
     return blend
 
 
@@ -106,14 +105,13 @@ def compute_similarity(query: dict, result: dict) -> float:
     if q_type and r_type and q_type != r_type:
         total *= MEDIA_TYPE_PENALTY
 
-    logger.log(
-        5,
-        "similarity %r vs %r: title=%.2f year=%.2f -> %.2f",
-        q_title,
-        r_title,
-        title_score,
-        year_score,
-        total,
+    logger.debug(
+        "similarity",
+        query=q_title,
+        result=r_title,
+        title_score=title_score,
+        year_score=year_score,
+        total=total,
     )
     return total
 
@@ -156,14 +154,11 @@ def compute_episode_similarity(query: dict, episode: dict) -> float:
         score += EPISODE_TITLE_WEIGHT * _string_similarity(str(q_title), str(e_title))
 
     score = min(score, 1.0)
-    logger.log(
-        5,
-        "episode_sim S%sE%s vs S%sE%s: %.2f",
-        query.get(SEASON, "?"),
-        query.get(EPISODE, "?"),
-        episode.get(SEASON, "?"),
-        episode.get(EPISODE, "?"),
-        score,
+    logger.debug(
+        "episode_sim",
+        query_ep=f"S{query.get(SEASON, '?')}E{query.get(EPISODE, '?')}",
+        result_ep=f"S{episode.get(SEASON, '?')}E{episode.get(EPISODE, '?')}",
+        score=score,
     )
     return score
 
@@ -183,26 +178,39 @@ def should_auto_accept(
         return False
     best = scores[0]
     if best < min_score:
-        logger.debug("auto-accept rejected: best=%.2f < min_score=%.2f", best, min_score)
+        logger.debug(
+            "auto_accept_check",
+            best=best,
+            min_score=min_score,
+            accepted=False,
+            reason="below_min_score",
+        )
         return False
     if len(scores) == 1:
-        logger.debug("auto-accept: single candidate best=%.2f >= min_score=%.2f", best, min_score)
+        logger.debug(
+            "auto_accept_check",
+            best=best,
+            min_score=min_score,
+            accepted=True,
+            reason="single_candidate",
+        )
         return True  # single candidate, infinite prominence
     prominence = best - scores[1]
     if prominence >= min_prominence:
         logger.debug(
-            "auto-accept: best=%.2f, prominence=%.2f (%.2f - %.2f)",
-            best,
-            prominence,
-            best,
-            scores[1],
+            "auto_accept_check",
+            best=best,
+            prominence=prominence,
+            min_prominence=min_prominence,
+            accepted=True,
         )
         return True
     logger.debug(
-        "auto-accept rejected: prominence=%.2f < %.2f (best=%.2f, second=%.2f)",
-        prominence,
-        min_prominence,
-        best,
-        scores[1],
+        "auto_accept_check",
+        best=best,
+        prominence=prominence,
+        min_prominence=min_prominence,
+        accepted=False,
+        reason="low_prominence",
     )
     return False

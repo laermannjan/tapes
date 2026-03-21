@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import fnmatch
-import logging
 import os
 import re
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
+import structlog
+
+logger = structlog.get_logger()
 
 VIDEO_EXTENSIONS: frozenset[str] = frozenset({".mkv", ".mp4", ".avi", ".mov", ".m4v", ".ts", ".m2ts", ".wmv", ".flv"})
 
@@ -76,5 +77,5 @@ def scan(
             results.append(path)
 
     results.sort()
-    logger.info("Scan complete: %d files found in %s", len(results), root)
+    logger.info("scan_complete", count=len(results), root=str(root))
     return results
