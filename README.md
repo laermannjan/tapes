@@ -47,28 +47,59 @@ EOF
 ```
 
 ```sh
-tapes import ~/media/unsorted
+tapes ~/media/unsorted
 ```
 
 That's it. Tapes scans the folder, identifies your files, and opens the TUI. Review what it found, stage the files you're happy with, and commit.
 
-For a one-off job with specific settings, use CLI flags directly:
+### Modes
 
 ```sh
-tapes import ~/media/unsorted \
+tapes ~/media/unsorted                          # interactive TUI
+tapes --serve ~/media/unsorted                  # browser-based TUI
+tapes --one-shot ~/media/unsorted               # process and exit (for cron)
+tapes --headless ~/media/unsorted               # daemon (keeps polling)
+tapes --serve --auto-commit ~/media/unsorted    # browser + auto-processing
+```
+
+`--one-shot` identifies files, auto-processes what it's confident about, and exits. `--headless` does the same but keeps running, polling for new files. `--serve` opens the TUI in a web browser via textual-serve. Combine flags freely.
+
+### Configuration
+
+For a one-off job with specific settings, use CLI flags:
+
+```sh
+tapes ~/media/unsorted \
   --library-movies /media/movies \
   --library-tv /media/tv \
-  --movie-template "{title} ({year})/{title} ({year}).{ext}" \
-  --tv-template "{title} ({year})/Season {season:02d}/{title} - S{season:02d}E{episode:02d} - {episode_title}.{ext}" \
-  --language de \
   --operation move \
-  --min-score 0.5 \
+  --language de \
   --dry-run
 ```
 
 Templates are Python format strings - `{field}` placeholders are filled from each file's metadata, and format specs like `{season:02d}` work as expected. Available fields include `title`, `year`, `season`, `episode`, `episode_title`, `tmdb_id`, `codec`, `resolution`, and more.
 
-All settings work as CLI flags, environment variables (`TAPES_` prefix), or in the config file. See [`config.example.yaml`](config.example.yaml) for everything, or run `tapes import --help`.
+All settings work as CLI flags, environment variables (`TAPES_` prefix), or in the config file. See [`config.example.yaml`](config.example.yaml) for everything, or run `tapes --help`.
+
+### Structured logging
+
+Tapes outputs structured JSON logs. In a terminal, you get colored human-readable output. When piped, you get JSON - one object per line, filterable with `jq` or `grep`:
+
+```sh
+# See what happened to a specific file
+tapes --one-shot /media | jq 'select(.file == "Dune.2021.mkv")'
+
+# List all files that weren't auto-staged and why
+tapes --one-shot /media | jq 'select(.event == "not_staged")'
+
+# Extract just the committed destinations
+tapes --one-shot /media | jq -r 'select(.event == "committed") | .dest'
+
+# Pipe committed files into another tool
+tapes --one-shot /media | jq -r 'select(.event == "committed") | .dest' | xargs -I{} notify "Done: {}"
+```
+
+Logs also go to `~/.local/state/tapes/tapes.log` (JSON, always). Override with `--log-file` or disable with `--log-file ""`.
 
 ## How it works
 
