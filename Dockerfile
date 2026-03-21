@@ -12,6 +12,7 @@ RUN uv sync --frozen --no-dev
 EXPOSE 8080
 
 ENV PATH="/app/.venv/bin:$PATH" \
+    TAPES_SCAN__IMPORT_PATH=/data/source \
     TAPES_LIBRARY__MOVIES=/data/movies \
     TAPES_LIBRARY__TV=/data/tv
 
