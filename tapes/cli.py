@@ -174,8 +174,8 @@ def _setup_logging(*, headless: bool, verbose: bool, log_file: str | None) -> Pa
         cache_logger_on_first_use=True,
     )
 
-    # ProcessorFormatter renders the final JSON on the stdlib side
-    formatter = structlog.stdlib.ProcessorFormatter(
+    # JSON formatter for log file (always JSON, machine-parseable)
+    json_formatter = structlog.stdlib.ProcessorFormatter(
         processors=[
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
             structlog.processors.JSONRenderer(),
@@ -189,7 +189,7 @@ def _setup_logging(*, headless: bool, verbose: bool, log_file: str | None) -> Pa
 
     resolved_log_path: Path | None = None
 
-    # File handler
+    # File handler (always JSON)
     if log_file != "":
         if log_file is None:
             from platformdirs import user_state_dir
@@ -202,13 +202,24 @@ def _setup_logging(*, headless: bool, verbose: bool, log_file: str | None) -> Pa
             resolved_log_path.parent.mkdir(parents=True, exist_ok=True)
 
         file_handler = logging.FileHandler(resolved_log_path)
-        file_handler.setFormatter(formatter)
+        file_handler.setFormatter(json_formatter)
         tapes_logger.addHandler(file_handler)
 
     # Stderr handler (headless only)
+    # Human-readable when stderr is a terminal, JSON when piped
     if headless:
+        if sys.stderr.isatty():
+            stderr_formatter = structlog.stdlib.ProcessorFormatter(
+                processors=[
+                    structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+                    structlog.dev.ConsoleRenderer(),
+                ],
+            )
+        else:
+            stderr_formatter = json_formatter
+
         stderr_handler = logging.StreamHandler(sys.stderr)
-        stderr_handler.setFormatter(formatter)
+        stderr_handler.setFormatter(stderr_formatter)
         tapes_logger.addHandler(stderr_handler)
 
     return resolved_log_path
@@ -404,6 +415,9 @@ def main(
     )
     if is_headless:
         tui.run(headless=True)
-        _print_jq_summary(_log_path)
+        # Show jq summary only when stderr was piped (JSON output).
+        # When stderr is a terminal, the user already sees human-readable logs.
+        if not sys.stderr.isatty():
+            _print_jq_summary(_log_path)
     else:
         tui.run()
