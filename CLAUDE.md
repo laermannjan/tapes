@@ -90,7 +90,8 @@ Core
   tapes/tmdb.py             -- TMDB API client (search_multi, get_movie, get_show, get_season_episodes)
   tapes/similarity.py       -- scoring (title similarity, episode matching)
   tapes/file_ops.py         -- file processing (copy, move, symlink, hardlink)
-  tapes/config.py           -- Pydantic v2 config (scan, metadata, library, dry_run)
+  tapes/config.py           -- Pydantic v2 config (scan, metadata, library, mode, dry_run)
+  tapes/conflicts.py        -- unified conflict detection (virtual nodes, auto/skip/keep_all)
 ```
 
 ---
@@ -116,11 +117,15 @@ Core
 See `docs/decisions.md` for all architectural decisions, rejected approaches,
 and learnings. Key points:
 
-- **One-shot tool.** No database, no persistent state.
+- **One-shot by default, persistent with polling.** No database, no persistent state.
 - **Every file is first-class.** No companion concept.
 - **Candidate-based metadata curation.** Metadata dict + candidate list.
 - **guessit-driven.** Filename-based metadata extraction.
 - **Two templates** selected by `media_type` field.
+- **Single command, composable flags.** `--serve`, `--auto-commit`, `--headless`, `--one-shot`.
+- **FileStatus enum.** PENDING/STAGED/REJECTED replaces boolean pair.
+- **Unified conflict detection.** Virtual nodes, three policies (auto/skip/keep_all).
+- **structlog.** JSON logging with context binding for file tracing.
 - **Move = copy-then-delete.** Kernel-optimized, no checksumming.
 - **`--dry-run`** safeguard: nothing happens to files.
 
@@ -145,16 +150,13 @@ and learnings. Key points:
 
 ## Current status
 
-**Pre-alpha. TUI + core pipeline complete.**
+**Pre-alpha. Core features complete.**
 
-Implemented: TUI (M1-M16), real TMDB integration (two-stage search),
-similarity scoring, template selection, broadened scanner,
-file processing on commit, config wiring. Visual design overhaul
-complete: Claude Code-inspired layout with horizontal separators,
-inline views (metadata, commit, help), persistent bottom bar, scroll
-indicators, confirm/discard editing model, double ctrl+c quit.
+Implemented: TUI with inline views (metadata, commit, help), real TMDB
+integration (two-stage search), similarity scoring, template selection,
+file processing on commit, config wiring. CLI redesign with composable
+mode flags. Conflict system with FileStatus enum and unified detection.
+Auto-commit with debounce. Directory polling with tree rebuild.
+Headless/one-shot mode. Structured JSON logging via structlog.
 
-No modals remain. All views are inline widgets toggled via display CSS.
-MetadataView edits use snapshot/restore on discard.
-
-Next up: end-to-end manual testing, error handling.
+Next up: Dockerfile, Unraid template, end-to-end manual testing.

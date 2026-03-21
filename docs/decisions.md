@@ -8,9 +8,10 @@ record, see `docs/legacy/`.
 
 ## Core architecture
 
-### One-shot, no database
-Each `tapes import` run is independent. No SQLite, no session tracking, no
-persistent state between runs.
+### One-shot by default, persistent with polling
+Each run is independent by default. No SQLite, no session tracking, no
+persistent state between runs. With `--poll-interval`, the app stays alive
+and picks up new files via periodic rescanning.
 
 Rejected: SQLite database tracking imports (early design, 2026-03-04). Added
 maintenance burden and complexity with no benefit for a CLI tool that processes
@@ -184,9 +185,107 @@ Serve the existing Textual TUI over WebSocket. Same code, no custom frontend.
 Rejected: REST API + custom web frontend (duplicate UI logic). Rejected:
 desktop app wrapper like Electron/Tauri (over-engineered).
 
-### Conflict detection before commit
-Detect duplicate destinations, writability issues, and pre-existing files
-before processing. Auto-resolve where possible (e.g., -2/-3 suffix).
+### Unified conflict detection with virtual nodes
+Single algorithm handles all conflict types (staged-vs-staged,
+staged-vs-existing on disk, three-way) by injecting virtual `ExistingFile`
+nodes into the candidate list. Three policies: `auto` (largest file wins),
+`skip` (existing file wins), `keep_all` (numeric suffixes). Replaces old
+`duplicate_resolution` and `disambiguation` settings.
 
-Rejected: silent overwrites (data loss). Rejected: blocking errors that halt
-the entire commit (some files can still be processed).
+Rejected: separate detection paths for each conflict type (code duplication,
+inconsistent behavior). Rejected: silent overwrites (data loss). Rejected:
+blocking errors that halt the entire commit.
+
+### FileStatus enum over boolean pair
+Single `FileStatus` enum (PENDING/STAGED/REJECTED) replaces `staged: bool`
+and `ignored: bool`. Eliminates impossible states. "Rejected" covers both
+user rejection (x key) and system rejection (conflict loser). Pipeline
+respects REJECTED - does not auto-stage rejected files.
+
+Rejected: three independent booleans (staged/ignored/rejected). Kept as
+enum for mutual exclusivity.
+
+### Delete rejected
+Optional `delete_rejected` setting deletes source files of all rejected
+nodes on commit. In manual commit: all rejected files. In auto-commit:
+only files rejected in the current batch (prevents deleting user's manual
+rejections from other batches).
+
+---
+
+## CLI and modes
+
+### Single command with composable flags
+No subcommands. `tapes [PATH]` with orthogonal flags: `--serve`, `--auto-commit`,
+`--headless`, `--one-shot`. Flags compose freely. All config flags available in
+every mode.
+
+Rejected: `tapes import` / `tapes serve` subcommands. The serve command
+couldn't forward all import flags to the textual-serve subprocess. Single
+command solves this by stripping `--serve*` from `sys.argv`.
+
+### --serve via textual-serve subprocess
+textual-serve only accepts a command string (no in-process App serving API).
+`--serve` strips itself from argv and delegates. Subprocess inherits env vars,
+so `TAPES_MODE__SERVE` is unset to prevent recursion.
+
+Rejected: custom Textual Driver for in-process web serving (100+ lines,
+fragile, loses session isolation). Rejected: hardcoded `"tapes"` as subprocess
+command (breaks `python -m` invocation).
+
+### Auto-commit with debounce
+2-second debounce timer (configurable) groups rapid staging events. View state
+guard defers firing during metadata/commit/help views. Pending flag ensures
+deferred batches fire on return to tree view.
+
+Rejected: immediate processing on every stage event (thrashing with TMDB
+bursts). Rejected: periodic sweep (less responsive than debounce).
+
+### Directory polling over filesystem events
+Periodic `os.walk` rescanning (default 10 seconds, configurable, 0 to disable).
+On changes, rebuilds tree from scratch and migrates state by path. Avoids
+surgical insertion into compressed tree structure.
+
+Rejected: watchdog/filesystem events (unreliable on NFS/SMB mounts, common
+in Unraid). Rejected: surgical node insertion (complex due to
+`_compress_single_child_dirs`).
+
+### Headless via Textual's headless mode
+`app.run(headless=True)` runs the full TUI lifecycle without terminal I/O.
+All timers, workers, and events work identically. Zero code duplication
+between TUI and headless modes.
+
+`--headless` implies `--auto-commit`. `--one-shot` implies `--headless`
+and `--poll-interval 0`.
+
+Rejected: separate HeadlessRunner that replicates TreeApp orchestration
+(code duplication, divergent behavior).
+
+### TMDB token required
+All modes require a TMDB token. Without identification, tapes can only
+extract metadata from filenames - not enough value for any use case.
+
+---
+
+## Logging
+
+### structlog with context binding
+structlog replaces stdlib logging. Bound loggers (`log = logger.bind(file=...)`)
+carry file identity through all subsequent calls, solving the concurrent TMDB
+worker interleaving problem. JSON output (one object per line) enables
+filtering with jq/grep.
+
+Rejected: stdlib logging with custom JsonFormatter (no context binding, every
+call repeats `extra={"file": ...}`). Rejected: python-json-logger (dependency
+for ~30 lines of trivial code, but structlog's context binding provides
+genuine value beyond formatting).
+
+### Console output adapts to terminal
+stdout uses `ConsoleRenderer` (colored, human-readable) when connected to a
+terminal, `JSONRenderer` when piped. Log file always gets JSON. Enables
+both interactive use and scripting.
+
+### Event names follow pipeline vocabulary
+Events use canonical pipeline terms: `extract` (guessit), `staged`/`not_staged`
+(auto-accept gate), `committed` (file processing), `rejected` (conflict).
+Not internal implementation names like `tmdb_match` or `processed`.
