@@ -162,6 +162,7 @@ def process_staged(
     on_file_start: Callable[[int, int, Path, Path], None] | None = None,
     on_file_progress: Callable[[int, int], None] | None = None,
     cancelled: Callable[[], bool] | None = None,
+    overwrite_dests: set[Path] | None = None,
 ) -> list[str]:
     """Process a list of (source, destination) file pairs.
 
@@ -178,10 +179,13 @@ def process_staged(
             to :func:`process_file` for byte-level progress during copies.
         cancelled: Callable returning ``True`` to stop processing.  Checked
             between files and passed through to copy operations.
+        overwrite_dests: Set of destination paths that should overwrite
+            existing files (from conflict resolution).
 
     Returns:
         List of result messages (one per file).
     """
+    _overwrite = overwrite_dests or set()
     total = len(files)
     results: list[str] = []
     for i, (src, dest) in enumerate(files):
@@ -197,6 +201,7 @@ def process_staged(
                 dry_run=dry_run,
                 progress_callback=on_file_progress,
                 cancelled=cancelled,
+                overwrite=dest in _overwrite,
             )
             results.append(msg)
         except OperationCancelledError:

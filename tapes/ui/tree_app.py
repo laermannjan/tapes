@@ -620,6 +620,7 @@ class TreeApp(App):
 
         pairs = [(n.path, d) for n, d in report.valid_pairs]
         staged = [n for n, _ in report.valid_pairs]
+        overwrite_dests = report.overwrite_dests
 
         if not pairs:
             self.notify("No files to process")
@@ -637,7 +638,7 @@ class TreeApp(App):
         cv.progress_text = f"0/{len(pairs)} files ..."
         cv.styles.height = cv.computed_height
         self.run_worker(
-            self._run_commit_worker(pairs, staged, operation),  # ty: ignore[invalid-argument-type]  # Textual WorkType stubs
+            self._run_commit_worker(pairs, staged, operation, overwrite_dests),  # ty: ignore[invalid-argument-type]  # Textual WorkType stubs
             thread=True,
         )
 
@@ -646,6 +647,7 @@ class TreeApp(App):
         pairs: list[tuple[Path, Path]],
         staged: list[FileNode],
         operation: str,
+        overwrite_dests: set[Path] | None = None,
     ) -> object:
         """Return a callable that processes files in a background thread."""
         from tapes.file_ops import process_staged
@@ -687,6 +689,7 @@ class TreeApp(App):
                 on_file_start=on_file_start,
                 on_file_progress=on_file_progress,
                 cancelled=cancel.is_set,
+                overwrite_dests=overwrite_dests,
             )
 
             if cancel.is_set():
@@ -755,9 +758,15 @@ class TreeApp(App):
     # ------------------------------------------------------------------
 
     def _schedule_auto_commit(self) -> None:
-        """Reset the auto-commit debounce timer after a staging event."""
+        """Reset the auto-commit debounce timer after a staging event.
+
+        Defers scheduling while TMDB is still querying to avoid processing
+        partial results. The debounce starts after TMDB completes.
+        """
         if not self.config.mode.auto_commit:
             return
+        if self._tmdb_querying:
+            return  # Wait for TMDB to finish first
         if self._auto_commit_timer is not None:
             self._auto_commit_timer.stop()
         self._auto_commit_timer = self.set_timer(
@@ -808,9 +817,10 @@ class TreeApp(App):
         src_dest_pairs = [(n.path, dest) for n, dest in report.valid_pairs]
         valid_nodes = [n for n, _ in report.valid_pairs]
         batch_rejected = [n for p in report.problems for n in p.rejected_nodes]
+        overwrite_dests = report.overwrite_dests
 
         self.run_worker(
-            self._run_auto_commit_worker(src_dest_pairs, valid_nodes, batch_rejected),  # ty: ignore[invalid-argument-type]  # Textual WorkType stubs
+            self._run_auto_commit_worker(src_dest_pairs, valid_nodes, batch_rejected, overwrite_dests),  # ty: ignore[invalid-argument-type]  # Textual WorkType stubs
             thread=True,
         )
 
@@ -819,6 +829,7 @@ class TreeApp(App):
         pairs: list[tuple[Path, Path]],
         staged: list[FileNode],
         batch_rejected: list[FileNode],
+        overwrite_dests: set[Path],
     ) -> object:
         """Background worker for auto-commit batch processing."""
         from tapes.file_ops import process_staged
@@ -831,6 +842,7 @@ class TreeApp(App):
                 pairs,
                 operation,
                 dry_run=dry_run,
+                overwrite_dests=overwrite_dests,
             )
             self.call_from_thread(self._on_auto_commit_done, pairs, results, staged, batch_rejected)
 
@@ -1139,6 +1151,10 @@ class TreeApp(App):
             self.query_one(TreeView).refresh()
         self._update_footer()
         self._maybe_start_tmdb_worker()
+        # Now that TMDB is done, kick off auto-commit for any staged files
+        # (staging during TMDB was deferred by _schedule_auto_commit)
+        if any(f.staged for f in self.model.all_files()):
+            self._schedule_auto_commit()
         self._check_headless_exit()
 
     def _should_return_to_tree(self, mv: MetadataView) -> bool:  # noqa: ARG002
