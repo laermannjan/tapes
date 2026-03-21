@@ -16,4 +16,3 @@ ENV PATH="/app/.venv/bin:$PATH" \
     TAPES_LIBRARY__TV=/data/tv
 
 ENTRYPOINT ["tapes"]
-CMD ["--serve", "--auto-commit", "/data/source"]

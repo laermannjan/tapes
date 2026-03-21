@@ -22,6 +22,7 @@
   <WebUI>http://[IP]:[PORT:8080]/</WebUI>
   <Icon>https://raw.githubusercontent.com/laermannjan/tapes/main/docs/icon.png</Icon>
   <ExtraParams>--restart unless-stopped</ExtraParams>
+  <PostArgs>--serve --auto-commit /data/source</PostArgs>
   <Config
     Name="WebUI Port"
     Target="8080"
