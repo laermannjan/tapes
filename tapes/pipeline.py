@@ -190,7 +190,11 @@ class _TmdbCache:
             event.set()
 
 
-def run_guessit_pass(model: TreeModel, root_path: Path | None = None) -> None:
+def run_guessit_pass(
+    model: TreeModel,
+    root_path: Path | None = None,
+    nodes: list[FileNode] | None = None,
+) -> None:
     """Extract metadata from filenames via guessit for all files.
 
     When *root_path* is provided, guessit receives the full relative
@@ -199,12 +203,16 @@ def run_guessit_pass(model: TreeModel, root_path: Path | None = None) -> None:
     directories.  Without it, only ``filename`` + immediate parent
     are used.
 
+    When *nodes* is provided, only those nodes are processed.
+    Otherwise all files in the model are processed.
+
     This is fast (local-only) and should be called synchronously before
     rendering the UI.
     """
     from tapes.extract import extract_metadata
 
-    for node in model.all_files():
+    targets = nodes if nodes is not None else model.all_files()
+    for node in targets:
         _populate_node_guessit(node, extract_metadata, root_path=root_path)
 
 

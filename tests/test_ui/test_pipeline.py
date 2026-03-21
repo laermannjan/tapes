@@ -1198,3 +1198,34 @@ class TestAcceptCurrentCandidate:
         dv.accept_current_candidate()
         assert node.metadata["title"] == "New Title"
         assert node.metadata["year"] == 2020
+
+
+class TestScopedGuessitPass:
+    def test_guessit_pass_with_nodes_parameter(self, tmp_path: Path) -> None:
+        """run_guessit_pass with nodes= only processes the specified nodes."""
+        from tapes.pipeline import run_guessit_pass
+
+        a = FileNode(path=tmp_path / "Movie.2020.mkv")
+        b = FileNode(path=tmp_path / "Show.S01E01.mkv")
+        root = FolderNode(name="root", children=[a, b])
+        model = TreeModel(root=root)
+
+        # Process only node a
+        run_guessit_pass(model, nodes=[a])
+
+        assert a.metadata.get("title") is not None
+        assert b.metadata == {}  # b was not processed
+
+    def test_guessit_pass_without_nodes_processes_all(self, tmp_path: Path) -> None:
+        """run_guessit_pass without nodes= processes all files (existing behavior)."""
+        from tapes.pipeline import run_guessit_pass
+
+        a = FileNode(path=tmp_path / "Movie.2020.mkv")
+        b = FileNode(path=tmp_path / "Show.S01E01.mkv")
+        root = FolderNode(name="root", children=[a, b])
+        model = TreeModel(root=root)
+
+        run_guessit_pass(model)
+
+        assert a.metadata.get("title") is not None
+        assert b.metadata.get("title") is not None
