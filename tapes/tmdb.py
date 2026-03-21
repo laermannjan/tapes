@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 import httpx
+import structlog
 import tenacity
 
 from tapes.fields import (
@@ -20,7 +20,7 @@ from tapes.fields import (
     YEAR,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 BASE_URL = "https://api.themoviedb.org/3"
 REQUEST_TIMEOUT_S = 10.0
@@ -114,7 +114,7 @@ def search_multi(
     try:
         resp = _request("GET", "/search/multi", token, client=client, max_retries=max_retries, params=params)
     except httpx.HTTPError as exc:
-        logger.warning("TMDB search_multi failed: %s", exc)
+        logger.warning("tmdb_api_error", endpoint="search_multi", error=str(exc))
         return []
 
     data = resp.json()
@@ -175,7 +175,7 @@ def get_show(
     try:
         resp = _request("GET", f"/tv/{tmdb_id}", token, client=client, max_retries=max_retries, params=params)
     except httpx.HTTPError as exc:
-        logger.warning("TMDB get_show failed: %s", exc)
+        logger.warning("tmdb_api_error", endpoint="get_show", error=str(exc))
         return {}
 
     data = resp.json()
@@ -219,7 +219,7 @@ def get_season_episodes(
             "GET", f"/tv/{show_id}/season/{season_number}", token, client=client, max_retries=max_retries, params=params
         )
     except httpx.HTTPError as exc:
-        logger.warning("TMDB get_season_episodes failed: %s", exc)
+        logger.warning("tmdb_api_error", endpoint="get_season_episodes", error=str(exc))
         return []
 
     data = resp.json()

@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-import logging
 import os
 import shutil
 import threading
 from collections.abc import Callable
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
+import structlog
+
+logger = structlog.get_logger()
 
 _POLL_INTERVAL = 0.5  # seconds between dest-size polls
 
@@ -63,14 +64,14 @@ def _copy(
             try:
                 dest.unlink(missing_ok=True)
             except OSError:
-                logger.debug("Could not clean up cancelled destination %s", dest)
+                logger.debug("cleanup_failed", dest=str(dest), reason="cancelled")
             raise OperationCancelledError
 
     if error is not None:
         try:
             dest.unlink(missing_ok=True)
         except OSError:
-            logger.debug("Could not clean up partial destination %s", dest)
+            logger.debug("cleanup_failed", dest=str(dest), reason="partial")
         raise error
 
 
@@ -143,12 +144,12 @@ def delete_files(paths: list[Path], *, dry_run: bool = False) -> list[str]:
     results: list[str] = []
     for path in paths:
         if dry_run:
-            logger.info("Delete: %s (dry-run)", path.name)
+            logger.info("deleted", file=path.name, dry_run=True)
             results.append(f"[dry-run] Would delete {path}")
             continue
         try:
             path.unlink()
-            logger.info("Deleted: %s", path.name)
+            logger.info("deleted", file=path.name, dry_run=False)
             results.append(f"Deleted {path}")
         except FileNotFoundError:
             results.append(f"Not found: {path}")
@@ -205,14 +206,14 @@ def process_staged(
                 cancelled=cancelled,
                 overwrite=dest in _overwrite,
             )
-            logger.info("Processed: %s -> %s (%s)", src.name, dest, operation)
+            logger.info("processed", file=src.name, dest=str(dest), operation=operation)
             results.append(msg)
         except OperationCancelledError:
             break
         except FileExistsError:
-            logger.warning("Destination already exists for %s -> %s", src, dest)
+            logger.warning("file_exists", file=str(src), dest=str(dest))
             results.append(f"Error: {dest} already exists")
         except Exception:
-            logger.exception("Error processing %s", src)
+            logger.error("processing_error", file=str(src), exc_info=True)  # noqa: G201
             results.append(f"Error processing {src}")
     return results
