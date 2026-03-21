@@ -531,3 +531,33 @@ class TestAutoCommitConfig:
         cfg = load_config(config_path=config_file)
         assert cfg.mode.auto_commit is True
         assert cfg.mode.auto_commit_delay == 3.0
+
+
+class TestPollIntervalConfig:
+    def test_poll_interval_default(self) -> None:
+        from tapes.config import load_config
+
+        cfg = load_config()
+        assert cfg.mode.poll_interval == 10.0
+
+    def test_poll_interval_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from tapes.config import load_config
+
+        monkeypatch.setenv("TAPES_MODE__POLL_INTERVAL", "30.0")
+        cfg = load_config()
+        assert cfg.mode.poll_interval == 30.0
+
+    def test_poll_interval_zero_disables(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from tapes.config import load_config
+
+        monkeypatch.setenv("TAPES_MODE__POLL_INTERVAL", "0")
+        cfg = load_config()
+        assert cfg.mode.poll_interval == 0.0
+
+    def test_poll_interval_from_yaml(self, tmp_path: Path) -> None:
+        from tapes.config import load_config
+
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text("mode:\n  poll_interval: 5.0\n")
+        cfg = load_config(config_path=config_file)
+        assert cfg.mode.poll_interval == 5.0

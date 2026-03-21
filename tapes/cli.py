@@ -44,6 +44,7 @@ def _build_overrides(**kwargs: Any) -> dict[str, Any]:
         "tmdb_timeout": ("advanced", "tmdb_timeout"),
         "tmdb_retries": ("advanced", "tmdb_retries"),
         "auto_commit_delay": ("mode", "auto_commit_delay"),
+        "poll_interval": ("mode", "poll_interval"),
     }
 
     overrides: dict[str, Any] = {}
@@ -133,6 +134,9 @@ def main(
     auto_commit_delay: float | None = typer.Option(
         None, "--auto-commit-delay", help="Debounce delay in seconds", rich_help_panel="Mode"
     ),
+    poll_interval: float | None = typer.Option(
+        None, "--poll-interval", help="Directory poll interval in seconds (0 to disable)", rich_help_panel="Mode"
+    ),
     # Library
     library_movies: Path | None = typer.Option(
         None, "--library-movies", help="Movies library directory", rich_help_panel="Library"
@@ -218,6 +222,7 @@ def main(
         tmdb_retries=tmdb_retries,
         auto_commit=auto_commit,
         auto_commit_delay=auto_commit_delay,
+        poll_interval=poll_interval,
     )
 
     cfg = load_config(config_path=config_file, cli_overrides=overrides)

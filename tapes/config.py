@@ -112,6 +112,7 @@ class ModeConfig(BaseModel):
     serve_port: int = Field(default=8080, ge=1, le=65535)
     auto_commit: bool = False
     auto_commit_delay: float = Field(default=2.0, gt=0.0)
+    poll_interval: float = Field(default=10.0, ge=0.0)
 
 
 # Module-level global is necessary because pydantic-settings calls

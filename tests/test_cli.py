@@ -439,6 +439,24 @@ class TestAutoCommitFlags:
         assert "mode" not in result or "auto_commit" not in result.get("mode", {})
 
 
+class TestPollIntervalFlags:
+    def test_poll_interval_in_help(self) -> None:
+        result = runner.invoke(app, ["--help"])
+        assert "--poll-interval" in result.output
+
+    def test_poll_interval_overrides(self) -> None:
+        from tapes.cli import _build_overrides
+
+        result = _build_overrides(poll_interval=5.0)
+        assert result["mode"]["poll_interval"] == 5.0
+
+    def test_poll_interval_none_not_included(self) -> None:
+        from tapes.cli import _build_overrides
+
+        result = _build_overrides(poll_interval=None)
+        assert "mode" not in result or "poll_interval" not in result.get("mode", {})
+
+
 class TestBuildServeCommand:
     def test_strips_serve_flag(self) -> None:
         from tapes.cli import _build_serve_command
