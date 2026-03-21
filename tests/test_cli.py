@@ -574,6 +574,37 @@ class TestHeadlessFlags:
         result = _build_overrides(headless=False)
         assert "mode" not in result or "headless" not in result.get("mode", {})
 
+    def test_one_shot_in_help(self) -> None:
+        result = runner.invoke(app, ["--help"])
+        assert "--one-shot" in result.output
+
+    def test_one_shot_implies_headless_and_no_polling(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("TAPES_CONFIG", raising=False)
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+
+        scan_dir = tmp_path / "media"
+        scan_dir.mkdir()
+        (scan_dir / "test.mkv").write_text("fake")
+
+        from unittest.mock import patch
+
+        with patch("tapes.ui.tree_app.TreeApp") as mock_app_cls:
+            mock_app_cls.return_value.run.return_value = None
+            runner.invoke(app, ["--one-shot", str(scan_dir)])
+            _kwargs = mock_app_cls.call_args[1]
+            assert _kwargs["config"].mode.headless is True
+            assert _kwargs["config"].mode.auto_commit is True
+            assert _kwargs["config"].mode.poll_interval == 0.0
+            mock_app_cls.return_value.run.assert_called_once_with(headless=True)
+
+    def test_one_shot_plus_serve_is_error(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("TAPES_CONFIG", raising=False)
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+        monkeypatch.setattr("sys.argv", ["tapes", "--one-shot", "--serve", "/media"])
+
+        result = runner.invoke(app, ["--one-shot", "--serve", "/media"])
+        assert result.exit_code != 0
+
     def test_log_file_override(self, tmp_path: Path) -> None:
         from tapes.cli import _build_overrides
 

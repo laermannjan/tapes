@@ -176,6 +176,9 @@ def main(
     ),
     serve_port: int = typer.Option(8080, "--serve-port", help="Port for web server", rich_help_panel="Serve"),
     # Mode
+    one_shot: bool = typer.Option(
+        False, "--one-shot", help="Process once and exit (implies --headless --poll-interval 0)", rich_help_panel="Mode"
+    ),
     headless: bool = typer.Option(
         False, "--headless", help="Run without UI (implies --auto-commit)", rich_help_panel="Mode"
     ),
@@ -275,6 +278,11 @@ def main(
     )
 
     cfg = load_config(config_path=config_file, cli_overrides=overrides)
+
+    # One-shot implies headless + poll_interval=0
+    if one_shot:
+        cfg.mode.headless = True
+        cfg.mode.poll_interval = 0.0
 
     # Headless implies auto_commit
     is_headless = headless or cfg.mode.headless
