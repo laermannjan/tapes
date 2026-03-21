@@ -114,7 +114,7 @@ def search_multi(
     try:
         resp = _request("GET", "/search/multi", token, client=client, max_retries=max_retries, params=params)
     except httpx.HTTPError as exc:
-        logger.warning("tmdb_api_error", endpoint="search_multi", error=str(exc))
+        logger.warning("search_api_error", endpoint="search_multi", error=str(exc))
         return []
 
     data = resp.json()
@@ -175,7 +175,7 @@ def get_show(
     try:
         resp = _request("GET", f"/tv/{tmdb_id}", token, client=client, max_retries=max_retries, params=params)
     except httpx.HTTPError as exc:
-        logger.warning("tmdb_api_error", endpoint="get_show", error=str(exc))
+        logger.warning("search_api_error", endpoint="get_show", error=str(exc))
         return {}
 
     data = resp.json()
@@ -219,7 +219,7 @@ def get_season_episodes(
             "GET", f"/tv/{show_id}/season/{season_number}", token, client=client, max_retries=max_retries, params=params
         )
     except httpx.HTTPError as exc:
-        logger.warning("tmdb_api_error", endpoint="get_season_episodes", error=str(exc))
+        logger.warning("search_api_error", endpoint="get_season_episodes", error=str(exc))
         return []
 
     data = resp.json()

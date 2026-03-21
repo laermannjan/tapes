@@ -206,7 +206,7 @@ def process_staged(
                 cancelled=cancelled,
                 overwrite=dest in _overwrite,
             )
-            logger.info("processed", file=src.name, dest=str(dest), operation=operation, dry_run=dry_run)
+            logger.info("committed", file=src.name, dest=str(dest), operation=operation, dry_run=dry_run)
             results.append(msg)
         except OperationCancelledError:
             break

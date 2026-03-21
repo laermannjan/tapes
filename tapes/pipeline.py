@@ -182,7 +182,7 @@ class _TmdbCache:
             with self._lock:
                 self._data[key] = result
         except Exception:  # noqa: BLE001
-            logger.warning("tmdb_cache_error", key=str(key[0]) if key else str(key))
+            logger.warning("search_cache_error", key=str(key[0]) if key else str(key))
             with self._lock:
                 self._data[key] = _FETCH_FAILED
             return None
@@ -526,7 +526,7 @@ def _populate_node_guessit(
     node.metadata = dict(filename_fields)
     node.candidates = []
 
-    logger.info("guessit", file=node.path.name, **filename_fields)
+    logger.info("extract", file=node.path.name, **filename_fields)
 
 
 def _query_tmdb_for_node(  # noqa: PLR0911
@@ -613,7 +613,7 @@ def _query_tmdb_for_node(  # noqa: PLR0911
         )
 
     if not search_results:
-        log.info("tmdb_no_results")
+        log.info("search_no_results")
         return
 
     tmdb_candidates: list[Candidate] = []
@@ -632,16 +632,8 @@ def _query_tmdb_for_node(  # noqa: PLR0911
     similarities = [c.score for c in tmdb_candidates]
     best = tmdb_candidates[0]
 
-    log.info(
-        "tmdb_match",
-        match=best.metadata.get(TITLE, "?"),
-        year=best.metadata.get(YEAR),
-        tmdb_id=best.metadata.get(TMDB_ID),
-        media_type=best.metadata.get(MEDIA_TYPE),
-        score=round(best.score, 3),
-    )
     log.debug(
-        "tmdb_candidates",
+        "search_results",
         candidates=[
             {
                 "name": c.name,
@@ -660,7 +652,7 @@ def _query_tmdb_for_node(  # noqa: PLR0911
     media_type_compatible = node_media_type is None or best_media_type is None or node_media_type == best_media_type
 
     if not media_type_compatible:
-        log.info("tmdb_media_type_mismatch", guessit_type=node_media_type, tmdb_type=best_media_type)
+        log.info("not_staged", reason="media_type_mismatch", guessit_type=node_media_type, tmdb_type=best_media_type)
         _post(_make_candidates_updater(node, list(tmdb_candidates)))
         return
 
@@ -826,12 +818,12 @@ def _query_episodes(
                 log.info("not_staged", reason="episode_template_incomplete", **ep_fields)
                 stage = False
             else:
-                log.info("episode_matched", staged=True, **ep_fields)
+                log.info("episode_accepted", staged=True, **ep_fields)
         else:
-            log.info("episode_matched", staged=True, **ep_fields)
+            log.info("episode_accepted", staged=True, **ep_fields)
 
         _post(_make_metadata_updater(node, _best_metadata, stage=stage))
         _post(_make_candidates_updater(node, _top_copy))
     else:
-        log.info("episode_not_matched", reason="needs_manual_curation")
+        log.info("not_staged", reason="episode_no_match")
         _post(_make_candidates_updater(node, _top_copy))
