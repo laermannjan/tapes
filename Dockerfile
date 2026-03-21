@@ -11,5 +11,7 @@ RUN uv sync --frozen --no-dev
 
 EXPOSE 8080
 
-ENTRYPOINT ["uv", "run", "tapes"]
+ENV PATH="/app/.venv/bin:$PATH"
+
+ENTRYPOINT ["tapes"]
 CMD ["--serve", "--auto-commit"]
