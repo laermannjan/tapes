@@ -142,6 +142,7 @@ class TreeApp(App):
         self._search_query = ""
         self._last_ctrl_c: float = 0.0
         self._commit_cancelled: threading.Event | None = None
+        self._commit_in_progress: bool = False
         # Auto-commit state
         self._auto_commit_timer: Timer | None = None
         self._auto_commit_pending: bool = False
@@ -635,6 +636,7 @@ class TreeApp(App):
             return
 
         self._commit_cancelled = threading.Event()
+        self._commit_in_progress = True
         cv.progress_text = f"0/{len(pairs)} files ..."
         cv.styles.height = cv.computed_height
         self.run_worker(
@@ -713,6 +715,7 @@ class TreeApp(App):
     ) -> None:
         """Handle successful commit -- remove processed files and return to tree."""
         self._commit_cancelled = None
+        self._commit_in_progress = False
 
         ok_srcs = {src for (src, _dest), msg in zip(pairs, results, strict=False) if not msg.startswith("Error")}
         processed = [n for n in staged if n.path in ok_srcs]
@@ -744,6 +747,7 @@ class TreeApp(App):
     def _on_commit_cancelled(self, done: int, total: int) -> None:
         """Handle commit cancellation -- return to tree view."""
         self._commit_cancelled = None
+        self._commit_in_progress = False
         self._hide_commit()
         self.query_one(CommitView).progress_text = ""
         self.notify(f"Cancelled ({done}/{total} files processed)")
@@ -777,6 +781,9 @@ class TreeApp(App):
 
         self._auto_commit_pending = False
 
+        if self._commit_in_progress:
+            return  # Another commit is running, defer
+
         staged = [f for f in self.model.all_files() if f.staged]
         if not staged:
             self._check_headless_exit()
@@ -807,6 +814,7 @@ class TreeApp(App):
         valid_nodes = [n for n, _ in report.valid_pairs]
         batch_rejected = [n for p in report.problems for n in p.rejected_nodes]
         overwrite_dests = report.overwrite_dests
+        self._commit_in_progress = True
 
         self.run_worker(
             self._run_auto_commit_worker(src_dest_pairs, valid_nodes, batch_rejected, overwrite_dests),  # ty: ignore[invalid-argument-type]  # Textual WorkType stubs
@@ -845,6 +853,7 @@ class TreeApp(App):
         batch_rejected: list[FileNode],
     ) -> None:
         """Handle auto-commit batch completion."""
+        self._commit_in_progress = False
         ok_srcs = {src for (src, _), msg in zip(pairs, results, strict=False) if not msg.startswith("Error")}
         processed = [n for n in staged if n.path in ok_srcs]
         errored = [n for n in staged if n.path not in ok_srcs]
@@ -940,7 +949,7 @@ class TreeApp(App):
                 nodes,
                 params,
                 on_progress=on_progress,
-                post_update=self.call_from_thread,
+                post_update=self._post_update_with_auto_commit,
                 can_stage=self._make_can_stage(),
             )
             self.call_from_thread(self._on_tmdb_done)
