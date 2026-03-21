@@ -758,15 +758,9 @@ class TreeApp(App):
     # ------------------------------------------------------------------
 
     def _schedule_auto_commit(self) -> None:
-        """Reset the auto-commit debounce timer after a staging event.
-
-        Defers scheduling while TMDB is still querying to avoid processing
-        partial results. The debounce starts after TMDB completes.
-        """
+        """Reset the auto-commit debounce timer after a staging event."""
         if not self.config.mode.auto_commit:
             return
-        if self._tmdb_querying:
-            return  # Wait for TMDB to finish first
         if self._auto_commit_timer is not None:
             self._auto_commit_timer.stop()
         self._auto_commit_timer = self.set_timer(
@@ -1151,10 +1145,8 @@ class TreeApp(App):
             self.query_one(TreeView).refresh()
         self._update_footer()
         self._maybe_start_tmdb_worker()
-        # Now that TMDB is done, kick off auto-commit for any staged files
-        # (staging during TMDB was deferred by _schedule_auto_commit)
-        if any(f.staged for f in self.model.all_files()):
-            self._schedule_auto_commit()
+        # Trigger auto-commit for any staged files that were deferred
+        self._schedule_auto_commit()
         self._check_headless_exit()
 
     def _should_return_to_tree(self, mv: MetadataView) -> bool:  # noqa: ARG002
