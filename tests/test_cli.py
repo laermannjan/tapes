@@ -499,3 +499,174 @@ class TestBuildServeCommand:
 
         result = _build_serve_command(["/path/to/tapes", "-v", "--serve", "/media"])
         assert result == "/path/to/tapes -v /media"
+
+
+# ---------------------------------------------------------------------------
+# Headless flags
+# ---------------------------------------------------------------------------
+
+
+class TestHeadlessFlags:
+    def test_headless_in_help(self) -> None:
+        result = runner.invoke(app, ["--help"])
+        assert "--headless" in result.output
+        assert "--log-file" in result.output
+
+    def test_headless_implies_auto_commit(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("TAPES_CONFIG", raising=False)
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+
+        scan_dir = tmp_path / "media"
+        scan_dir.mkdir()
+        (scan_dir / "test.mkv").write_text("fake")
+
+        from unittest.mock import patch
+
+        with patch("tapes.ui.tree_app.TreeApp") as mock_app_cls:
+            mock_app_cls.return_value.run.return_value = None
+            runner.invoke(app, ["--headless", str(scan_dir)])
+            _kwargs = mock_app_cls.call_args[1]
+            assert _kwargs["config"].mode.auto_commit is True
+
+    def test_headless_plus_serve_is_error(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("TAPES_CONFIG", raising=False)
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+        monkeypatch.setattr("sys.argv", ["tapes", "--headless", "--serve", "/media"])
+
+        result = runner.invoke(app, ["--headless", "--serve", "/media"])
+        assert result.exit_code != 0
+        assert "headless" in result.output.lower() or "serve" in result.output.lower()
+
+    def test_headless_plus_serve_via_env(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Conflict detected even when one flag comes from env var."""
+        monkeypatch.delenv("TAPES_CONFIG", raising=False)
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+        monkeypatch.setenv("TAPES_MODE__SERVE", "true")
+        monkeypatch.setattr("sys.argv", ["tapes", "--headless", "/media"])
+
+        result = runner.invoke(app, ["--headless", "/media"])
+        assert result.exit_code != 0
+
+    def test_headless_runs_app_in_headless_mode(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("TAPES_CONFIG", raising=False)
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+
+        scan_dir = tmp_path / "media"
+        scan_dir.mkdir()
+        (scan_dir / "test.mkv").write_text("fake")
+
+        from unittest.mock import patch
+
+        with patch("tapes.ui.tree_app.TreeApp") as mock_app_cls:
+            mock_app_cls.return_value.run.return_value = None
+            runner.invoke(app, ["--headless", str(scan_dir)])
+            mock_app_cls.return_value.run.assert_called_once_with(headless=True)
+
+    def test_headless_override(self) -> None:
+        from tapes.cli import _build_overrides
+
+        result = _build_overrides(headless=True)
+        assert result["mode"]["headless"] is True
+
+    def test_headless_false_not_included(self) -> None:
+        from tapes.cli import _build_overrides
+
+        result = _build_overrides(headless=False)
+        assert "mode" not in result or "headless" not in result.get("mode", {})
+
+    def test_log_file_override(self, tmp_path: Path) -> None:
+        from tapes.cli import _build_overrides
+
+        log_path = str(tmp_path / "tapes.log")
+        result = _build_overrides(log_file=log_path)
+        assert result["mode"]["log_file"] == log_path
+
+
+# ---------------------------------------------------------------------------
+# _setup_logging
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _clean_logging():
+    """Save and restore logging state to prevent test pollution."""
+    import logging
+
+    tapes_logger = logging.getLogger("tapes")
+    root_logger = logging.getLogger()
+    old_tapes_handlers = tapes_logger.handlers[:]
+    old_root_handlers = root_logger.handlers[:]
+    old_tapes_level = tapes_logger.level
+    yield
+    tapes_logger.handlers = old_tapes_handlers
+    tapes_logger.level = old_tapes_level
+    root_logger.handlers = old_root_handlers
+
+
+class TestSetupLogging:
+    def test_setup_logging_creates_file_handler(self, tmp_path: Path) -> None:
+        import logging
+
+        from tapes.cli import _setup_logging
+
+        log_file = tmp_path / "test.log"
+        _setup_logging(headless=False, verbose=False, log_file=str(log_file))
+
+        logger = logging.getLogger("tapes")
+        logger.info("test message")
+
+        assert log_file.exists()
+        content = log_file.read_text()
+        assert "test message" in content
+
+    def test_setup_logging_stderr_in_headless(self, tmp_path: Path) -> None:
+        import logging
+
+        from tapes.cli import _setup_logging
+
+        _setup_logging(headless=True, verbose=False, log_file=str(tmp_path / "test.log"))
+
+        logger = logging.getLogger("tapes")
+        # Check that a StreamHandler writing to stderr exists
+        stderr_handlers = [
+            h
+            for h in logger.handlers
+            if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
+        ]
+        assert len(stderr_handlers) >= 1
+
+    def test_setup_logging_no_stderr_in_tui(self, tmp_path: Path) -> None:
+        import logging
+
+        from tapes.cli import _setup_logging
+
+        _setup_logging(headless=False, verbose=False, log_file=str(tmp_path / "test.log"))
+
+        logger = logging.getLogger("tapes")
+        stderr_handlers = [
+            h
+            for h in logger.handlers
+            if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
+        ]
+        assert len(stderr_handlers) == 0
+
+    def test_setup_logging_empty_log_file_disables_file(self) -> None:
+        import logging
+
+        from tapes.cli import _setup_logging
+
+        _setup_logging(headless=False, verbose=False, log_file="")
+
+        logger = logging.getLogger("tapes")
+        file_handlers = [h for h in logger.handlers if isinstance(h, logging.FileHandler)]
+        assert len(file_handlers) == 0
+
+    def test_setup_logging_verbose_sets_debug(self, tmp_path: Path) -> None:
+        import logging
+
+        from tapes.cli import _setup_logging
+
+        _setup_logging(headless=False, verbose=True, log_file=str(tmp_path / "test.log"))
+
+        logger = logging.getLogger("tapes")
+        assert logger.level == logging.DEBUG

@@ -45,6 +45,7 @@ def _build_overrides(**kwargs: Any) -> dict[str, Any]:
         "tmdb_retries": ("advanced", "tmdb_retries"),
         "auto_commit_delay": ("mode", "auto_commit_delay"),
         "poll_interval": ("mode", "poll_interval"),
+        "log_file": ("mode", "log_file"),
     }
 
     overrides: dict[str, Any] = {}
@@ -60,6 +61,9 @@ def _build_overrides(**kwargs: Any) -> dict[str, Any]:
 
     if kwargs.get("auto_commit"):
         overrides.setdefault("mode", {})["auto_commit"] = True
+
+    if kwargs.get("headless"):
+        overrides.setdefault("mode", {})["headless"] = True
 
     return overrides
 
@@ -108,6 +112,48 @@ def _start_server(command: str, host: str, port: int) -> None:
     server.serve()
 
 
+def _setup_logging(*, headless: bool, verbose: bool, log_file: str | None) -> None:
+    """Configure logging handlers for file and optionally stderr.
+
+    Args:
+        headless: If True, also log to stderr.
+        verbose: If True, set tapes logger to DEBUG. Otherwise INFO.
+        log_file: Path to log file. None = default XDG location. "" = disable file logging.
+    """
+    import logging
+
+    log_format = "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+    formatter = logging.Formatter(log_format, datefmt="%Y-%m-%d %H:%M:%S")
+
+    # Root logger at WARNING (suppress noisy third-party loggers)
+    logging.basicConfig(level=logging.WARNING)
+
+    tapes_logger = logging.getLogger("tapes")
+    tapes_logger.setLevel(logging.DEBUG if verbose else logging.INFO)
+
+    # File handler
+    if log_file != "":
+        if log_file is None:
+            from platformdirs import user_state_dir
+
+            log_dir = Path(user_state_dir("tapes"))
+            log_dir.mkdir(parents=True, exist_ok=True)
+            log_path = log_dir / "tapes.log"
+        else:
+            log_path = Path(log_file)
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+
+        file_handler = logging.FileHandler(log_path)
+        file_handler.setFormatter(formatter)
+        tapes_logger.addHandler(file_handler)
+
+    # Stderr handler (headless only)
+    if headless:
+        stderr_handler = logging.StreamHandler(sys.stderr)
+        stderr_handler.setFormatter(formatter)
+        tapes_logger.addHandler(stderr_handler)
+
+
 # ---------------------------------------------------------------------------
 # Single command
 # ---------------------------------------------------------------------------
@@ -130,6 +176,12 @@ def main(
     ),
     serve_port: int = typer.Option(8080, "--serve-port", help="Port for web server", rich_help_panel="Serve"),
     # Mode
+    headless: bool = typer.Option(
+        False, "--headless", help="Run without UI (implies --auto-commit)", rich_help_panel="Mode"
+    ),
+    log_file: str | None = typer.Option(
+        None, "--log-file", help="Log file path (empty to disable)", rich_help_panel="Mode"
+    ),
     auto_commit: bool = typer.Option(False, "--auto-commit", help="Auto-process staged files", rich_help_panel="Mode"),
     auto_commit_delay: float | None = typer.Option(
         None, "--auto-commit-delay", help="Debounce delay in seconds", rich_help_panel="Mode"
@@ -194,12 +246,7 @@ def main(
     ),
 ) -> None:
     """Tapes - organise your movie and TV show files."""
-    import logging
     import os
-
-    if verbose:
-        logging.basicConfig(level=logging.WARNING)
-        logging.getLogger("tapes").setLevel(logging.DEBUG)
 
     overrides = _build_overrides(
         dry_run=dry_run,
@@ -223,12 +270,29 @@ def main(
         auto_commit=auto_commit,
         auto_commit_delay=auto_commit_delay,
         poll_interval=poll_interval,
+        headless=headless,
+        log_file=log_file,
     )
 
     cfg = load_config(config_path=config_file, cli_overrides=overrides)
 
+    # Headless implies auto_commit
+    is_headless = headless or cfg.mode.headless
+    if is_headless:
+        cfg.mode.auto_commit = True
+
+    # Validate: headless + serve conflict
+    is_serve = serve or cfg.mode.serve
+    if is_headless and is_serve:
+        console.print("[red]Error:[/red] Cannot use --headless with --serve.")
+        raise typer.Exit(code=1)
+
+    # Set up logging
+    resolved_log_file = log_file if log_file is not None else cfg.mode.log_file
+    _setup_logging(headless=is_headless, verbose=verbose, log_file=resolved_log_file)
+
     # Serve mode: CLI flag or config/env var
-    if serve or cfg.mode.serve:
+    if is_serve:
         os.environ.pop("TAPES_MODE__SERVE", None)
         actual_host = serve_host if serve else cfg.mode.serve_host
         actual_port = serve_port if serve else cfg.mode.serve_port
@@ -265,4 +329,7 @@ def main(
         auto_pipeline=True,
         config=cfg,
     )
-    tui.run()
+    if is_headless:
+        tui.run(headless=True)
+    else:
+        tui.run()
