@@ -25,6 +25,7 @@ def _clean_tapes_env(monkeypatch: pytest.MonkeyPatch) -> None:
             monkeypatch.delenv(key, raising=False)
     monkeypatch.delenv("TMDB_TOKEN", raising=False)
     monkeypatch.setenv("TAPES_METADATA__TMDB_TOKEN", "test-fake-token")
+    monkeypatch.setenv("NO_COLOR", "1")  # prevent ANSI codes in help output
 
 
 def test_help():

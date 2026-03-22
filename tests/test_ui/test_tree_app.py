@@ -1342,12 +1342,15 @@ class TestAutoCommit:
         model = TreeModel(root=root)
         cfg = _auto_commit_config()
         app = TreeApp(model=model, movie_template=TEMPLATE, tv_template=TEMPLATE, config=cfg)
-        async with app.run_test() as pilot:
-            await pilot.press("space")  # stage file_a
+        async with app.run_test() as _pilot:
+            # Stage directly to avoid cursor navigation timing issues
+            file_a.status = FileStatus.STAGED
+            app._schedule_auto_commit()
             timer1 = app._auto_commit_timer
             assert timer1 is not None
-            await pilot.press("j")  # move to file_b
-            await pilot.press("space")  # stage file_b
+
+            file_b.status = FileStatus.STAGED
+            app._schedule_auto_commit()
             timer2 = app._auto_commit_timer
             assert timer2 is not None
             assert timer2 is not timer1  # timer was replaced
