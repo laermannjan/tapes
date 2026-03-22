@@ -263,24 +263,21 @@ class TestWritabilityCheck:
 
     def test_unwritable_destination_rejects(self, tmp_path: Path) -> None:
         """Unwritable destination is reported as problem, node rejected."""
+        from unittest.mock import patch
+
         _touch(tmp_path / "movie.mkv", b"data")
         node = _node(tmp_path / "movie.mkv")
-        # Create a read-only directory.
-        readonly_dir = tmp_path / "readonly"
-        readonly_dir.mkdir()
-        readonly_dir.chmod(0o555)
-        dest = readonly_dir / "sub" / "Movie.mkv"
+        dest = tmp_path / "unwritable" / "sub" / "Movie.mkv"
 
-        try:
+        # Mock os.access to simulate unwritable directory (chmod is unreliable on Windows)
+        with patch("tapes.conflicts.os.access", return_value=False):
             report = detect_conflicts([(node, dest)], conflict_resolution="auto")
 
-            assert len(report.problems) == 1
-            assert "not writable" in report.problems[0].description.lower()
-            assert node in report.problems[0].rejected_nodes
-            assert node.rejected
-            assert len(report.valid_pairs) == 0
-        finally:
-            readonly_dir.chmod(0o755)
+        assert len(report.problems) == 1
+        assert "not writable" in report.problems[0].description.lower()
+        assert node in report.problems[0].rejected_nodes
+        assert node.rejected
+        assert len(report.valid_pairs) == 0
 
 
 class TestRejectedCount:

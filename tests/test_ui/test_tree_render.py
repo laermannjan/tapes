@@ -184,8 +184,9 @@ class TestRenderFileRow:
         plain = row.plain
         # Flat mode: no indentation regardless of depth
         assert not plain.startswith(" " * 6)
-        # Uses relative path
-        assert "movies/Inception.mkv" in plain
+        # Uses relative path (separator varies by OS)
+        assert "movies" in plain
+        assert "Inception.mkv" in plain
 
     def test_arrow_is_dim(self) -> None:
         node = FileNode(

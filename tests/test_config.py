@@ -276,7 +276,7 @@ class TestYamlConfigSource:
 
 
 def test_default_config_path(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("XDG_CONFIG_HOME", "/fake/config")
+    monkeypatch.setattr("tapes.config.user_config_dir", lambda app: f"/fake/config/{app}")
     assert default_config_path() == Path("/fake/config/tapes/config.yaml")
 
 
@@ -290,10 +290,10 @@ def test_config_path_explicit_overrides_env(monkeypatch: pytest.MonkeyPatch) -> 
     assert resolve_config_path(Path("/explicit.yaml")) == Path("/explicit.yaml")
 
 
-def test_resolve_config_path_xdg_default_only_if_exists(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """When no explicit path and no TAPES_CONFIG, use XDG default only if file exists."""
+def test_resolve_config_path_default_only_if_exists(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """When no explicit path and no TAPES_CONFIG, use default only if file exists."""
     monkeypatch.delenv("TAPES_CONFIG", raising=False)
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    monkeypatch.setattr("tapes.config.user_config_dir", lambda app: str(tmp_path / app))
     # File doesn't exist yet
     assert resolve_config_path(None) is None
 
