@@ -6,9 +6,6 @@ on:
     tags: ["v*"]
   pull_request:
 
-env:
-  NO_COLOR: "1"
-
 jobs:
   test:
     strategy:

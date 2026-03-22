@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -10,7 +11,33 @@ from typer.testing import CliRunner
 
 from tapes.cli import app
 
-runner = CliRunner()
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+class _CleanResult:
+    """Wraps a CliRunner Result, stripping ANSI from output."""
+
+    def __init__(self, result: object) -> None:
+        self._result = result
+
+    @property
+    def output(self) -> str:
+        raw = self._result.output  # type: ignore[attr-defined]
+        return _ANSI_RE.sub("", raw) if raw else ""
+
+    @property
+    def exit_code(self) -> int:
+        return self._result.exit_code  # type: ignore[attr-defined]
+
+
+class _CleanRunner(CliRunner):
+    """CliRunner that strips ANSI escape codes from output."""
+
+    def invoke(self, *args, **kwargs):  # type: ignore[override]
+        return _CleanResult(super().invoke(*args, **kwargs))
+
+
+runner = _CleanRunner()
 
 
 @pytest.fixture(autouse=True)
@@ -25,7 +52,6 @@ def _clean_tapes_env(monkeypatch: pytest.MonkeyPatch) -> None:
             monkeypatch.delenv(key, raising=False)
     monkeypatch.delenv("TMDB_TOKEN", raising=False)
     monkeypatch.setenv("TAPES_METADATA__TMDB_TOKEN", "test-fake-token")
-    monkeypatch.setenv("NO_COLOR", "1")  # prevent ANSI codes in help output
 
 
 def test_help():
