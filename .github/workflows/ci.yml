@@ -6,6 +6,9 @@ on:
     tags: ["v*"]
   pull_request:
 
+env:
+  PYTHONIOENCODING: utf-8
+
 jobs:
   test:
     strategy:

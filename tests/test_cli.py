@@ -304,7 +304,7 @@ class TestAlwaysUsesLoadConfig:
             mock_app_cls.return_value.run.return_value = None
             runner.invoke(app, ["--library-movies", "/my/movies", str(scan_dir)])
             _kwargs = mock_app_cls.call_args[1]
-            assert _kwargs["config"].library.movies == "/my/movies"
+            assert Path(_kwargs["config"].library.movies) == Path("/my/movies")
 
     def test_library_tv_flag_reaches_config(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """--library-tv flag sets cfg.library.tv."""
@@ -321,7 +321,7 @@ class TestAlwaysUsesLoadConfig:
             mock_app_cls.return_value.run.return_value = None
             runner.invoke(app, ["--library-tv", "/my/tv", str(scan_dir)])
             _kwargs = mock_app_cls.call_args[1]
-            assert _kwargs["config"].library.tv == "/my/tv"
+            assert Path(_kwargs["config"].library.tv) == Path("/my/tv")
 
 
 # ---------------------------------------------------------------------------
